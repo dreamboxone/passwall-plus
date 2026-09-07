@@ -195,8 +195,12 @@ PAYLOAD="$RIG/work/payload.bin"
 dd if=/dev/urandom of="$PAYLOAD" bs=1024 count=8 2>/dev/null
 
 write_caller() {
+	# The helper out of the tree, not out of the rig: this suite is the one
+	# that needs nothing, and it never calls rig_setup - so $RIG/lib exists
+	# only on a machine where some other suite has already run. That is why
+	# this passed on a development router and failed on a clean runner.
 	cat > "$RIG/work/caller.sh" <<CALLER
-. "$RIG/lib/pwplus-common.sh"
+. "$ROOT/package/passwall-plus/files/pwplus-common.sh"
 _tmp="$RIG/work/dest.bin"
 _url="$1"
 download_checked "\$_url" "\$_tmp" 8192 >/dev/null 2>&1
