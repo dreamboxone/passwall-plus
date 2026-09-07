@@ -205,7 +205,21 @@ CALLER
 }
 
 run_caller() {
-	PWPLUS_RUN="$RIG/run" PWPLUS_ETC="$RIG/etc" sh "$RIG/work/caller.sh" 2>/dev/null
+	PWPLUS_RUN="$RIG/run" PWPLUS_ETC="$RIG/etc" \
+		sh "$RIG/work/caller.sh" 2>"$RIG/work/caller.err"
+	echo "$?" > "$RIG/work/caller.rc"
+}
+
+# When this goes wrong it goes wrong silently - the caller dies and hands back
+# nothing, and "expected X, got []" says which of a dozen things happened only
+# if you already know. So say what the shell said.
+caller_why() {
+	printf '     exit %s' "$(cat "$RIG/work/caller.rc" 2>/dev/null)"
+	if [ -s "$RIG/work/caller.err" ]; then
+		printf ', stderr: %s' "$(head -3 "$RIG/work/caller.err" | tr '\n' ' ')"
+	fi
+	printf '\n'
+	printf '     sh is %s\n' "$(readlink -f /bin/sh 2>/dev/null || echo /bin/sh)"
 }
 
 # The collision happens where the helper assigns, which is before it transfers
@@ -216,8 +230,13 @@ run_caller() {
 # somewhere eventually for a reason that has nothing to do with what it checks.
 NOWHERE="file://$RIG/work/there-is-no-such-file"
 write_caller "$NOWHERE"
-check "$(run_caller)" "$RIG/work/dest.bin|$NOWHERE" \
-	"a download that fails leaves the caller's _tmp and _url alone"
+GOT="$(run_caller)"
+if [ "$GOT" = "$RIG/work/dest.bin|$NOWHERE" ]; then
+	ok "a download that fails leaves the caller's _tmp and _url alone"
+else
+	bad "a download that fails leaves the caller's _tmp and _url alone (got [$GOT])"
+	caller_why
+fi
 
 # And where curl will fetch one, that the file lands where it was asked to.
 if command -v curl >/dev/null 2>&1 && curl -fsS "file://$PAYLOAD" -o /dev/null 2>/dev/null; then
