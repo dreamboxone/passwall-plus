@@ -20,6 +20,35 @@ Developed on **OpenWrt 25.12**, target `ipq40xx/chromium`, architecture
 `arm_cortex-a7_neon-vfpv4`. Releases also carry `.ipk` packages for **24.10
 and 23.05**, across four architectures.
 
+### What the router needs
+
+| | Minimum | Comfortable |
+|---|---|---|
+| **Free flash** | 20 MB | 50 MB |
+| **RAM** | 128 MB | 256 MB or more |
+| **CPU** | any architecture Xray publishes a build for | two cores or more |
+
+**Flash.** The package itself is about **13 MB**, because it carries the Xray
+core. A router that already has `xray-core` — because PassWall2 pulled it in —
+uses that one and downloads nothing. The Iranian routing data is optional and
+counted separately: 25 MB for the full pair, about 2 MB for the `-lite` pair.
+Space is checked before every download and one that will not fit is refused,
+because filling a router's overlay remounts it read-only and from then on
+nothing works.
+
+**RAM.** The running core uses 40–80 MB. It works on a 128 MB router, but with
+a hundred-server list turn **Checked at once** down from 30 to 10 in the
+settings: the first pass opens thirty handshakes at once, and on a small
+router that, rather than the tunnel itself, is what brings it to its knees.
+
+**CPU.** Throughput is decided by TLS, not by core count. Measured on the
+reference router — four Cortex-A7 cores at 717 MHz — **1.6 MB/s** through the
+tunnel, and choosing a server out of 98 took **8.8 seconds**. A slower
+single-core CPU does the same work, more slowly.
+
+Routers with **32 MB of flash**, which is most older models, do not have room
+for this without external storage.
+
 ---
 
 ## How it chooses a server

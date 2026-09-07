@@ -35,6 +35,14 @@ define Package/luci-app-ovpn/install
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/ovpn
 	$(INSTALL_DATA) ./root/www/luci-static/resources/view/ovpn/overview.js \
 		$(1)/www/luci-static/resources/view/ovpn/overview.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/view/ovpn/nodes.js \
+		$(1)/www/luci-static/resources/view/ovpn/nodes.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/view/ovpn/settings.js \
+		$(1)/www/luci-static/resources/view/ovpn/settings.js
+
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/ovpn
+	$(INSTALL_DATA) ./root/www/luci-static/resources/ovpn/i18n.js \
+		$(1)/www/luci-static/resources/ovpn/i18n.js
 
 	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
 	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-app-ovpn.json \

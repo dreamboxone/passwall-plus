@@ -97,7 +97,127 @@ else
 	bad "a base64 subscription decodes to links"
 fi
 
+# ------------------------------------------------------ subscriptions in JSON
+#
+# A provider hands back a configuration as often as a list now: an Xray file,
+# a sing-box file, a Clash proxy list, an array of nodes. And one of the
+# things those carry - WireGuard - has no share link in most of them.
+
+echo "== a subscription that is a configuration rather than a list"
+
+cat > "$WORK/xray.json" <<'JSON'
+{ "outbounds": [
+  { "tag": "direct", "protocol": "freedom" },
+  { "tag": "JSON VLESS", "protocol": "vless",
+    "settings": { "vnext": [ { "address": "jx.example.com", "port": 443,
+      "users": [ { "id": "11111111-2222-3333-4444-555555555555", "encryption": "none" } ] } ] },
+    "streamSettings": { "network": "ws", "security": "tls",
+      "tlsSettings": { "serverName": "jx.example.com", "allowInsecure": true },
+      "wsSettings": { "path": "/ws" } } },
+  { "tag": "JSON WG", "protocol": "wireguard",
+    "settings": { "secretKey": "aGVsbG8gd29ybGQgdGhpcyBpcyBub3QgYSBrZXkxMjM=",
+      "address": ["172.16.0.2/32"], "mtu": 1280, "reserved": [78, 251, 145],
+      "peers": [ { "publicKey": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+        "endpoint": "wg.example.com:2408", "keepAlive": 25 } ] } }
+] }
+JSON
+
+cat > "$WORK/singbox.json" <<'JSON'
+{ "outbounds": [
+  { "type": "direct", "tag": "direct" },
+  { "type": "trojan", "tag": "SB Trojan", "server": "sb.example.com", "server_port": 8443,
+    "password": "hunter2",
+    "tls": { "enabled": true, "server_name": "sb.example.com", "alpn": ["h2","http/1.1"] },
+    "transport": { "type": "ws", "path": "/tj", "headers": { "Host": "sb.example.com" } } }
+], "endpoints": [
+  { "type": "wireguard", "tag": "SB WARP", "address": ["172.16.0.2/32"],
+    "private_key": "aGVsbG8gd29ybGQgdGhpcyBpcyBub3QgYSBrZXkxMjM=", "mtu": 1280,
+    "peers": [ { "address": "162.159.192.1", "port": 2408,
+      "public_key": "bmXOC+F1FxEMF9dyiK2H5/1SUtzH0JuVo51h2wPfgyo=",
+      "persistent_keepalive_interval": 25, "reserved": [1,2,3] } ] }
+] }
+JSON
+
+cat > "$WORK/clash.json" <<'JSON'
+{ "proxies": [
+  { "name": "CL VMess", "type": "vmess", "server": "cl.example.com", "port": 443,
+    "uuid": "11111111-2222-3333-4444-555555555555", "alterId": 0, "cipher": "auto",
+    "tls": true, "servername": "cl.example.com", "network": "ws",
+    "ws-opts": { "path": "/cl", "headers": { "Host": "cl.example.com" } } },
+  { "name": "CL SS", "type": "ss", "server": "cs.example.com", "port": 8388,
+    "cipher": "aes-256-gcm", "password": "hunter2" }
+] }
+JSON
+
+cat > "$WORK/links.json" <<'JSON'
+{ "remarks": "carried links",
+  "links": [
+    "vless://11111111-2222-3333-4444-555555555555@jl.example.com:443?encryption=none&security=tls&type=tcp#FROM LINKS",
+    { "name": "named by its object", "url": "trojan://hunter2@jo.example.com:443?sni=jo.example.com" }
+  ] }
+JSON
+
+: > "$WORK/json.tsv"
+for f in xray singbox clash links; do
+	LC_ALL=C awk -f "$RIG/lib/ovpn-parse" < "$WORK/$f.json" >> "$WORK/json.tsv" 2>/dev/null || true
+done
+
+for want in "JSON VLESS" "JSON WG" "SB Trojan" "SB WARP" "CL VMess" "CL SS" \
+            "FROM LINKS" "named by its object"; do
+	if cut -f2 "$WORK/json.tsv" | grep -qx "$want"; then
+		ok "read out of JSON: $want"
+	else
+		bad "read out of JSON: $want"
+	fi
+done
+
+# A service outbound is part of a configuration, not a server in it.
+if cut -f2 "$WORK/json.tsv" | grep -qx "direct"; then
+	bad "the service outbounds are left out"
+else
+	ok "the service outbounds are left out"
+fi
+
+# allowInsecure was removed in Xray 26 and is refused outright, so a file
+# written for an older core must not carry it through.
+if grep -q 'allowInsecure' "$WORK/json.tsv"; then
+	bad "allowInsecure is dropped on the way through"
+else
+	ok "allowInsecure is dropped on the way through"
+fi
+
+# The WireGuard peer's endpoint is what has to be measured and connected to.
+if grep -q '	wireguard	wg.example.com	2408	' "$WORK/json.tsv"; then
+	ok "a WireGuard peer's endpoint becomes the address and port"
+else
+	bad "a WireGuard peer's endpoint becomes the address and port"
+fi
+if grep -q '"reserved":\[78,251,145\]' "$WORK/json.tsv"; then
+	ok "and its reserved bytes survive as numbers"
+else
+	bad "and its reserved bytes survive as numbers"
+fi
+
 # ------------------------------------------------- against the real binary
+
+if [ -x "$RIG/core/xray" ]; then
+	echo "== the JSON-derived outbounds, against the core"
+	jrej=0
+	jtot=0
+	while IFS='	' read -r tag label proto host port payload; do
+		[ -n "$tag" ] || continue
+		case "$proto" in hysteria2|tuic) continue ;; esac
+		jtot=$((jtot + 1))
+		printf '{"log":{"loglevel":"none"},"outbounds":[%s]}' \
+			"$(printf '%s' "$payload" | sed 's/^{/{"tag":"proxy",/')" > "$WORK/j.json"
+		if ! "$RIG/core/xray" run -test -config "$WORK/j.json" >"$WORK/j.err" 2>&1; then
+			jrej=$((jrej + 1))
+			echo "     rejected: $proto $label"
+			grep -o 'common/errors:.*\|infra/conf:.*' "$WORK/j.err" | tail -1 | cut -c1-160
+		fi
+	done < "$WORK/json.tsv"
+	check "$jrej" "0" "all $jtot of them are accepted"
+fi
 
 if [ -x "$RIG/core/xray" ]; then
 	echo "== checking every outbound against $("$RIG/core/xray" version 2>/dev/null | head -1)"

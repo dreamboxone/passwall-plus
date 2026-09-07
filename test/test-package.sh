@@ -153,6 +153,32 @@ else
 	bad "these would kill a caller running under set -e: $FOUND"
 fi
 
+# The web interface has two packaging paths too, and only one of them was
+# being checked. The OpenWrt Makefile installed overview.js and neither of the
+# other two views: a package built that way was one page and two blank ones,
+# and nothing said so, because the shell builders - which the releases use -
+# ship all three.
+echo "== every file the web interface needs is in both packaging paths"
+LUCI_FILES="www/luci-static/resources/view/ovpn/overview.js
+www/luci-static/resources/view/ovpn/nodes.js
+www/luci-static/resources/view/ovpn/settings.js
+www/luci-static/resources/ovpn/i18n.js
+usr/share/luci/menu.d/luci-app-ovpn.json
+usr/share/rpcd/acl.d/luci-app-ovpn.json"
+MISSING=""
+for f in $LUCI_FILES; do
+	[ -f "$ROOT/package/luci-app-ovpn/root/$f" ] || MISSING="$MISSING $f(not in the tree)"
+	grep -q "$(basename "$f")" "$ROOT/package/luci-app-ovpn/Makefile" || MISSING="$MISSING $f(Makefile)"
+	# Without the extension: the shell builder installs the three views from a
+	# loop over their names, so the file name never appears in it whole.
+	grep -q "$(basename "$f" .js)" "$ROOT/build/packages.inc.sh" || MISSING="$MISSING $f(packages.inc.sh)"
+done
+if [ -z "$MISSING" ]; then
+	ok "all of them, in both"
+else
+	bad "missing:$MISSING"
+fi
+
 # A shared helper must not take a variable name away from whoever called it.
 #
 # There is no `local` in this shell, so every name a function assigns is

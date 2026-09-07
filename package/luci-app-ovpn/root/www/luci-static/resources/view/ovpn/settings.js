@@ -14,6 +14,13 @@
 'require poll';
 'require ui';
 'require uci';
+'require ovpn.i18n as i18n';
+
+/* Our own strings, in the language the setting names. The global _()
+   is shadowed for this file only: LuCI translates through .lmo
+   catalogues built by a tool this package's build does not have. */
+var _ = i18n.tr;
+
 
 /* The public Iranian resolvers, offered rather than typed. Nothing is chosen
    by default and nothing has to be: with none of them selected the Iran split
@@ -232,6 +239,8 @@ return view.extend({
 	},
 
 	render: function(data) {
+		i18n.setLang(uci.get('ovpn', 'config', 'lang'));
+
 		var m, s, o, i;
 		var sys = (data && data[0]) || {};
 
@@ -247,6 +256,16 @@ return view.extend({
 		});
 
 		m = new form.Map('ovpn', _('Settings'));
+
+		/* ------------------------------------------------------ language */
+		s = m.section(form.NamedSection, 'config', 'ovpn');
+		s.anonymous = true;
+
+		o = s.option(form.ListValue, 'lang', _('Language'),
+			_('The language of these three pages. The rest of LuCI keeps whatever language it was already in. Save, then reload the page to see it.'));
+		o.value('en', _('English'));
+		o.value('fa', _('Persian'));
+		o.default = 'en';
 
 		/* ------------------------------------------------------- routing */
 		s = m.section(form.NamedSection, 'config', 'ovpn', _('Routing'));

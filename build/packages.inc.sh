@@ -113,11 +113,16 @@ stage_luci() {
 	i="$work/luci-app-ovpn"
 
 	install -d "$i/www/luci-static/resources/view/ovpn" \
+	           "$i/www/luci-static/resources/ovpn" \
 	           "$i/usr/share/luci/menu.d" "$i/usr/share/rpcd/acl.d"
 	for v in overview nodes settings; do
 		install -m 0644 "$l/www/luci-static/resources/view/ovpn/$v.js" \
 			"$i/www/luci-static/resources/view/ovpn/$v.js"
 	done
+	# The Persian strings. Every view requires it, so a package without it is
+	# three blank pages - it ships beside them, not as an extra.
+	install -m 0644 "$l/www/luci-static/resources/ovpn/i18n.js" \
+		"$i/www/luci-static/resources/ovpn/i18n.js"
 	install -m 0644 "$l/usr/share/luci/menu.d/luci-app-ovpn.json" \
 		"$i/usr/share/luci/menu.d/luci-app-ovpn.json"
 	install -m 0644 "$l/usr/share/rpcd/acl.d/luci-app-ovpn.json" \

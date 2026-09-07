@@ -114,8 +114,24 @@ icmp_ms() {
 }
 
 sift_one() {
-	_tag="$1"; _host="$2"; _port="$3"
+	_tag="$1"; _host="$2"; _port="$3"; _proto="${4:-}"
 	_ms=0
+
+	# A handshake asks a question these protocols cannot answer. WireGuard,
+	# hysteria2 and tuic live on UDP and nothing is listening on the TCP port
+	# at all, so the first pass was quietly discarding every one of them - the
+	# program has carried hysteria2 and tuic since it was written and would
+	# never once have measured one. They go through with a distance that puts
+	# them behind everything that did answer, and the second pass, which makes
+	# a real request, decides whether they work.
+	case "$_proto" in
+		wireguard|hysteria2|hysteria|tuic)
+			printf '%06d\t%s\n' 9000 "$_tag" >> "$ALIVE"
+			echo x >> "$ATTEMPTS"
+			return 0
+			;;
+	esac
+
 	case "$PREFILTER" in
 		icmp)
 			_ms="$(icmp_ms "$_host")"
@@ -149,7 +165,7 @@ cmd_sift() {
 	_pids=""
 	while IFS="	" read -r tag label proto host port payload; do
 		[ -n "$tag" ] || continue
-		sift_one "$tag" "$host" "$port" &
+		sift_one "$tag" "$host" "$port" "$proto" &
 		_pids="$_pids $!"
 		_running=$((_running + 1))
 		if [ "$_running" -ge "$SIFT_PARALLEL" ]; then

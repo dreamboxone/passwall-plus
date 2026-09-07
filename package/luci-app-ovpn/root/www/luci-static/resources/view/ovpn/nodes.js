@@ -13,6 +13,14 @@
 'require rpc';
 'require poll';
 'require ui';
+'require uci';
+'require ovpn.i18n as i18n';
+
+/* Our own strings, in the language the setting names. The global _()
+   is shadowed for this file only: LuCI translates through .lmo
+   catalogues built by a tool this package's build does not have. */
+var _ = i18n.tr;
+
 
 var callNodes  = rpc.declare({ object: 'luci.ovpn', method: 'nodes', expect: { '': {} } });
 var callSubs   = rpc.declare({ object: 'luci.ovpn', method: 'subs',  expect: { '': {} } });
@@ -184,11 +192,14 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			callNodes().catch(function() { return {}; }),
-			callSubs().catch(function() { return {}; })
+			callSubs().catch(function() { return {}; }),
+			uci.load('ovpn').catch(function() { return null; })
 		]);
 	},
 
 	render: function(data) {
+		i18n.setLang(uci.get('ovpn', 'config', 'lang'));
+
 		var m, s, o;
 
 		m = new form.Map('ovpn', _('Servers'),
