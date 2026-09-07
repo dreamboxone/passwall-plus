@@ -194,6 +194,16 @@ return view.extend({
 		m = new form.Map('ovpn', _('Servers'),
 			_('Where servers come from, and which ones to add by hand. Changes take effect the next time the list is read.'));
 
+		s = m.section(form.NamedSection, 'config', 'ovpn', _('Which servers to use'));
+		s.anonymous = true;
+
+		o = s.option(form.ListValue, 'sources', _('Servers to use'),
+			_('This decides who may be measured, not who wins: whichever server answers fastest is the one used, wherever it came from. A server added by hand joins the list rather than replacing it. To insist on one particular server, press “Use this one” beside it below.'));
+		o.value('both', _('Mine and the subscriptions'));
+		o.value('own', _('Only the ones I added by hand'));
+		o.value('subs', _('Only the subscriptions'));
+		o.default = 'both';
+
 		s = m.section(form.GridSection, 'subscription', _('Subscriptions'),
 			_('Each one is fetched every fifteen minutes. A source that hands back a single base64 block is understood as well as a plain list of links.'));
 		s.addremove = true;

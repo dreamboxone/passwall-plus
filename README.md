@@ -201,6 +201,7 @@ beside it. Names in brackets are the UCI options.
 
 | Setting | Default | What it does |
 |---|---|---|
+| Servers to use `sources` | Mine and the subscriptions | Which servers are allowed into the running: both, only the ones added by hand, or only the subscriptions. It decides who may be measured, not who wins — whichever server answers fastest is the one used, wherever it came from, and a server added by hand joins the list rather than replacing it. On *only mine* the subscriptions are not even fetched, which on a censored connection saves a minute of waiting on an address that hangs rather than refusing. To insist on one particular server, press **Use this one** beside it on the Servers page. |
 | First pass `prefilter` | TCP handshake | How a server is judged worth measuring properly. A handshake to its real port is the right test. A ping is cheaper and wrong often enough to matter: a server behind a CDN answers pings at the edge whatever state it is in, and plenty of working servers drop ICMP entirely. *Ping, then handshake* is the strictest and discards the most. |
 | Good enough `good_ms` | 1000 | The first server measured faster than this is the one used. Lower means a better server and a longer wait. |
 | Measured at a time `batch_size` | 10 | How many of the survivors are measured properly at once. |

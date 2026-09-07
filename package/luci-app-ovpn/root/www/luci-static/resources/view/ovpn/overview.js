@@ -63,13 +63,21 @@ function donut(title, up, down) {
 	/* An empty ring must read as "nothing yet" rather than as "all download". */
 	if (total === 0) ring = [ ring[0] ];
 
-	/* Transparent on purpose. Themes paint a background on every svg they
-	   find - it is there for the bandwidth graphs, which are drawn on it -
-	   and a ring drawn on that turns into a pale square sitting on the card
-	   in a colour belonging to neither. The ring is the drawing; the card
-	   behind it is the background. */
+	/* Transparent, and it takes an !important to say so. The theme paints a
+	   background on every svg on the page and does it with two rules that are
+	   themselves !important:
+
+	       svg { background-color: var(--background-color-high) !important }
+	       #view div[style] > svg { ... !important }
+
+	   They exist for the bandwidth graphs, which are drawn on that background.
+	   A ring drawn on it becomes a pale square sitting on the card in a colour
+	   belonging to neither, and a plain background:transparent loses to them
+	   without a word. An important declaration in a style attribute outranks
+	   an important declaration in a stylesheet, which is the whole of the fix.
+	   The ring is the drawing; the card behind it is the background. */
 	var g = svg('svg', { viewBox: '0 0 120 120', width: 120, height: 120,
-	                     style: 'display:block;background:transparent' }, ring);
+	                     style: 'display:block;background-color:transparent!important' }, ring);
 
 	return E('div', { 'style': 'text-align:center;flex:1 1 140px;min-width:140px' }, [
 		E('div', { 'style': 'font-size:12px;opacity:.65;margin-bottom:6px' }, title),
@@ -192,8 +200,10 @@ function renderState(st) {
 	var msg = document.getElementById('ovpn-msg');
 	if (msg) {
 		var text = st.message || '';
+		/* Asked fresh every few seconds rather than remembered, so it goes as
+		   soon as PassWall does. */
 		if (!text && st.passwall)
-			text = _('PassWall is also redirecting traffic on this router. Two transparent proxies will fight over the same packets.');
+			text = _('PassWall is also redirecting traffic — turn one of them off.');
 		msg.style.display = text ? 'block' : 'none';
 		setNode('ovpn-msg-text', text);
 	}

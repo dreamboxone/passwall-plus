@@ -401,8 +401,14 @@ cmd_up() {
 
 	# Another transparent proxy fighting for the same packets is not something
 	# to discover later from a connection that behaves strangely.
+	#
+	# The log, and not say_message. A stored message outlives the thing it
+	# describes: this one was written while PassWall was running, sat in the
+	# file afterwards, and was still on the front page once PassWall had been
+	# switched off - telling the reader to do the thing they had just done.
+	# The status the page shows is asked fresh every few seconds, so that is
+	# where a condition that can go away belongs.
 	if passwall_running; then
-		say_message "PassWall is also redirecting traffic on this router. Two transparent proxies will fight over the same packets - turn one of them off."
 		warn "another transparent proxy is active - expect trouble"
 	fi
 

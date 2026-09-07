@@ -44,8 +44,19 @@ fetch_one() {
 	# long timeouts in a row is a quarter of an hour spent waiting.
 	_tmp="$OVPN_RUN/sub.$_sec"
 	_got=0
+	_first=1
 	for _try in "$url" $(mirrors_for "$url"); do
-		if curl -fsSL --connect-timeout 10 --max-time 60 --retry 1 -o "$_tmp" "$_try" 2>/dev/null; then
+		if [ "$_first" = "1" ]; then
+			_ct=8; _mt=30; _rt=1
+		else
+			_ct=6; _mt=20; _rt=0
+		fi
+		_first=0
+		# A blocked address does not refuse, it hangs, so the whole point of
+		# these numbers is the worst case: three sources at the old timeouts
+		# was four minutes of a fifteen-minute schedule spent waiting. The
+		# list is a few kilobytes; twenty seconds is not a tight budget for it.
+		if curl -fsSL --connect-timeout "$_ct" --max-time "$_mt" --retry "$_rt" -o "$_tmp" "$_try" 2>/dev/null; then
 			_got=1
 			[ "$_try" = "$url" ] || log "subscription '$name': unreachable, read from $_try instead"
 			break
@@ -93,6 +104,16 @@ fetch_one() {
 cmd_fetch() {
 	: > "$OVPN_RUN/links.new"
 	: > "$SUBS_STATUS"
+
+	# Nothing to fetch when the subscriptions are switched off. Worth saying
+	# out loud because it is not only tidiness: on a censored connection the
+	# list address hangs rather than refusing, so this is the difference
+	# between a refresh that takes a moment and one that spends a minute
+	# failing to read something nobody asked for.
+	if [ "$(cfg sources both)" = "own" ]; then
+		rm -f "$OVPN_RUN/links.new"
+		return 0
+	fi
 
 	config_load ovpn
 	config_foreach fetch_one subscription
@@ -170,17 +191,28 @@ add_node() {
 }
 
 cmd_build() {
+	# both / own / subs. Which servers are allowed into the running, before
+	# anything is measured. "both" is the default and the useful answer: a
+	# server added by hand does not replace the list, it joins it.
+	_sources="$(cfg sources both)"
+
 	_src="$LINKS"
 	[ -s "$_src" ] || _src="$OVPN_NODE_CACHE"
 
 	: > "$OVPN_RUN/build.txt"
-	[ -s "$_src" ] && cat "$_src" >> "$OVPN_RUN/build.txt"
+	if [ "$_sources" != "own" ] && [ -s "$_src" ]; then
+		cat "$_src" >> "$OVPN_RUN/build.txt"
+	fi
 
 	# Hand-added nodes go in ahead of the subscriptions. They were typed in on
 	# purpose, so when a limit has to bite it should bite the free list first.
+	# It is an order, not a preference: what is actually used is whichever
+	# server answers fastest, out of all of them.
 	: > "$OVPN_RUN/manual.txt"
-	config_load ovpn
-	config_foreach add_node node
+	if [ "$_sources" != "subs" ]; then
+		config_load ovpn
+		config_foreach add_node node
+	fi
 	if [ -s "$OVPN_RUN/manual.txt" ]; then
 		cat "$OVPN_RUN/build.txt" >> "$OVPN_RUN/manual.txt"
 		mv -f "$OVPN_RUN/manual.txt" "$OVPN_RUN/build.txt"
