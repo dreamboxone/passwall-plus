@@ -187,30 +187,51 @@ fi
 # pointed at the temporary name that had just been moved away. The core
 # downloaded perfectly and the program then reported that it "will not run on
 # this router - probably built for a different processor", about a build that
-# was correct. Driven for real here, over file://, because the collision only
-# shows when the helper actually runs.
+# was correct. Driven for real here, because the collision only shows when the
+# helper actually runs.
 echo "== a helper does not overwrite its caller's variables"
-if command -v curl >/dev/null 2>&1; then
-	mkdir -p "$RIG/work"
-	PAYLOAD="$RIG/work/payload.bin"
-	dd if=/dev/urandom of="$PAYLOAD" bs=1024 count=8 2>/dev/null
+mkdir -p "$RIG/work"
+PAYLOAD="$RIG/work/payload.bin"
+dd if=/dev/urandom of="$PAYLOAD" bs=1024 count=8 2>/dev/null
+
+write_caller() {
 	cat > "$RIG/work/caller.sh" <<CALLER
 . "$RIG/lib/pwplus-common.sh"
 _tmp="$RIG/work/dest.bin"
-_url="file://$PAYLOAD"
-download_checked "\$_url" "\$_tmp" 8192 >/dev/null 2>&1 || exit 3
+_url="$1"
+download_checked "\$_url" "\$_tmp" 8192 >/dev/null 2>&1
 printf '%s|%s\n' "\$_tmp" "\$_url"
 CALLER
-	GOT="$(PWPLUS_RUN="$RIG/run" PWPLUS_ETC="$RIG/etc" sh "$RIG/work/caller.sh" 2>/dev/null)"
-	check "$GOT" "$RIG/work/dest.bin|file://$PAYLOAD" \
-		"download_checked leaves the caller's _tmp and _url alone"
+}
+
+run_caller() {
+	PWPLUS_RUN="$RIG/run" PWPLUS_ETC="$RIG/etc" sh "$RIG/work/caller.sh" 2>/dev/null
+}
+
+# The collision happens where the helper assigns, which is before it transfers
+# anything - so the transfer is not allowed to decide whether this check means
+# something. A download that cannot possibly work exercises it just as well,
+# and does it on every machine: whether curl here will fetch a file:// URL at
+# all is not this project's business, and a check that depends on it fails
+# somewhere eventually for a reason that has nothing to do with what it checks.
+NOWHERE="file://$RIG/work/there-is-no-such-file"
+write_caller "$NOWHERE"
+check "$(run_caller)" "$RIG/work/dest.bin|$NOWHERE" \
+	"a download that fails leaves the caller's _tmp and _url alone"
+
+# And where curl will fetch one, that the file lands where it was asked to.
+if command -v curl >/dev/null 2>&1 && curl -fsS "file://$PAYLOAD" -o /dev/null 2>/dev/null; then
+	rm -f "$RIG/work/dest.bin"
+	write_caller "file://$PAYLOAD"
+	check "$(run_caller)" "$RIG/work/dest.bin|file://$PAYLOAD" \
+		"a download that works leaves them alone too"
 	if [ -s "$RIG/work/dest.bin" ]; then
-		ok "and the file it was asked for is where it was asked to put it"
+		ok "and the file is where it was asked to put it"
 	else
-		bad "and the file it was asked for is where it was asked to put it"
+		bad "and the file is where it was asked to put it"
 	fi
 else
-	echo "  skip - no curl on this machine"
+	echo "  skip - curl here will not fetch a file:// URL"
 fi
 
 rig_report
