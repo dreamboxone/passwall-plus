@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of ovpn - https://github.com/dreamboxone/ovpn
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
 # Everything, in the order of how much it needs to run.
 #

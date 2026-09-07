@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of ovpn - https://github.com/dreamboxone/ovpn
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
 # build-apk.sh - build .apk packages for OpenWrt 25.12 and later.
 #
@@ -32,7 +32,7 @@ APK="${2:-$APK_BIN}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 . "$ROOT/build/packages.inc.sh"
 
-WORK="${OVPN_WORK:-${TMPDIR:-/tmp}/ovpn-apk-build}"
+WORK="${PWPLUS_WORK:-${TMPDIR:-/tmp}/ovpn-apk-build}"
 DIST="$ROOT/dist"
 
 if [ -z "$APK" ]; then
@@ -73,7 +73,7 @@ finalize() {
 	find "$idir" -type f -exec chmod 0644 {} +
 	# derive what must be executable from where it lives, so a helper added
 	# later cannot be shipped non-executable by accident
-	for d in usr/bin usr/sbin etc/init.d usr/libexec usr/libexec/rpcd usr/libexec/ovpn; do
+	for d in usr/bin usr/sbin etc/init.d usr/libexec usr/libexec/rpcd usr/libexec/passwall-plus; do
 		if [ -d "$idir/$d" ]; then
 			find "$idir/$d" -maxdepth 1 -type f -exec chmod 0755 {} +
 		fi
@@ -143,13 +143,13 @@ finalize() {
 	echo ">>> built $(basename "$out") ($(du -h "$out" | cut -f1))"
 }
 
-stage_ovpn "$WORK" "$ROOT" "$CORE"
-finalize ovpn "$ARCH" "$OVPN_DEPS" "$OVPN_DESC"
+stage_pwplus "$WORK" "$ROOT" "$CORE"
+finalize passwall-plus "$ARCH" "$PWPLUS_DEPS" "$PWPLUS_DESC"
 
 stage_luci "$WORK" "$ROOT"
 # OpenWrt spells an architecture independent package "all" in the Makefile and
 # "noarch" in the package metadata; package-pack.mk does the same translation
-finalize luci-app-ovpn noarch "$LUCI_DEPS" "$LUCI_DESC"
+finalize luci-app-passwall-plus noarch "$LUCI_DEPS" "$LUCI_DESC"
 
 echo
 echo ">>> packages in $DIST"

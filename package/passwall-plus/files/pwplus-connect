@@ -1,0 +1,124 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+#
+# pwplus-connect - choose a server, and connect through it.
+#
+#   pwplus-connect            choose, then start the tunnel     (the Connect button)
+#   pwplus-connect prepare    choose only, and only if there is nothing yet
+#   pwplus-connect force      choose again from scratch, then start
+#   pwplus-connect next       take the next server already measured, then start
+#
+# Choosing cannot happen inside the init script: procd would be held for the
+# whole measurement and the service would be neither started nor failed while
+# it waited. So the measuring happens here and the init script is only ever
+# asked to start something that has already been decided.
+
+set -e
+
+. "${PWPLUS_LIB:-/usr/libexec}/pwplus-common.sh"
+
+NODES="${PWPLUS_LIB:-/usr/libexec}/pwplus-nodes"
+PROBE="${PWPLUS_LIB:-/usr/libexec}/pwplus-probe"
+RULES="${PWPLUS_LIB:-/usr/libexec}/pwplus-rules"
+
+MODE="${1:-connect}"
+
+if ! pwplus_lock; then
+	# Something is already choosing. Two measurements at once would fight over
+	# the same listening ports and both would come back wrong.
+	log "already busy - leaving it to the run in progress"
+	exit 0
+fi
+
+trap 'say_status failed; pwplus_unlock' INT TERM
+trap pwplus_unlock EXIT
+
+# Opening the page must not throw away a choice that is already good, and must
+# never disturb a tunnel that is already up.
+if [ "$MODE" = "prepare" ] && [ -s "$PWPLUS_BEST" ]; then
+	exit 0
+fi
+
+# Opening the page measures; pressing Connect then finds the answer already
+# there. Measuring again would make the reader wait a second time for a result
+# that has not had time to change, which is the whole point of doing it when
+# the page opened.
+FRESH_SECONDS="$(cfg fresh_seconds 3600)"
+fresh=0
+if [ -s "$PWPLUS_BEST" ]; then
+	_age=$(( $(date +%s) - $(date -r "$PWPLUS_BEST" +%s 2>/dev/null || echo 0) ))
+	# an `a && b && c` line is a trap under set -e: when the test is false the
+	# line returns non-zero and takes the whole script with it
+	if [ "$_age" -ge 0 ] && [ "$_age" -lt "$FRESH_SECONDS" ]; then
+		fresh=1
+	fi
+fi
+
+case "$MODE" in
+	force)
+		# The healer calls this when the tunnel should be up and is not, which
+		# means the server we chose has stopped working. Reusing that choice
+		# is the one thing that cannot help.
+		fresh=0
+		;;
+	next)
+		# The cheap half of healing: the measurements are minutes old and
+		# still perfectly good, so take the next server down the list rather
+		# than spending another half minute learning what is already written
+		# down. Falls through to a full choice when the list runs out.
+		say_status selecting
+		if "$PROBE" next >/dev/null 2>&1; then
+			fresh=1
+		else
+			fresh=0
+		fi
+		;;
+esac
+
+if [ "$fresh" = "1" ]; then
+	say_status starting
+else
+	clear_message
+	say_status selecting
+	# A failure here is not fatal on its own: the saved list is still on disk
+	# and is very often good enough to connect with.
+	"$NODES" update >/dev/null 2>&1 || true
+	if ! "$PROBE" select >/dev/null 2>&1; then
+		say_status failed
+		exit 0
+	fi
+fi
+
+if [ "$MODE" = "prepare" ]; then
+	# ready to connect, but nothing is running and nothing was changed
+	say_status idle
+	exit 0
+fi
+
+say_status starting
+
+if timeout 90 /etc/init.d/passwall-plus restart >/dev/null 2>&1; then
+	# autostart was a setting nothing read: the boot symlink was never made,
+	# so the tunnel could not come back after a power cut whatever it said.
+	# Done here rather than inside the init script, which would be asking the
+	# init script to run itself and wait on a lock it is already holding.
+	if [ "$(cfg autostart 0)" = "1" ]; then
+		timeout 15 /etc/init.d/passwall-plus enable >/dev/null 2>&1 || true
+	else
+		timeout 15 /etc/init.d/passwall-plus disable >/dev/null 2>&1 || true
+	fi
+	# service_started sets this to `ready` when the rules actually went in.
+	# Anything else means the process is alive and the network is untouched,
+	# which must not be reported as connected.
+	if [ "$(cat "$PWPLUS_STATUS" 2>/dev/null)" != "ready" ]; then
+		say_status failed
+	fi
+else
+	# A failed start must not leave the network pointing at a tunnel that is
+	# not there. Better disconnected than unreachable.
+	"$RULES" down >/dev/null 2>&1 || true
+	say_status failed
+fi

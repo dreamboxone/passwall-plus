@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of ovpn - https://github.com/dreamboxone/ovpn
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
 # build-core.sh - fetch the Xray core for an OpenWrt target.
 #
@@ -44,7 +44,7 @@ esac
 command -v curl >/dev/null 2>&1 || { echo "curl not found in PATH"; exit 1; }
 command -v unzip >/dev/null 2>&1 || { echo "unzip not found in PATH"; exit 1; }
 
-WORK="${OVPN_WORK:-$ROOT/.build}/$OUTDIR"
+WORK="${PWPLUS_WORK:-$ROOT/.build}/$OUTDIR"
 OUT="$ROOT/prebuilt/$OUTDIR/xray"
 
 echo ">>> target      : $TARGET"

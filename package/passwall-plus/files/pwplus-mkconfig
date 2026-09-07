@@ -1,0 +1,200 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+#
+# pwplus-mkconfig - write the Xray configuration for the selected server.
+# Prints it on stdout.
+#
+# Four things here are not obvious.
+#
+# The DNS inbound listens on 0.0.0.0, not on loopback: a firewall redirect
+# rewrites the destination to the address of the interface the query arrived
+# on and never to 127.0.0.1, so a loopback listener would receive nothing.
+#
+# Name lookups leave over TCP, not UDP. A free server list is mostly vless
+# and vmess over TCP, websocket or reality, and a great many of those carry
+# no UDP at all - so sending lookups out as UDP loses them completely on the
+# very servers this is built to use. A tunnel that carries every byte except
+# the name lookups looks, from the inside, like a tunnel where no site opens.
+#
+# The Iran split lives here and nowhere else. It would have been possible to
+# put Iranian address ranges into the firewall as a set and decide there, but
+# then the same decision would have had to be written twice, once for
+# nftables and once for iptables, and kept in step with a list that changes
+# weekly. Xray already knows how to read geoip.dat; the firewall's whole job
+# is to hand it the packets.
+#
+# And the geo rules are only written when the geo files are actually on the
+# router. Asking Xray for `geoip:ir` when geoip.dat is missing does not
+# degrade to sending everything through the tunnel - it refuses to start at
+# all, which turns a missing optional download into a dead connection.
+
+set -e
+
+. "${PWPLUS_LIB:-/usr/libexec}/pwplus-common.sh"
+
+BEST="${PWPLUS_BEST}"
+
+[ -s "$BEST" ] || { echo "no server selected yet" >&2; exit 1; }
+
+tproxy_port="$(cfg tproxy_port 1082)"
+dns_port="$(cfg dns_port 1053)"
+api_port="$(cfg api_port 10853)"
+route_ir="$(cfg_bool route_ir 0)"
+block_ads="$(cfg_bool block_ads 0)"
+block_torrent="$(cfg_bool block_torrent 1)"
+# Empty on purpose, and empty is a real answer: no Iranian resolver, Iranian
+# names answered by the same resolver as everything else. A default given here
+# would make "none" impossible to express, because an empty setting is read as
+# no setting and the default comes back in its place.
+ir_dns="$(cfg ir_dns '')"
+remote_dns="$(cfg remote_dns 1.1.1.1)"
+loglevel="$(cfg loglevel warning)"
+
+PRIVATE_V4='"0.0.0.0/8","10.0.0.0/8","100.64.0.0/10","127.0.0.0/8","169.254.0.0/16","172.16.0.0/12","192.168.0.0/16","224.0.0.0/4","240.0.0.0/4"'
+PRIVATE_V6='"::1/128","fc00::/7","fe80::/10"'
+
+# `pwplus-mkconfig nogeo` writes the same configuration with no geo category in
+# it at all. It exists for one situation: the router has geoip.dat and
+# geosite.dat, they are found, the rules are written - and the core still
+# refuses them, because the files came from somewhere that does not carry the
+# categories this asks for. A tunnel that will not start is a worse outcome
+# than a tunnel without the split, so the caller can ask for the second.
+FORCE_NO_GEO=0
+if [ "${1:-}" = "nogeo" ]; then
+	FORCE_NO_GEO=1
+	route_ir=0
+	block_ads=0
+fi
+
+# The split needs both files. Anything less and the rules below stay out.
+geo=""
+if [ "$route_ir" = "1" ] || [ "$block_ads" = "1" ]; then
+	geo="$(geo_dir)" || geo=""
+	if [ -z "$geo" ]; then
+		say_message "Iran routing is switched on but geoip.dat and geosite.dat are not on the router yet - press Update beside them. Until then everything goes through the tunnel."
+		warn "geo files missing - routing everything through the tunnel"
+		route_ir=0
+		block_ads=0
+	fi
+fi
+
+# ------------------------------------------------------------------ rules
+
+rules=""
+add_rule() {
+	[ -n "$rules" ] && rules="$rules,"
+	rules="$rules$1"
+}
+
+add_rule '{"type":"field","inboundTag":["api-in"],"outboundTag":"api"}'
+add_rule '{"type":"field","inboundTag":["dns-in"],"outboundTag":"dns-out"}'
+
+# `[ test ] && command` as a whole statement is a trap under set -e: when the
+# test is false the statement returns non-zero and takes the script with it.
+if [ "$block_torrent" = "1" ]; then
+	add_rule '{"type":"field","protocol":["bittorrent"],"outboundTag":"block"}'
+fi
+
+if [ "$block_ads" = "1" ]; then
+	add_rule '{"type":"field","domain":["geosite:category-ads-all"],"outboundTag":"block"}'
+fi
+
+# Anything addressed to this network stays on this network, always. This is
+# written out rather than left to geoip:private so that it holds even with no
+# geo files on the router at all - losing the LAN is not an acceptable way to
+# find out that an optional download is missing.
+add_rule "{\"type\":\"field\",\"ip\":[$PRIVATE_V4,$PRIVATE_V6],\"outboundTag\":\"direct\"}"
+
+if [ "$route_ir" = "1" ]; then
+	add_rule '{"type":"field","domain":["geosite:ir"],"outboundTag":"direct"}'
+	add_rule '{"type":"field","ip":["geoip:ir","geoip:private"],"outboundTag":"direct"}'
+	domain_strategy=IPIfNonMatch
+else
+	# With everything going the same way there is nothing to look up, and
+	# AsIs saves a resolution on every single connection.
+	domain_strategy=AsIs
+fi
+
+add_rule '{"type":"field","network":"tcp,udp","outboundTag":"proxy"}'
+
+# -------------------------------------------------------------------- dns
+
+if [ "$route_ir" = "1" ] && [ -n "$ir_dns" ]; then
+	# Iranian names are better answered by a resolver inside Iran, or the
+	# answer names a foreign edge of an Iranian CDN and the "direct" route
+	# then goes the long way round for no reason. That resolver is at an
+	# Iranian address, so the geoip:ir rule above already sends the query to
+	# it directly - it is not asked through the tunnel it is meant to avoid.
+	#
+	# With no resolver chosen the split still works: the rules above still
+	# send Iranian names and Iranian addresses straight out. Only the lookup
+	# itself goes the ordinary way, which costs an Iranian CDN answering with
+	# a foreign edge now and then, and nothing else.
+	dns_servers="{\"address\":\"$ir_dns\",\"domains\":[\"geosite:ir\"],\"expectIPs\":[\"geoip:ir\"]},\"tcp://$remote_dns\",\"tcp://8.8.8.8\""
+else
+	dns_servers="\"tcp://$remote_dns\",\"tcp://8.8.8.8\""
+fi
+
+# ----------------------------------------------------------------- output
+
+cat <<EOF
+{
+  "log": { "loglevel": "${loglevel}" },
+  "stats": {},
+  "api": { "tag": "api", "services": [ "StatsService" ] },
+  "policy": {
+    "system": {
+      "statsOutboundUplink": true,
+      "statsOutboundDownlink": true
+    }
+  },
+  "inbounds": [
+    {
+      "tag": "tproxy-in",
+      "listen": "0.0.0.0",
+      "port": ${tproxy_port},
+      "protocol": "dokodemo-door",
+      "settings": { "network": "tcp,udp", "followRedirect": true },
+      "streamSettings": { "sockopt": { "tproxy": "tproxy" } },
+      "sniffing": {
+        "enabled": true,
+        "destOverride": [ "http", "tls", "quic" ],
+        "routeOnly": false
+      }
+    },
+    {
+      "tag": "dns-in",
+      "listen": "0.0.0.0",
+      "port": ${dns_port},
+      "protocol": "dokodemo-door",
+      "settings": { "address": "${remote_dns}", "port": 53, "network": "tcp,udp" }
+    },
+    {
+      "tag": "api-in",
+      "listen": "127.0.0.1",
+      "port": ${api_port},
+      "protocol": "dokodemo-door",
+      "settings": { "address": "127.0.0.1" }
+    }
+  ],
+  "outbounds": [
+$(sed -e 's/^[[:space:]]*//' -e 's/^{/{"tag":"proxy",/' "$BEST" | head -1),
+    { "tag": "direct", "protocol": "freedom", "settings": { "domainStrategy": "UseIP" } },
+    { "tag": "dns-out", "protocol": "dns" },
+    { "tag": "block", "protocol": "blackhole" }
+  ],
+  "dns": {
+    "tag": "dns-module",
+    "servers": [ ${dns_servers} ],
+    "queryStrategy": "UseIPv4",
+    "disableCache": false
+  },
+  "routing": {
+    "domainStrategy": "${domain_strategy}",
+    "rules": [ ${rules} ]
+  }
+}
+EOF

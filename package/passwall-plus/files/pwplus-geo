@@ -1,0 +1,189 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+#
+# pwplus-geo - fetch the routing data the Iran split needs.
+#
+#   pwplus-geo update [geoip|geosite|all]
+#   pwplus-geo status
+#   pwplus-geo remove
+#
+# Both addresses are settings, shown in the web interface and editable there.
+# Pressing Update always downloads again, whether or not the file is already
+# on the router - that is the point of a button called Update.
+#
+# Two things this refuses to do.
+#
+# It will not start a download that cannot fit. A router that fills its
+# overlay does not simply fail to save the file: it remounts read-only, and
+# from that moment nothing works and nothing says why. The full geoip.dat is
+# about seventeen megabytes and geosite.dat about eight, which is more than
+# the free space on a great many routers, so this is not a theoretical
+# concern - it is the normal case.
+#
+# And it will not install a file it has not seen the core read. A download
+# that returns an error page, a rate-limit notice or a login form is still a
+# file, and it is still the right name and roughly the right size. Installed,
+# it does not degrade anything: Xray refuses to start at all, and the router
+# loses its internet connection because of a file that was meant to make
+# routing cleverer. So the new file is put in front of the core, in place,
+# before it is allowed to replace the old one.
+
+set -e
+
+. "${PWPLUS_LIB:-/usr/libexec}/pwplus-common.sh"
+
+GEOIP_DEFAULT="https://raw.githubusercontent.com/Chocolate4U/Iran-v2ray-rules/release/geoip.dat"
+GEOSITE_DEFAULT="https://raw.githubusercontent.com/Chocolate4U/Iran-v2ray-rules/release/geosite.dat"
+
+DIR="$(cfg geo_dir "$PWPLUS_ETC/geo")"
+
+url_for() {
+	case "$1" in
+		geoip)   cfg geoip_url "$GEOIP_DEFAULT" ;;
+		geosite) cfg geosite_url "$GEOSITE_DEFAULT" ;;
+	esac
+	return 0
+}
+
+# Ask the core to read the pair, one of which is the newcomer.
+#
+# `geoip:ir` and `geosite:ir` are the two categories the split actually uses,
+# so this is not a shape check - it is the same question the tunnel will ask
+# thirty seconds from now, asked while there is still time to say no.
+verify_pair() {
+	_ip="$1"
+	_site="$2"
+	_x="$(find_xray '')" || {
+		log "no core available to check the geo files with - installing them unchecked"
+		return 0
+	}
+
+	_t="$PWPLUS_RUN/geocheck"
+	rm -rf "$_t"
+	mkdir -p "$_t"
+	# Symlinks would do, but a stripped busybox does not always have ln -s,
+	# and these are read once and thrown away.
+	cp -f "$_ip" "$_t/geoip.dat" 2>/dev/null || return 1
+	cp -f "$_site" "$_t/geosite.dat" 2>/dev/null || return 1
+
+	cat > "$_t/check.json" <<'EOF'
+{
+  "log": { "loglevel": "none" },
+  "outbounds": [
+    { "tag": "direct", "protocol": "freedom" },
+    { "tag": "block", "protocol": "blackhole" }
+  ],
+  "routing": {
+    "rules": [
+      { "type": "field", "domain": [ "geosite:ir" ], "outboundTag": "direct" },
+      { "type": "field", "ip": [ "geoip:ir" ], "outboundTag": "direct" }
+    ]
+  }
+}
+EOF
+
+	if XRAY_LOCATION_ASSET="$_t" "$_x" run -test -config "$_t/check.json" >"$_t/err" 2>&1; then
+		rm -rf "$_t"
+		return 0
+	fi
+	warn "the downloaded geo data is not something the core can read: $(grep -o 'common/errors:.*' "$_t/err" | tail -1 | cut -c1-160)"
+	rm -rf "$_t"
+	return 1
+}
+
+fetch_one() {
+	_what="$1"
+	_url="$(url_for "$_what")"
+	[ -n "$_url" ] || return 1
+
+	_size="$(remote_size "$_url")"
+	log "$_what: $_url ($(human_size "$_size"))"
+
+	# Both files have to be in place before either can be checked, so the new
+	# one is downloaded beside the target rather than over it.
+	_new="$DIR/$_what.dat.new"
+	mkdir -p "$DIR"
+	download_checked "$_url" "$_new" "$_size" || return 1
+
+	# The partner file: whichever is not being replaced this time round.
+	if [ "$_what" = "geoip" ]; then
+		_a="$_new"; _b="$DIR/geosite.dat"
+	else
+		_a="$DIR/geoip.dat"; _b="$_new"
+	fi
+
+	if [ -s "$_a" ] && [ -s "$_b" ]; then
+		if ! verify_pair "$_a" "$_b"; then
+			rm -f "$_new"
+			say_message "The $_what file that came back is not readable routing data - the old one has been kept. Check the address."
+			return 1
+		fi
+	fi
+
+	mv -f "$_new" "$DIR/$_what.dat" || return 1
+	date -u +%s > "$DIR/$_what.stamp" 2>/dev/null || true
+	log "$_what updated ($(human_size "$(wc -c < "$DIR/$_what.dat")"))"
+	return 0
+}
+
+cmd_update() {
+	clear_message
+	_rc=0
+	case "${1:-all}" in
+		geoip)   fetch_one geoip   || _rc=1 ;;
+		geosite) fetch_one geosite || _rc=1 ;;
+		all)
+			# Both, and both are attempted even when the first fails: a
+			# partial result is more useful than none, and the pair check
+			# above already refuses to install a broken half.
+			fetch_one geoip   || _rc=1
+			fetch_one geosite || _rc=1
+			;;
+		*) echo "usage: $0 update [geoip|geosite|all]" >&2; exit 1 ;;
+	esac
+
+	if [ "$_rc" = "0" ]; then
+		say_message "Routing data updated. Reconnect for it to take effect."
+	fi
+	return "$_rc"
+}
+
+one_status() {
+	_what="$1"
+	_f="$DIR/$_what.dat"
+	if [ -s "$_f" ]; then
+		printf '"%s":{"present":true,"bytes":%s,"updated":%s,"url":"%s"}' \
+			"$_what" "$(wc -c < "$_f" | tr -d ' ')" \
+			"$(cat "$DIR/$_what.stamp" 2>/dev/null || echo 0)" \
+			"$(json_escape "$(url_for "$_what")")"
+	else
+		printf '"%s":{"present":false,"bytes":0,"updated":0,"url":"%s"}' \
+			"$_what" "$(json_escape "$(url_for "$_what")")"
+	fi
+	return 0
+}
+
+cmd_status() {
+	printf '{"dir":"%s","free":%s,' "$(json_escape "$DIR")" "$(free_bytes "$DIR")"
+	one_status geoip
+	printf ','
+	one_status geosite
+	printf ',"usable":%s}\n' "$(geo_dir >/dev/null 2>&1 && echo true || echo false)"
+	return 0
+}
+
+cmd_remove() {
+	rm -f "$DIR/geoip.dat" "$DIR/geosite.dat" "$DIR/geoip.stamp" "$DIR/geosite.stamp"
+	log "routing data removed"
+	return 0
+}
+
+case "${1:-status}" in
+	update) shift; cmd_update "${1:-all}" ;;
+	status) cmd_status ;;
+	remove) cmd_remove ;;
+	*) echo "usage: $0 update [geoip|geosite|all]|status|remove" >&2; exit 1 ;;
+esac

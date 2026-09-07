@@ -1,0 +1,405 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+#
+# pwplus-cores - install, update and remove the proxy engines.
+#
+#   pwplus-cores list
+#   pwplus-cores install xray|sing-box|hysteria
+#   pwplus-cores remove  sing-box|hysteria
+#
+# Xray is the engine. It is what the configuration generator writes for, what
+# the measurements run through, and what carries the traffic, and one copy of
+# it ships with this package so that a fresh router works without downloading
+# anything.
+#
+# sing-box and hysteria are here for the protocols Xray does not speak -
+# hysteria2 and tuic. They are not a second engine: pwplus-bridge runs one of
+# them as a local SOCKS port for a single server, and Xray reaches it through
+# an ordinary socks outbound. That way there is one routing engine, one DNS
+# arrangement and one set of firewall rules no matter which protocol the
+# chosen server happens to use, instead of two of everything.
+#
+# Nothing here touches /usr/bin/xray. That belongs to OpenWrt's xray-core
+# package, which PassWall2 and others pull in, and a router that already has
+# one is a router that needs nothing downloaded at all - find_xray will use
+# it. Installing over it, or removing it, would break the other program.
+
+set -e
+
+. "${PWPLUS_LIB:-/usr/libexec}/pwplus-common.sh"
+
+DIR="$(cfg core_dir "$PWPLUS_OWN_DIR")"
+
+XRAY_REPO=XTLS/Xray-core
+SINGBOX_REPO=SagerNet/sing-box
+HYSTERIA_REPO=apernet/hysteria
+
+asset_for() {
+	_a="$(arch_assets)"
+	case "$1" in
+		xray)     echo "$_a" | awk '{print $1}' ;;
+		sing-box) echo "$_a" | awk '{print $2}' ;;
+		hysteria) echo "$_a" | awk '{print $3}' ;;
+	esac
+	return 0
+}
+
+latest_tag() {
+	curl -fsSL --connect-timeout 15 --max-time 45 \
+		"https://api.github.com/repos/$1/releases/latest" 2>/dev/null |
+		sed -n 's/.*"tag_name"[ \t]*:[ \t]*"\([^"]*\)".*/\1/p' | head -1
+	return 0
+}
+
+# Every archive needs room for itself and for what comes out of it, and the
+# check has to happen against the filesystem it will actually land on.
+need_room() {
+	space_for "$1" "$DIR"
+	return $?
+}
+
+# ------------------------------------------------------------------- xray
+
+install_xray() {
+	_asset="$(asset_for xray)"
+	[ "$_asset" != "-" ] && [ -n "$_asset" ] || {
+		say_message "Xray publishes no build for this router's processor ($(openwrt_arch)$(uname -m))."
+		return 1
+	}
+	_url="https://github.com/$XRAY_REPO/releases/latest/download/Xray-linux-$_asset.zip"
+	_zip="$PWPLUS_RUN/xray.zip"
+
+	command -v unzip >/dev/null 2>&1 || {
+		say_message "unzip is needed to install Xray and is not on this router. Press Install dependencies on the settings page."
+		return 1
+	}
+
+	_size="$(remote_size "$_url")"
+	# the archive, plus the binary that comes out of it
+	need_room $((_size * 2)) || return 1
+
+	download_checked "$_url" "$_zip" "$_size" || return 1
+
+	rm -rf "$PWPLUS_RUN/xtract"
+	mkdir -p "$PWPLUS_RUN/xtract"
+	if ! unzip -o -q "$_zip" xray -d "$PWPLUS_RUN/xtract" 2>/dev/null; then
+		rm -f "$_zip"
+		rm -rf "$PWPLUS_RUN/xtract"
+		say_message "The Xray download did not contain a program - the address or the release may have changed."
+		return 1
+	fi
+	rm -f "$_zip"
+	install_binary "$PWPLUS_RUN/xtract/xray" "$DIR/xray" xray
+	return $?
+}
+
+# ---------------------------------------------------------------- sing-box
+
+install_singbox() {
+	_asset="$(asset_for sing-box)"
+	[ "$_asset" != "-" ] && [ -n "$_asset" ] || {
+		say_message "sing-box publishes no build for this router's processor."
+		return 1
+	}
+	_tag="$(latest_tag "$SINGBOX_REPO")"
+	[ -n "$_tag" ] || {
+		say_message "Could not reach GitHub to find out which sing-box is current. Connect the tunnel first, then try again."
+		return 1
+	}
+	_ver="${_tag#v}"
+	# The archive name carries the version, so unlike the others this one
+	# cannot be fetched from the /latest/download/ path without asking first.
+	_name="sing-box-$_ver-linux-$_asset"
+	_url="https://github.com/$SINGBOX_REPO/releases/download/$_tag/$_name.tar.gz"
+	_tgz="$PWPLUS_RUN/sing-box.tar.gz"
+
+	_size="$(remote_size "$_url")"
+	need_room $((_size * 3)) || return 1
+	download_checked "$_url" "$_tgz" "$_size" || return 1
+
+	rm -rf "$PWPLUS_RUN/xtract"
+	mkdir -p "$PWPLUS_RUN/xtract"
+	if ! tar -xzf "$_tgz" -C "$PWPLUS_RUN/xtract" 2>/dev/null; then
+		rm -f "$_tgz"; rm -rf "$PWPLUS_RUN/xtract"
+		say_message "The sing-box download could not be unpacked."
+		return 1
+	fi
+	rm -f "$_tgz"
+	_bin="$(find "$PWPLUS_RUN/xtract" -name sing-box -type f 2>/dev/null | head -1)"
+	[ -n "$_bin" ] || { rm -rf "$PWPLUS_RUN/xtract"; say_message "No sing-box program inside the archive."; return 1; }
+	install_binary "$_bin" "$DIR/sing-box" sing-box
+	return $?
+}
+
+# ---------------------------------------------------------------- hysteria
+
+install_hysteria() {
+	_asset="$(asset_for hysteria)"
+	[ "$_asset" != "-" ] && [ -n "$_asset" ] || {
+		say_message "hysteria publishes no build for this router's processor."
+		return 1
+	}
+	# A plain executable, not an archive.
+	_url="https://github.com/$HYSTERIA_REPO/releases/latest/download/hysteria-linux-$_asset"
+	# _bin, not _tmp: the other two installers name their download for what it
+	# is, and this one did not - which is how it came to hand a helper the one
+	# variable name that helper was about to reuse.
+	_bin="$PWPLUS_RUN/hysteria.bin"
+
+	_size="$(remote_size "$_url")"
+	need_room $((_size * 2)) || return 1
+	download_checked "$_url" "$_bin" "$_size" || return 1
+	install_binary "$_bin" "$DIR/hysteria" hysteria
+	return $?
+}
+
+# ------------------------------------------------------------------ common
+
+# Put it in place only once it has been seen to run. A download for the wrong
+# processor is the right size, the right name and completely inert, and it
+# would sit there looking installed until the day something tried to use it.
+# Is this an ELF at all, and is it for this machine?
+#
+# Asked of the file rather than guessed at from the failure. Bytes 0 to 3 of
+# an ELF header are the magic, 4 and 5 are its word size and byte order, and
+# 18 and 19 are the processor it was built for - so comparing those against a
+# program this router is already running answers the question outright.
+#
+# With dd and cmp, because that is what is actually here. A router's busybox
+# may be built without od, without hexdump and without cksum - this one has no
+# od and no cksum - and a check written on top of a missing tool does not fail
+# loudly, it compares one empty string with another and says yes to anything.
+elf_slice() {   # elf_slice <file> <destination> <offset> <length>
+	dd if="$1" bs=1 skip="$3" count="$4" of="$2" 2>/dev/null || return 1
+	[ -s "$2" ] || return 1
+	return 0
+}
+
+is_elf() {
+	[ -s "$1" ] || return 1
+	_want="$PWPLUS_RUN/.elf.want"
+	_got="$PWPLUS_RUN/.elf.got"
+	printf '\177ELF' > "$_want" 2>/dev/null || { rm -f "$_want"; return 0; }
+	if ! elf_slice "$1" "$_got" 0 4; then
+		rm -f "$_want" "$_got"
+		return 1
+	fi
+	if cmp -s "$_want" "$_got"; then _r=0; else _r=1; fi
+	rm -f "$_want" "$_got"
+	return "$_r"
+}
+
+same_arch() {
+	_ref=/bin/busybox
+	[ -r "$_ref" ] || _ref=/bin/sh
+	# Nothing to compare against is not a reason to refuse a download.
+	[ -r "$_ref" ] || return 0
+	_a="$PWPLUS_RUN/.elf.a"
+	_b="$PWPLUS_RUN/.elf.b"
+	rm -f "$_a" "$_b"
+	for _off in 4 18; do
+		_len=2
+		if ! elf_slice "$1" "$_a.part" "$_off" "$_len"; then rm -f "$_a" "$_b" "$_a.part"; return 0; fi
+		if ! elf_slice "$_ref" "$_b.part" "$_off" "$_len"; then rm -f "$_a" "$_b" "$_a.part" "$_b.part"; return 0; fi
+		cat "$_a.part" >> "$_a"
+		cat "$_b.part" >> "$_b"
+		rm -f "$_a.part" "$_b.part"
+	done
+	if cmp -s "$_a" "$_b"; then _r=0; else _r=1; fi
+	rm -f "$_a" "$_b"
+	return "$_r"
+}
+
+install_binary() {
+	_src="$1"; _dst="$2"; _name="$3"
+	mkdir -p "$(dirname "$_dst")"
+	chmod 0755 "$_src" 2>/dev/null || true
+
+	if ! "$_src" version >/dev/null 2>&1; then
+		# Three different things used to be reported as one, and the one was a
+		# guess: "probably built for a different processor". It is the least
+		# likely of the three, because the address the file came from is
+		# chosen from this router's own architecture - and saying it sends the
+		# reader looking for a build that is already the right build.
+		if ! is_elf "$_src"; then
+			_why="what came back is not a program at all - the address may have moved, or answered with an error page"
+		elif ! same_arch "$_src"; then
+			_why="it is built for a different processor than this router"
+		else
+			_why="it is built for this processor but would not start: $("$_src" version 2>&1 | head -1)"
+		fi
+		rm -f "$_src"
+		rm -rf "$PWPLUS_RUN/xtract"
+		say_message "The $_name that was downloaded could not be installed - $_why."
+		warn "$_name downloaded but will not run here: $_why"
+		return 1
+	fi
+
+	# Replacing a running program in place fails on a busy filesystem; moving
+	# the old one aside first does not.
+	if [ -e "$_dst" ]; then
+		mv -f "$_dst" "$_dst.old" 2>/dev/null || true
+	fi
+	if mv -f "$_src" "$_dst" 2>/dev/null || cp -f "$_src" "$_dst"; then
+		chmod 0755 "$_dst"
+		rm -f "$_dst.old"
+		rm -rf "$PWPLUS_RUN/xtract"
+		log "$_name $(core_version "$_dst") installed in $_dst"
+		say_message "$_name $(core_version "$_dst") installed."
+		return 0
+	fi
+	# put back what was there
+	[ -e "$_dst.old" ] && mv -f "$_dst.old" "$_dst" 2>/dev/null || true
+	rm -rf "$PWPLUS_RUN/xtract"
+	say_message "Could not write $_dst."
+	return 1
+}
+
+# -------------------------------------------------------------------- list
+
+# What each project has published, as last seen. Read from a file and never
+# from the network: this is printed for a page that polls every few seconds,
+# and asking GitHub three times on every poll would be both rude and slow.
+# `pwplus-cores latest` is what refreshes it, in the background.
+LATEST_CACHE="$PWPLUS_ETC/cores.latest"
+LATEST_MAX_AGE=43200        # twelve hours
+
+latest_of() {
+	sed -n "s/^$1	//p" "$LATEST_CACHE" 2>/dev/null | head -1
+	return 0
+}
+
+repo_of() {
+	case "$1" in
+		xray)     echo "$XRAY_REPO" ;;
+		sing-box) echo "$SINGBOX_REPO" ;;
+		hysteria) echo "$HYSTERIA_REPO" ;;
+	esac
+	return 0
+}
+
+# The published version, normalised to what the core itself prints so the two
+# can be compared at all: a tag is "v26.7.28" or "app/v2.12.2", and the binary
+# says "26.7.28" or "v2.12.2".
+tag_version() {
+	_t="$1"
+	_t="${_t##*/}"
+	echo "$_t"
+	return 0
+}
+
+cmd_latest() {
+	# Refresh only when it is old, unless asked to do it anyway. Three small
+	# requests twice a day is nothing; three on every page poll is a habit
+	# that gets a router rate-limited.
+	if [ "${1:-}" != "force" ] && [ -s "$LATEST_CACHE" ]; then
+		_age=$(( $(date +%s) - $(date -r "$LATEST_CACHE" +%s 2>/dev/null || echo 0) ))
+		[ "$_age" -ge 0 ] && [ "$_age" -lt "$LATEST_MAX_AGE" ] && return 0
+	fi
+
+	_tmp="$LATEST_CACHE.new"
+	: > "$_tmp"
+	for _c in xray sing-box hysteria; do
+		_repo="$(repo_of "$_c")"
+		[ -n "$_repo" ] || continue
+		# The tag is all that is wanted, so this is a small request and a
+		# short leash. A source that will not answer leaves the previous
+		# answer in place rather than blanking it.
+		_tag="$(curl -fsSL --connect-timeout 8 --max-time 20 \
+			"https://api.github.com/repos/$_repo/releases/latest" 2>/dev/null |
+			sed -n 's/.*"tag_name"[ \t]*:[ \t]*"\([^"]*\)".*/\1/p' | head -1)"
+		if [ -n "$_tag" ]; then
+			printf '%s\t%s\n' "$_c" "$(tag_version "$_tag")" >> "$_tmp"
+		else
+			_old="$(latest_of "$_c")"
+			[ -n "$_old" ] && printf '%s\t%s\n' "$_c" "$_old" >> "$_tmp"
+		fi
+	done
+	if [ -s "$_tmp" ]; then
+		mv -f "$_tmp" "$LATEST_CACHE"
+	else
+		rm -f "$_tmp"
+	fi
+	return 0
+}
+
+one() {
+	_name="$1"; _path="$2"
+	_latest="$(latest_of "$_name")"
+	if [ -n "$_path" ] && [ -x "$_path" ]; then
+		_have="$(core_version "$_path")"
+		# Different strings, not "newer": comparing version numbers written by
+		# three different projects is a way to be confidently wrong. The page
+		# shows both and the reader decides.
+		_new=false
+		if [ -n "$_latest" ] && [ -n "$_have" ] && \
+		   [ "${_latest#v}" != "${_have#v}" ]; then
+			_new=true
+		fi
+		printf '{"name":"%s","installed":true,"path":"%s","version":"%s","latest":"%s","update":%s,"bytes":%s,"ours":%s,"arch_ok":%s}' \
+			"$_name" "$(json_escape "$_path")" \
+			"$(json_escape "$_have")" \
+			"$(json_escape "$_latest")" "$_new" \
+			"$(wc -c < "$_path" | tr -d ' ')" \
+			"$(case "$_path" in "$DIR"/*) echo true ;; *) echo false ;; esac)" \
+			"$([ "$(asset_for "$_name")" != "-" ] && echo true || echo false)"
+	else
+		printf '{"name":"%s","installed":false,"path":"","version":"","latest":"%s","update":false,"bytes":0,"ours":false,"arch_ok":%s}' \
+			"$_name" "$(json_escape "$_latest")" \
+			"$([ "$(asset_for "$_name")" != "-" ] && echo true || echo false)"
+	fi
+	return 0
+}
+
+cmd_list() {
+	_x="$(find_xray '' 2>/dev/null)" || _x=""
+	_s="$(find_singbox 2>/dev/null)" || _s=""
+	_h="$(find_hysteria 2>/dev/null)" || _h=""
+	printf '{"dir":"%s","free":%s,"arch":"%s","cores":[' \
+		"$(json_escape "$DIR")" "$(free_bytes "$DIR")" \
+		"$(json_escape "$(openwrt_arch)")"
+	one xray "$_x"; printf ','
+	one sing-box "$_s"; printf ','
+	one hysteria "$_h"
+	printf ']}\n'
+	return 0
+}
+
+cmd_remove() {
+	case "$1" in
+		sing-box|hysteria)
+			# Only ever our own copy. Something else on this router installed
+			# anything outside this directory, and it is not ours to delete.
+			if [ -e "$DIR/$1" ]; then
+				rm -f "$DIR/$1"
+				log "$1 removed"
+				say_message "$1 removed."
+			fi
+			;;
+		xray)
+			say_message "Xray is the engine and cannot be removed - it can only be updated."
+			return 1
+			;;
+		*) echo "usage: $0 remove sing-box|hysteria" >&2; return 1 ;;
+	esac
+	return 0
+}
+
+case "${1:-list}" in
+	list) cmd_list ;;
+	install)
+		clear_message
+		case "${2:-}" in
+			xray)     install_xray ;;
+			sing-box) install_singbox ;;
+			hysteria) install_hysteria ;;
+			*) echo "usage: $0 install xray|sing-box|hysteria" >&2; exit 1 ;;
+		esac
+		;;
+	remove) clear_message; cmd_remove "${2:-}" ;;
+	latest) cmd_latest "${2:-}" ;;
+	*) echo "usage: $0 list|install <core>|remove <core>|latest [force]" >&2; exit 1 ;;
+esac

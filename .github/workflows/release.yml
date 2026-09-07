@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of ovpn - https://github.com/dreamboxone/ovpn
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
 # Check everything, build installable packages in both formats, and publish
 # them.
@@ -63,7 +63,7 @@ jobs:
           # and the transparent-proxy probe genuinely loads a throwaway table.
           sudo -E env \
             RIG_XRAY="$PWD/prebuilt/x86_64/xray" \
-            OVPN_GEO_DIR="$PWD/geo" \
+            PWPLUS_GEO_DIR="$PWD/geo" \
             PATH="$PATH" \
             sh test/run.sh
 
@@ -77,11 +77,11 @@ jobs:
         run: |
           set -euo pipefail
           sub=$(sed -n "s/.*option url '\(https[^']*\)'.*/\1/p" \
-                package/ovpn/files/ovpn.config | head -1)
+                package/passwall-plus/files/ovpn.config | head -1)
           echo "source: $sub"
           curl -fsSL --retry 3 -o live.txt "$sub"
           echo "lines: $(grep -c . live.txt)"
-          LC_ALL=C awk -f package/ovpn/files/ovpn-parse < live.txt > live.tsv
+          LC_ALL=C awk -f package/passwall-plus/files/pwplus-parse < live.txt > live.tsv
           echo "parsed: $(wc -l < live.tsv) servers"
           test "$(wc -l < live.tsv)" -gt 0
           cut -f3 live.tsv | sort | uniq -c | sort -rn
@@ -138,8 +138,8 @@ jobs:
           cat > best.json <<'EOF'
           {"protocol":"freedom"}
           EOF
-          OVPN_LIB="$PWD/package/ovpn/files" OVPN_ETC="$PWD" OVPN_RUN="$PWD" \
-            sh package/ovpn/files/ovpn-mkconfig > cfg.json
+          PWPLUS_LIB="$PWD/package/passwall-plus/files" PWPLUS_ETC="$PWD" PWPLUS_RUN="$PWD" \
+            sh package/passwall-plus/files/pwplus-mkconfig > cfg.json
           ./prebuilt/x86_64/xray run -test -config cfg.json
           sudo ./prebuilt/x86_64/xray run -config cfg.json > xray.log 2>&1 &
           xpid=$!
@@ -201,9 +201,9 @@ jobs:
           done
 
           rm -rf verify && mkdir -p verify/apk verify/ipk
-          "$APK_BIN" extract --destination verify/apk --allow-untrusted --no-chown dist/ovpn-*.apk
+          "$APK_BIN" extract --destination verify/apk --allow-untrusted --no-chown dist/passwall-plus-*.apk
 
-          tar -xzf dist/ovpn_*_${{ matrix.openwrt_arch }}.ipk -C verify/ipk
+          tar -xzf dist/passwall-plus_*_${{ matrix.openwrt_arch }}.ipk -C verify/ipk
           mkdir -p verify/ipk/data verify/ipk/control
           tar -xzf verify/ipk/data.tar.gz -C verify/ipk/data
           tar -xzf verify/ipk/control.tar.gz -C verify/ipk/control
@@ -213,22 +213,22 @@ jobs:
           # shipped without its executable bit is a package that installs
           # perfectly and then does nothing at all.
           for base in verify/apk verify/ipk/data; do
-            test -x "$base/usr/libexec/ovpn/xray"
-            test -x "$base/etc/init.d/ovpn"
-            test -x "$base/usr/libexec/rpcd/luci.ovpn"
-            for s in $(sed -n 's/^OVPN_SCRIPTS="//p' build/packages.inc.sh | tr -d '"'); do
+            test -x "$base/usr/libexec/passwall-plus/xray"
+            test -x "$base/etc/init.d/passwall-plus"
+            test -x "$base/usr/libexec/rpcd/luci.passwall-plus"
+            for s in $(sed -n 's/^PWPLUS_SCRIPTS="//p' build/packages.inc.sh | tr -d '"'); do
               test -x "$base/usr/libexec/$s" || {
                 echo "::error::$base/usr/libexec/$s is not executable"; exit 1; }
             done
-            test -s "$base/etc/ovpn/version"
+            test -s "$base/etc/passwall-plus/version"
           done
           echo "== every shipped helper is executable in both formats"
-          file verify/apk/usr/libexec/ovpn/xray
+          file verify/apk/usr/libexec/passwall-plus/xray
 
           # The version the web interface shows has to be the version that
           # was built, not one somebody forgot to bump.
           want=$(sed -n 's/^VERSION=//p' build/packages.inc.sh)-r$(sed -n 's/^RELEASE=//p' build/packages.inc.sh)
-          got=$(cat verify/apk/etc/ovpn/version)
+          got=$(cat verify/apk/etc/passwall-plus/version)
           [ "$want" = "$got" ] || { echo "::error::version is $got, expected $want"; exit 1; }
           echo "== the packaged version is $got"
 
@@ -236,18 +236,18 @@ jobs:
           # unchecked: a menu file that never reached the router looks exactly
           # like a green build.
           rm -rf verifyl && mkdir -p verifyl/apk verifyl/ipk
-          "$APK_BIN" extract --destination verifyl/apk --allow-untrusted --no-chown dist/luci-app-ovpn-*.apk
-          tar -xzf dist/luci-app-ovpn_*_all.ipk -C verifyl/ipk
+          "$APK_BIN" extract --destination verifyl/apk --allow-untrusted --no-chown dist/luci-app-passwall-plus-*.apk
+          tar -xzf dist/luci-app-passwall-plus_*_all.ipk -C verifyl/ipk
           mkdir -p verifyl/ipk/data && tar -xzf verifyl/ipk/data.tar.gz -C verifyl/ipk/data
           for base in verifyl/apk verifyl/ipk/data; do
-            test -s "$base/usr/share/luci/menu.d/luci-app-ovpn.json"
-            test -s "$base/usr/share/rpcd/acl.d/luci-app-ovpn.json"
+            test -s "$base/usr/share/luci/menu.d/luci-app-passwall-plus.json"
+            test -s "$base/usr/share/rpcd/acl.d/luci-app-passwall-plus.json"
             for v in overview nodes settings; do
-              test -s "$base/www/luci-static/resources/view/ovpn/$v.js"
+              test -s "$base/www/luci-static/resources/view/passwall-plus/$v.js"
             done
           done
           # every menu entry has to name a view the package actually ships
-          for view in $(grep -o '"path": *"[^"]*"' verifyl/apk/usr/share/luci/menu.d/luci-app-ovpn.json | cut -d'"' -f4); do
+          for view in $(grep -o '"path": *"[^"]*"' verifyl/apk/usr/share/luci/menu.d/luci-app-passwall-plus.json | cut -d'"' -f4); do
             test -s "verifyl/apk/www/luci-static/resources/view/$view.js"
             echo "== menu entry $view.js is in the package"
           done
@@ -261,7 +261,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: ovpn-${{ matrix.openwrt_arch }}
+          name: passwall-plus-${{ matrix.openwrt_arch }}
           path: |
             dist/*.apk
             dist/*.ipk
@@ -283,8 +283,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
-          for dir in artifacts/ovpn-*; do
-            arch="${dir#artifacts/ovpn-}"
+          for dir in artifacts/passwall-plus-*; do
+            arch="${dir#artifacts/passwall-plus-}"
             for f in "$dir"/*.apk; do
               base=$(basename "$f" .apk)
               case "$base" in
@@ -311,12 +311,12 @@ jobs:
 
           | Your OpenWrt | Files |
           |---|---|
-          | 25.12 and later | `ovpn-<version>.<arch>.apk` and `luci-app-ovpn-<version>.apk` |
-          | 24.10, 23.05 | `ovpn_<version>_<arch>.ipk` and `luci-app-ovpn_<version>_all.ipk` |
+          | 25.12 and later | `passwall-plus-<version>.<arch>.apk` and `luci-app-passwall-plus-<version>.apk` |
+          | 24.10, 23.05 | `passwall-plus_<version>_<arch>.ipk` and `luci-app-passwall-plus_<version>_all.ipk` |
 
           Your architecture is `DISTRIB_ARCH` in `/etc/openwrt_release`.
 
-          Then open LuCI, go to **Services -> ovpn** and press **Connect**.
+          Then open LuCI, go to **Services -> Passwall+** and press **Connect**.
 
           راهنمای کامل: README.md · Full guide in English: README.en.md
           NOTES
@@ -324,9 +324,9 @@ jobs:
 
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" release/* --clobber
-            gh release edit   "$tag" --title "ovpn $tag" --notes-file notes.md
+            gh release edit   "$tag" --title "Passwall+ $tag" --notes-file notes.md
           else
             gh release create "$tag" release/* \
-              --title "ovpn $tag" \
+              --title "Passwall+ $tag" \
               --notes-file notes.md
           fi

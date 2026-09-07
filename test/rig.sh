@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of ovpn - https://github.com/dreamboxone/ovpn
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
 # rig.sh - stand the router's scripts up somewhere that is not a router.
 #
@@ -14,13 +14,13 @@
 # that reimplements what it is testing proves only that two things agree.
 
 RIG_SRC="$(cd "$(dirname "$0")/.." && pwd)"
-RIG="${RIG_ROOT:-${TMPDIR:-/tmp}/ovpn-rig}"
+RIG="${RIG_ROOT:-${TMPDIR:-/tmp}/pwplus-rig}"
 
 rig_setup() {
 	rm -rf "$RIG"
 	mkdir -p "$RIG/lib" "$RIG/etc" "$RIG/run" "$RIG/bin" "$RIG/core" "$RIG/var/etc"
 
-	for f in "$RIG_SRC"/package/ovpn/files/ovpn-*; do
+	for f in "$RIG_SRC"/package/passwall-plus/files/pwplus-*; do
 		cp "$f" "$RIG/lib/$(basename "$f")"
 	done
 	chmod +x "$RIG"/lib/* 2>/dev/null || true
@@ -34,11 +34,11 @@ _get=""; _key=""
 for a in "$@"; do
 	case "$a" in
 		get) _get=1 ;;
-		ovpn.config.*) _key="${a#ovpn.config.}" ;;
+		passwall-plus.config.*) _key="${a#passwall-plus.config.}" ;;
 	esac
 done
 if [ -n "$_get" ] && [ -n "$_key" ]; then
-	sed -n "s/^$_key=//p" "${OVPN_TEST_UCI:-/dev/null}" 2>/dev/null | head -1
+	sed -n "s/^$_key=//p" "${PWPLUS_TEST_UCI:-/dev/null}" 2>/dev/null | head -1
 fi
 exit 0
 UCI
@@ -51,14 +51,14 @@ UCI
 		chmod +x "$RIG/core/xray"
 	fi
 
-	OVPN_LIB="$RIG/lib"
-	OVPN_ETC="$RIG/etc"
-	OVPN_RUN="$RIG/run"
-	OVPN_OWN_DIR="$RIG/core"
-	OVPN_CONFIG_JSON="$RIG/var/etc/ovpn.json"
-	OVPN_TEST_UCI="$RIG/uci.conf"
+	PWPLUS_LIB="$RIG/lib"
+	PWPLUS_ETC="$RIG/etc"
+	PWPLUS_RUN="$RIG/run"
+	PWPLUS_OWN_DIR="$RIG/core"
+	PWPLUS_CONFIG_JSON="$RIG/var/etc/passwall-plus.json"
+	PWPLUS_TEST_UCI="$RIG/uci.conf"
 	PATH="$RIG/bin:$PATH"
-	export OVPN_LIB OVPN_ETC OVPN_RUN OVPN_OWN_DIR OVPN_CONFIG_JSON OVPN_TEST_UCI PATH
+	export PWPLUS_LIB PWPLUS_ETC PWPLUS_RUN PWPLUS_OWN_DIR PWPLUS_CONFIG_JSON PWPLUS_TEST_UCI PATH
 }
 
 # rig_set key value

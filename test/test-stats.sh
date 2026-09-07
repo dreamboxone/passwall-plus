@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of ovpn - https://github.com/dreamboxone/ovpn
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
 # The traffic accounting, checked against arithmetic that can be done by hand.
 #
@@ -17,7 +17,7 @@
 
 rig_setup
 
-STATS="$RIG/lib/ovpn-stats"
+STATS="$RIG/lib/pwplus-stats"
 DB="$RIG/etc/usage.db"
 
 # A port nothing is listening on, so that "there is no core to ask" means it.

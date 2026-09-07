@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of ovpn - https://github.com/dreamboxone/ovpn
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
 # The firewall ruleset, put in front of a real nft rather than read carefully.
 #
@@ -30,7 +30,7 @@ mkdir -p "$WORK"
 
 check_ruleset() {
 	_what="$1"
-	sh "$RIG/lib/ovpn-rules" dump > "$WORK/rules.nft" 2>"$WORK/rules.err"
+	sh "$RIG/lib/pwplus-rules" dump > "$WORK/rules.nft" 2>"$WORK/rules.err"
 	if [ ! -s "$WORK/rules.nft" ]; then
 		bad "$_what: nothing was generated ($(cat "$WORK/rules.err"))"
 		return
@@ -71,7 +71,7 @@ check_ruleset "one LAN interface"
 
 echo "== the pieces that have to be present"
 rig_set lan_zone "br-lan"
-sh "$RIG/lib/ovpn-rules" dump > "$WORK/rules.nft"
+sh "$RIG/lib/pwplus-rules" dump > "$WORK/rules.nft"
 
 for want in 'tproxy ip to 127.0.0.1:1082' 'meta mark set 0x162' \
             'ct direction reply return' 'ip daddr @reserved return' \
@@ -108,7 +108,7 @@ esac
 # all. It passed every syntax check in this file the whole time it was doing
 # nothing, which is what this asserts instead.
 rig_set block_quic 1
-sh "$RIG/lib/ovpn-rules" dump > "$WORK/rules.nft"
+sh "$RIG/lib/pwplus-rules" dump > "$WORK/rules.nft"
 pre=$(awk '/chain prerouting/, /^\t}/' "$WORK/rules.nft")
 if printf '%s\n' "$pre" | grep -q 'dport 443'; then
 	ok "the QUIC rule is in the prerouting chain"

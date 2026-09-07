@@ -1,0 +1,54 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+#
+# pwplus-refresh - what the router does every quarter of an hour.
+#
+# Two jobs, and the difference between them is the whole reason this is a
+# separate script.
+#
+# Reading the list is cheap: one small request, a few kilobytes, and it only
+# reaches flash on the days it actually changed. Doing it often is what keeps
+# a free list useful, because servers appear and disappear through the day and
+# a list fetched this morning may name nothing that still answers.
+#
+# Choosing again is not cheap. So it happens only when it would change
+# something - when the tunnel is meant to be up and is not, which is exactly
+# the case where the server chosen earlier has stopped working and a fresh
+# list is worth acting on. And even then it tries the cheap repair first: the
+# next server down a list that was measured minutes ago, which costs a restart
+# rather than a fresh sweep.
+
+set -e
+
+. "${PWPLUS_LIB:-/usr/libexec}/pwplus-common.sh"
+
+NODES="${PWPLUS_LIB:-/usr/libexec}/pwplus-nodes"
+CONNECT="${PWPLUS_LIB:-/usr/libexec}/pwplus-connect"
+
+# Read the sources. A failure here is not worth reporting: the list already on
+# disk stays, and the next quarter hour will try again.
+"$NODES" fetch >/dev/null 2>&1 || true
+
+[ "$(cfg enabled 0)" = "1" ] || exit 0
+
+# Already carrying traffic - leave it alone. Reconnecting a working tunnel to
+# chase a server that measured faster would drop every connection in progress
+# to win a few milliseconds.
+if tunnel_running; then
+	# ...but a core that is running with no rules in front of it is not a
+	# tunnel, it is a process. That happens after a firewall reload wipes the
+	# ruleset, and from the inside it looks exactly like being connected while
+	# every byte leaves in the clear.
+	if ! "${PWPLUS_LIB:-/usr/libexec}/pwplus-rules" status 2>/dev/null | grep -q '^active:[ \t]*yes'; then
+		log "the tunnel is running but its rules are gone - putting them back"
+		"${PWPLUS_LIB:-/usr/libexec}/pwplus-rules" up >/dev/null 2>&1 || true
+		"${PWPLUS_LIB:-/usr/libexec}/pwplus-dns" up >/dev/null 2>&1 || true
+	fi
+	exit 0
+fi
+
+log "the tunnel should be up and is not - repairing"
+exec "$CONNECT" next

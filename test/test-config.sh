@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of ovpn - https://github.com/dreamboxone/ovpn
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
 # What the parser and the configuration generator do, checked against a real
 # Xray rather than against my opinion of what Xray accepts.
@@ -49,7 +49,7 @@ LINKS
 fi
 
 echo "== parsing $(grep -c . "$LIST") lines"
-LC_ALL=C awk -f "$RIG/lib/ovpn-parse" < "$LIST" > "$WORK/cand.tsv"
+LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$LIST" > "$WORK/cand.tsv"
 N=$(wc -l < "$WORK/cand.tsv" | tr -d ' ')
 echo "== $N servers parsed"
 
@@ -84,13 +84,13 @@ check "$AI" "0" "allowInsecure is never written"
 if command -v base64 >/dev/null 2>&1; then
 	IN='the quick brown fox jumps over the lazy dog, 0123456789'
 	ENC=$(printf '%s' "$IN" | base64 | tr -d '\n')
-	DEC=$(printf '%s' "$ENC" | LC_ALL=C awk -v DECODE=1 -f "$RIG/lib/ovpn-parse")
+	DEC=$(printf '%s' "$ENC" | LC_ALL=C awk -v DECODE=1 -f "$RIG/lib/pwplus-parse")
 	check "$DEC" "$IN" "the built-in base64 decoder agrees with base64"
 fi
 
 # A subscription handed over as one base64 blob has to come back as links.
 BLOB=$(printf 'vless://11111111-2222-3333-4444-555555555555@b64.example.com:443?encryption=none&security=none#B64\n' | base64 | tr -d '\n')
-printf '%s' "$BLOB" | LC_ALL=C awk -v DECODE=1 -f "$RIG/lib/ovpn-parse" > "$WORK/dec.txt"
+printf '%s' "$BLOB" | LC_ALL=C awk -v DECODE=1 -f "$RIG/lib/pwplus-parse" > "$WORK/dec.txt"
 if grep -q 'b64.example.com' "$WORK/dec.txt"; then
 	ok "a base64 subscription decodes to links"
 else
@@ -159,7 +159,7 @@ JSON
 
 : > "$WORK/json.tsv"
 for f in xray singbox clash links; do
-	LC_ALL=C awk -f "$RIG/lib/ovpn-parse" < "$WORK/$f.json" >> "$WORK/json.tsv" 2>/dev/null || true
+	LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$WORK/$f.json" >> "$WORK/json.tsv" 2>/dev/null || true
 done
 
 for want in "JSON VLESS" "JSON WG" "SB Trojan" "SB WARP" "CL VMess" "CL SS" \
@@ -241,7 +241,7 @@ if [ -x "$RIG/core/xray" ]; then
 	head -1 "$WORK/cand.tsv" | cut -f6 > "$RIG/etc/best.json"
 
 	rig_clear
-	sh "$RIG/lib/ovpn-mkconfig" > "$WORK/cfg.json" 2>"$WORK/cfg.err" || bad "mkconfig failed: $(cat "$WORK/cfg.err")"
+	sh "$RIG/lib/pwplus-mkconfig" > "$WORK/cfg.json" 2>"$WORK/cfg.err" || bad "mkconfig failed: $(cat "$WORK/cfg.err")"
 	if "$RIG/core/xray" run -test -config "$WORK/cfg.json" >"$WORK/t.err" 2>&1; then
 		ok "the generated configuration is accepted with the split off"
 	else
@@ -263,7 +263,7 @@ if [ -x "$RIG/core/xray" ]; then
 	# Xray refuses to start when asked for a geoip file that is not there, so
 	# writing them anyway turns a missing optional download into no internet.
 	#
-	# OVPN_GEO_SEARCH is emptied because "missing" has to mean missing. A
+	# PWPLUS_GEO_SEARCH is emptied because "missing" has to mean missing. A
 	# router that already runs another front-end has that project's geoip.dat
 	# and geosite.dat in /usr/share, geo_dir finds them there on purpose - it
 	# is twenty-five megabytes not worth downloading twice - and this test
@@ -271,7 +271,7 @@ if [ -x "$RIG/core/xray" ]; then
 	# means to describe.
 	rig_set route_ir 1
 	rig_set geo_dir "$RIG/etc/nowhere"
-	OVPN_GEO_SEARCH="" sh "$RIG/lib/ovpn-mkconfig" > "$WORK/cfg_nogeo.json" 2>/dev/null
+	PWPLUS_GEO_SEARCH="" sh "$RIG/lib/pwplus-mkconfig" > "$WORK/cfg_nogeo.json" 2>/dev/null
 	if grep -q 'geoip:ir' "$WORK/cfg_nogeo.json"; then
 		bad "the split stays out when the geo files are missing"
 	else
@@ -285,22 +285,22 @@ if [ -x "$RIG/core/xray" ]; then
 
 	# With the files actually present, the rules must appear and the core
 	# must accept them.
-	if [ -s "$OVPN_GEO_DIR/geoip.dat" ] && [ -s "$OVPN_GEO_DIR/geosite.dat" ]; then
-		rig_set geo_dir "$OVPN_GEO_DIR"
-		sh "$RIG/lib/ovpn-mkconfig" > "$WORK/cfg_geo.json" 2>/dev/null
+	if [ -s "$PWPLUS_GEO_DIR/geoip.dat" ] && [ -s "$PWPLUS_GEO_DIR/geosite.dat" ]; then
+		rig_set geo_dir "$PWPLUS_GEO_DIR"
+		sh "$RIG/lib/pwplus-mkconfig" > "$WORK/cfg_geo.json" 2>/dev/null
 		if grep -q 'geoip:ir' "$WORK/cfg_geo.json" && grep -q 'geosite:ir' "$WORK/cfg_geo.json"; then
 			ok "the split is written when the geo files are present"
 		else
 			bad "the split is written when the geo files are present"
 		fi
-		if XRAY_LOCATION_ASSET="$OVPN_GEO_DIR" "$RIG/core/xray" run -test -config "$WORK/cfg_geo.json" >"$WORK/g.err" 2>&1; then
+		if XRAY_LOCATION_ASSET="$PWPLUS_GEO_DIR" "$RIG/core/xray" run -test -config "$WORK/cfg_geo.json" >"$WORK/g.err" 2>&1; then
 			ok "the core reads geoip:ir and geosite:ir from the downloaded files"
 		else
 			bad "the core reads geoip:ir and geosite:ir from the downloaded files"
 			grep -o 'common/errors:.*\|failed to.*' "$WORK/g.err" | tail -2
 		fi
 	else
-		echo "  skip - no geo files to test the split against (set OVPN_GEO_DIR)"
+		echo "  skip - no geo files to test the split against (set PWPLUS_GEO_DIR)"
 	fi
 	rig_clear
 
@@ -316,7 +316,7 @@ if [ -x "$RIG/core/xray" ]; then
 	} > "$WORK/batch.tsv"
 	before=$(wc -l < "$WORK/batch.tsv" | tr -d ' ')
 	: > "$RIG/run/rejected"
-	sh "$RIG/lib/ovpn-probe" prune "$WORK/batch.tsv" >/dev/null 2>&1 || true
+	sh "$RIG/lib/pwplus-probe" prune "$WORK/batch.tsv" >/dev/null 2>&1 || true
 	after=$(wc -l < "$WORK/batch.tsv" | tr -d ' ')
 	check "$after" "$((before - 2))" "a batch survives the two servers the core cannot use"
 	if grep -qx bad1 "$RIG/run/rejected" && grep -qx bad2 "$RIG/run/rejected"; then

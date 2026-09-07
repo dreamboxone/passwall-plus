@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of ovpn - https://github.com/dreamboxone/ovpn
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
 # The whole of choosing a server, run for real.
 #
@@ -73,12 +73,12 @@ rig_set good_ms 5000
 rig_set sift_parallel 15
 
 echo "== the first pass"
-sh "$RIG/lib/ovpn-probe" sift >/dev/null 2>&1 || true
+sh "$RIG/lib/pwplus-probe" sift >/dev/null 2>&1 || true
 ALIVE=$(wc -l < "$RIG/run/alive.tsv" 2>/dev/null | tr -d ' ')
 check "$ALIVE" "15" "every candidate answered a handshake"
 
 echo "== the whole thing"
-if sh "$RIG/lib/ovpn-probe" select >"$WORK/sel.log" 2>&1; then
+if sh "$RIG/lib/pwplus-probe" select >"$WORK/sel.log" 2>&1; then
 	ok "a server was chosen"
 else
 	bad "a server was chosen ($(tail -2 "$WORK/sel.log" | tr '\n' ' '))"
@@ -120,7 +120,7 @@ fi
 
 echo "== healing takes the next one down rather than measuring again"
 BEFORE="$CHOSEN"
-if sh "$RIG/lib/ovpn-probe" next >/dev/null 2>&1; then
+if sh "$RIG/lib/pwplus-probe" next >/dev/null 2>&1; then
 	AFTER=$(sed -n 's/^tag=//p' "$RIG/etc/best.meta")
 	if [ "$AFTER" != "$BEFORE" ]; then
 		ok "moved from $BEFORE to $AFTER"
@@ -139,7 +139,7 @@ echo "== a candidate no core can use is dropped, not fatal"
 } > "$RIG/run/candidates.tsv"
 : > "$RIG/run/rejected"
 
-if sh "$RIG/lib/ovpn-probe" select >"$WORK/sel2.log" 2>&1; then
+if sh "$RIG/lib/pwplus-probe" select >"$WORK/sel2.log" 2>&1; then
 	ok "the batch still produced a choice"
 else
 	bad "the batch still produced a choice ($(tail -2 "$WORK/sel2.log" | tr '\n' ' '))"

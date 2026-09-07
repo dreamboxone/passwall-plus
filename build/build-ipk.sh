@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of ovpn - https://github.com/dreamboxone/ovpn
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
 # build-ipk.sh - build .ipk packages for OpenWrt 24.10 and 23.05.
 #
@@ -27,7 +27,7 @@ ARCH="${1:-arm_cortex-a7_neon-vfpv4}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 . "$ROOT/build/packages.inc.sh"
 
-WORK="${OVPN_WORK:-${TMPDIR:-/tmp}/ovpn-ipk-build}"
+WORK="${PWPLUS_WORK:-${TMPDIR:-/tmp}/ovpn-ipk-build}"
 DIST="$ROOT/dist"
 
 CORE="$ROOT/prebuilt/$ARCH/xray"
@@ -48,7 +48,7 @@ finalize() {
 
 	find "$idir" -type d -exec chmod 0755 {} +
 	find "$idir" -type f -exec chmod 0644 {} +
-	for d in usr/bin usr/sbin etc/init.d usr/libexec usr/libexec/rpcd usr/libexec/ovpn; do
+	for d in usr/bin usr/sbin etc/init.d usr/libexec usr/libexec/rpcd usr/libexec/passwall-plus; do
 		if [ -d "$idir/$d" ]; then
 			find "$idir/$d" -maxdepth 1 -type f -exec chmod 0755 {} +
 		fi
@@ -110,12 +110,12 @@ finalize() {
 	echo ">>> built $(basename "$out") ($(du -h "$out" | cut -f1))"
 }
 
-stage_ovpn "$WORK" "$ROOT" "$CORE"
-finalize ovpn "$ARCH" "$OVPN_DEPS" "$OVPN_DESC"
+stage_pwplus "$WORK" "$ROOT" "$CORE"
+finalize passwall-plus "$ARCH" "$PWPLUS_DEPS" "$PWPLUS_DESC"
 
 stage_luci "$WORK" "$ROOT"
 # opkg spells an architecture independent package "all"
-finalize luci-app-ovpn all "$LUCI_DEPS" "$LUCI_DESC"
+finalize luci-app-passwall-plus all "$LUCI_DEPS" "$LUCI_DESC"
 
 echo
 echo ">>> packages in $DIST"

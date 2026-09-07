@@ -1,0 +1,17 @@
+{
+	"luci-app-passwall-plus": {
+		"description": "Grant access to Passwall+",
+		"read": {
+			"ubus": {
+				"luci.passwall-plus": [ "state", "traffic", "nodes", "subs", "system" ]
+			},
+			"uci": [ "passwall-plus" ]
+		},
+		"write": {
+			"ubus": {
+				"luci.passwall-plus": [ "action" ]
+			},
+			"uci": [ "passwall-plus" ]
+		}
+	}
+}

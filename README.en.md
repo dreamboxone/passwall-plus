@@ -1,4 +1,4 @@
-# ovpn — a router-wide tunnel for OpenWrt
+# Passwall+ — a router-wide tunnel for OpenWrt
 
 **Version 1.0.0** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
 🇮🇷 **[راهنمای فارسی: README.md](README.md)**
@@ -90,28 +90,28 @@ Releases ship both package formats, because OpenWrt changed package manager in
 
 | Your OpenWrt | Package manager | Files to download |
 |---|---|---|
-| 25.12 and later | `apk` | `ovpn-<version>.<arch>.apk` and `luci-app-ovpn-<version>.apk` |
-| 24.10, 23.05 | `opkg` | `ovpn_<version>_<arch>.ipk` and `luci-app-ovpn_<version>_all.ipk` |
+| 25.12 and later | `apk` | `passwall-plus-<version>.<arch>.apk` and `luci-app-passwall-plus-<version>.apk` |
+| 24.10, 23.05 | `opkg` | `passwall-plus_<version>_<arch>.ipk` and `luci-app-passwall-plus_<version>_all.ipk` |
 
 Your architecture is `DISTRIB_ARCH` in `/etc/openwrt_release` (on 23.05 and
-24.10, `opkg print-architecture` prints it too). The `luci-app-ovpn` package
+24.10, `opkg print-architecture` prints it too). The `luci-app-passwall-plus` package
 fits every router.
 
 **OpenWrt 25.12 and later:**
 
 ```sh
-scp ovpn-*.apk luci-app-ovpn-*.apk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'apk add --allow-untrusted /tmp/ovpn-*.apk /tmp/luci-app-ovpn-*.apk'
+scp passwall-plus-*.apk luci-app-passwall-plus-*.apk root@192.168.1.1:/tmp/
+ssh root@192.168.1.1 'apk add --allow-untrusted /tmp/passwall-plus-*.apk /tmp/luci-app-passwall-plus-*.apk'
 ```
 
 **OpenWrt 24.10 and 23.05:**
 
 ```sh
-scp ovpn_*.ipk luci-app-ovpn_*.ipk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'opkg update && opkg install /tmp/ovpn_*.ipk /tmp/luci-app-ovpn_*.ipk'
+scp passwall-plus_*.ipk luci-app-passwall-plus_*.ipk root@192.168.1.1:/tmp/
+ssh root@192.168.1.1 'opkg update && opkg install /tmp/passwall-plus_*.ipk /tmp/luci-app-passwall-plus_*.ipk'
 ```
 
-**The router needs working internet while you install.** Several things ovpn
+**The router needs working internet while you install.** Several things Passwall+
 relies on are not in a stock OpenWrt image — `kmod-nft-tproxy`, `curl`,
 `ip-full` — and the package manager fetches them as it installs. Do this on a
 connection that works, before you need the tunnel.
@@ -122,7 +122,7 @@ system three questions — can it redirect traffic, can it do policy routing,
 can it fetch over HTTPS — and offers to install whatever is missing. It never
 touches `xray-core`, so a router that already has PassWall2 is left alone.
 
-Then open LuCI → **Services → ovpn**.
+Then open LuCI → **Services → Passwall+**.
 
 Nothing runs after installation. The tunnel stays off until you press
 **Connect**.
@@ -196,7 +196,7 @@ before. Xray itself can be updated here too.
 
 ### Every setting
 
-The page carries the ones worth changing. The rest live in `/etc/config/ovpn`,
+The page carries the ones worth changing. The rest live in `/etc/config/passwall-plus`,
 an ordinary UCI file, where each default is written out with the reasoning
 beside it. Names in brackets are the UCI options.
 
@@ -251,9 +251,9 @@ rare and getting them wrong is quiet.
 | `test_url` | `gstatic.com/generate_204` | What is fetched to measure a server. |
 | `fresh_seconds` | 3600 s | A measurement younger than this is used as it stands instead of being taken again. |
 | `max_nodes` | 300 | A ceiling on one round of candidates. |
-| `geo_dir` | `/etc/ovpn/geo` | Where the routing data is kept. Another front-end's copy in `/usr/share/xray` or `/usr/share/v2ray` is used if there is one, rather than downloading twenty-five megabytes a second time. |
+| `geo_dir` | `/etc/passwall-plus/geo` | Where the routing data is kept. Another front-end's copy in `/usr/share/xray` or `/usr/share/v2ray` is used if there is one, rather than downloading twenty-five megabytes a second time. |
 | `remote_dns` | `1.1.1.1` | The resolver used through the tunnel for everything that is not Iranian. |
-| `core_dir` | `/usr/libexec/ovpn` | Where downloaded cores are kept. Point it at a USB stick on a router whose flash is too small for sing-box. |
+| `core_dir` | `/usr/libexec/passwall-plus` | Where downloaded cores are kept. Point it at a USB stick on a router whose flash is too small for sing-box. |
 | `core_xray` | *empty* | Forces a particular Xray. Empty means: use whichever one on this router accepts the generated configuration, preferring one that is already installed. |
 | `loglevel` | `warning` | What the core writes to the system log. `debug` is a great deal of output and worth it only while chasing something. |
 | `https_probe` | a small file on GitHub | What the dependency check fetches to prove the router can reach an HTTPS address at all. Only ever downloaded to `/dev/null`. |
@@ -269,8 +269,8 @@ done by editing that file, and the other way round.
 
 ```sh
 ssh root@192.168.1.1
-/etc/init.d/ovpn stop
-apk del luci-app-ovpn ovpn          # opkg remove ... on 24.10 and older
+/etc/init.d/passwall-plus stop
+apk del luci-app-passwall-plus passwall-plus          # opkg remove ... on 24.10 and older
 ```
 
 That removes the service, the core and the web page, and takes the scheduled
@@ -280,7 +280,7 @@ Removing the packages leaves your settings behind on purpose. To erase those
 too, including any routing data and traffic history:
 
 ```sh
-rm -rf /etc/config/ovpn /etc/ovpn
+rm -rf /etc/config/passwall-plus /etc/passwall-plus
 ```
 
 Nothing else is touched — no firewall zone, no other package's configuration.
@@ -312,8 +312,8 @@ asking the core for a geo file it has not got stops it starting at all.
 proxies fight over the same packets; run one at a time.
 
 **Nothing is tunnelled but it says connected.** It should not — that specific
-lie was fixed. If you see it, `/usr/libexec/ovpn-rules status` says what is
-actually loaded, and `logread -e ovpn` says what happened.
+lie was fixed. If you see it, `/usr/libexec/pwplus-rules status` says what is
+actually loaded, and `logread -e passwall-plus` says what happened.
 
 Support and contact: [t.me/routekernel1](https://t.me/routekernel1)
 

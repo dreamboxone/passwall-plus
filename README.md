@@ -1,6 +1,6 @@
 <div dir="rtl">
 
-# ovpn — تونل سراسری برای روتر OpenWrt
+# Passwall+ — تونل سراسری برای روتر OpenWrt
 
 **نسخه ۱.۰.۰** · پشتیبانی و تماس: [t.me/routekernel1](https://t.me/routekernel1)
 🇬🇧 **[English guide: README.en.md](README.en.md)**
@@ -88,19 +88,19 @@
 
 | OpenWrt تو | پکیج‌منیجر | فایل‌هایی که باید بگیری |
 |---|---|---|
-| ۲۵.۱۲ و بالاتر | `apk` | `ovpn-<version>.<arch>.apk` و `luci-app-ovpn-<version>.apk` |
-| ۲۴.۱۰ و ۲۳.۰۵ | `opkg` | `ovpn_<version>_<arch>.ipk` و `luci-app-ovpn_<version>_all.ipk` |
+| ۲۵.۱۲ و بالاتر | `apk` | `passwall-plus-<version>.<arch>.apk` و `luci-app-passwall-plus-<version>.apk` |
+| ۲۴.۱۰ و ۲۳.۰۵ | `opkg` | `passwall-plus_<version>_<arch>.ipk` و `luci-app-passwall-plus_<version>_all.ipk` |
 
 معماری روترت `DISTRIB_ARCH` داخل `/etc/openwrt_release` است. پکیج
-`luci-app-ovpn` به همهٔ روترها می‌خورد.
+`luci-app-passwall-plus` به همهٔ روترها می‌خورد.
 
 **OpenWrt ۲۵.۱۲ و بالاتر:**
 
 <div dir="ltr">
 
 ```sh
-scp ovpn-*.apk luci-app-ovpn-*.apk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'apk add --allow-untrusted /tmp/ovpn-*.apk /tmp/luci-app-ovpn-*.apk'
+scp passwall-plus-*.apk luci-app-passwall-plus-*.apk root@192.168.1.1:/tmp/
+ssh root@192.168.1.1 'apk add --allow-untrusted /tmp/passwall-plus-*.apk /tmp/luci-app-passwall-plus-*.apk'
 ```
 
 </div>
@@ -110,13 +110,13 @@ ssh root@192.168.1.1 'apk add --allow-untrusted /tmp/ovpn-*.apk /tmp/luci-app-ov
 <div dir="ltr">
 
 ```sh
-scp ovpn_*.ipk luci-app-ovpn_*.ipk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'opkg update && opkg install /tmp/ovpn_*.ipk /tmp/luci-app-ovpn_*.ipk'
+scp passwall-plus_*.ipk luci-app-passwall-plus_*.ipk root@192.168.1.1:/tmp/
+ssh root@192.168.1.1 'opkg update && opkg install /tmp/passwall-plus_*.ipk /tmp/luci-app-passwall-plus_*.ipk'
 ```
 
 </div>
 
-**موقع نصب، روتر باید اینترنت داشته باشد.** چند چیزی که ovpn لازم دارد در ایمیج
+**موقع نصب، روتر باید اینترنت داشته باشد.** چند چیزی که Passwall+ لازم دارد در ایمیج
 استاندارد OpenWrt نیست — `kmod-nft-tproxy` و `curl` و `ip-full` — و پکیج‌منیجر
 موقع نصب آن‌ها را می‌گیرد. این کار را روی یک اتصال سالم انجام بده، قبل از اینکه
 به تونل احتیاج پیدا کنی.
@@ -127,7 +127,7 @@ ssh root@192.168.1.1 'opkg update && opkg install /tmp/ovpn_*.ipk /tmp/luci-app-
 دهد؟ می‌تواند HTTPS بگیرد؟ — و هرچه کم است را نصب می‌کند. هیچ‌وقت به `xray-core`
 دست نمی‌زند، پس روتری که PassWall2 دارد دست‌نخورده می‌ماند.
 
-بعد در LuCI برو به **Services ← ovpn**.
+بعد در LuCI برو به **Services ← Passwall+**.
 
 بعد از نصب هیچ چیزی اجرا نمی‌شود. تا **Connect** را نزنی تونل خاموش است.
 
@@ -199,7 +199,7 @@ ssh root@192.168.1.1 'opkg update && opkg install /tmp/ovpn_*.ipk /tmp/luci-app-
 
 ### همهٔ تنظیمات
 
-آن‌هایی که ارزش عوض کردن دارند روی صفحه‌اند. بقیه در `/etc/config/ovpn` هستند —
+آن‌هایی که ارزش عوض کردن دارند روی صفحه‌اند. بقیه در `/etc/config/passwall-plus` هستند —
 یک فایل معمولی UCI که کنار هر پیش‌فرض، دلیلش هم نوشته شده. نام داخل بک‌تیک، نام
 گزینهٔ UCI است.
 
@@ -254,9 +254,9 @@ ssh root@192.168.1.1 'opkg update && opkg install /tmp/ovpn_*.ipk /tmp/luci-app-
 | `test_url` | `gstatic.com/generate_204` | برای اندازه‌گیری سرور چه چیزی گرفته شود. |
 | `fresh_seconds` | ۳۶۰۰ ثانیه | اندازه‌گیری جوان‌تر از این، دوباره گرفته نمی‌شود و همان استفاده می‌شود. |
 | `max_nodes` | ۳۰۰ | سقف کاندیداها در یک دور. |
-| `geo_dir` | `/etc/ovpn/geo` | دادهٔ مسیریابی کجا نگه داشته شود. اگر نسخهٔ برنامهٔ دیگری در `/usr/share/xray` یا `/usr/share/v2ray` باشد از همان استفاده می‌شود، به‌جای دانلود دوبارهٔ ۲۵ مگابایت. |
+| `geo_dir` | `/etc/passwall-plus/geo` | دادهٔ مسیریابی کجا نگه داشته شود. اگر نسخهٔ برنامهٔ دیگری در `/usr/share/xray` یا `/usr/share/v2ray` باشد از همان استفاده می‌شود، به‌جای دانلود دوبارهٔ ۲۵ مگابایت. |
 | `remote_dns` | `1.1.1.1` | resolverی که از داخل تونل برای هر چیز غیرایرانی استفاده می‌شود. |
-| `core_dir` | `/usr/libexec/ovpn` | هسته‌های دانلودشده کجا بمانند. روی روتری که فلشش برای sing-box کم است، به یک فلش USB اشاره بده. |
+| `core_dir` | `/usr/libexec/passwall-plus` | هسته‌های دانلودشده کجا بمانند. روی روتری که فلشش برای sing-box کم است، به یک فلش USB اشاره بده. |
 | `core_xray` | *خالی* | یک Xray مشخص را اجبار می‌کند. خالی یعنی: هر کدام روی این روتر کانفیگ تولیدشده را قبول کرد، با ترجیح آنکه از قبل نصب است. |
 | `loglevel` | `warning` | هسته چه چیزی در لاگ سیستم بنویسد. `debug` خروجی خیلی زیادی است و فقط موقع دنبال کردن یک مشکل می‌ارزد. |
 | `https_probe` | یک فایل کوچک روی گیت‌هاب | بررسی وابستگی‌ها چه چیزی را می‌گیرد تا ثابت شود روتر اصلاً می‌تواند به یک آدرس HTTPS برسد. همیشه فقط به `/dev/null` دانلود می‌شود. |
@@ -273,8 +273,8 @@ ssh root@192.168.1.1 'opkg update && opkg install /tmp/ovpn_*.ipk /tmp/luci-app-
 
 ```sh
 ssh root@192.168.1.1
-/etc/init.d/ovpn stop
-apk del luci-app-ovpn ovpn          # opkg remove ... روی ۲۴.۱۰ و پایین‌تر
+/etc/init.d/passwall-plus stop
+apk del luci-app-passwall-plus passwall-plus          # opkg remove ... روی ۲۴.۱۰ و پایین‌تر
 ```
 
 </div>
@@ -288,7 +288,7 @@ apk del luci-app-ovpn ovpn          # opkg remove ... روی ۲۴.۱۰ و پای
 <div dir="ltr">
 
 ```sh
-rm -rf /etc/config/ovpn /etc/ovpn
+rm -rf /etc/config/passwall-plus /etc/passwall-plus
 ```
 
 </div>
@@ -322,8 +322,8 @@ at all*» یعنی لیست کهنه است یا اتصال کلاً آن‌ها
 دعوا می‌کنند؛ هر بار یکی را روشن بگذار.
 
 **هیچ چیز تونل نمی‌شود ولی می‌گوید connected.** نباید بگوید — دقیقاً همین دروغ
-اصلاح شده. اگر دیدی، `/usr/libexec/ovpn-rules status` می‌گوید واقعاً چه چیزی
-لود شده و `logread -e ovpn` می‌گوید چه اتفاقی افتاده.
+اصلاح شده. اگر دیدی، `/usr/libexec/pwplus-rules status` می‌گوید واقعاً چه چیزی
+لود شده و `logread -e passwall-plus` می‌گوید چه اتفاقی افتاده.
 
 پشتیبانی و تماس: [t.me/routekernel1](https://t.me/routekernel1)
 

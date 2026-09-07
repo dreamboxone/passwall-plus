@@ -1,4 +1,4 @@
-# Audit of ovpn 1.0.0
+# Audit of Passwall+ 1.0.0
 
 What was found wrong before this version was released, how each thing was
 confirmed, and what was done about it.
@@ -25,11 +25,11 @@ no xray on this router can run the generated configuration
 ```
 
 on a router carrying twenty-five megabytes of correct, current routing data in
-`/etc/ovpn/geo`.
+`/etc/passwall-plus/geo`.
 
 A core reads `geoip.dat` and `geosite.dat` from its own asset directory —
 `XRAY_LOCATION_ASSET`, defaulting to `/usr/share/xray` and the directory the
-binary sits in. Ours are in `/etc/ovpn/geo`. `find_xray` offers each candidate
+binary sits in. Ours are in `/etc/passwall-plus/geo`. `find_xray` offers each candidate
 core the generated configuration and keeps the first that accepts it, which is
 the right way to choose a core — but it offered that configuration **without
 telling any of them where to look**. So each core went to its default asset
@@ -45,7 +45,7 @@ failed to parse domain rule: geosite:ir > failed to load geosite: IR
 ```
 
 The `geosite.dat` it had found was PassWall2's, which carries different
-categories. The right file was thirty centimetres away in `/etc/ovpn/geo` and
+categories. The right file was thirty centimetres away in `/etc/passwall-plus/geo` and
 nothing had told the core about it.
 
 It only bit with the split switched on, because that is the only thing that

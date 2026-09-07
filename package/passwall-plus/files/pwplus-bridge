@@ -1,0 +1,171 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+#
+# pwplus-bridge - make a protocol Xray cannot speak look like one it can.
+#
+#   pwplus-bridge needed    exit 0 when the chosen server needs a bridge
+#   pwplus-bridge command   print the command line to run it
+#   pwplus-bridge config    write the bridge's configuration, print its path
+#
+# hysteria2 and tuic are not Xray protocols. Rather than run a second routing
+# engine for them - with its own idea of DNS, its own transparent proxy
+# arrangement and its own firewall rules to keep in step - one of them is run
+# here for a single server and asked only to offer it as a SOCKS port on
+# loopback. Xray then reaches that port with an ordinary socks outbound.
+#
+# So the tunnel is always Xray. The bridge is a detail of one outbound, and
+# everything else in the program - measuring, routing, statistics, the rules -
+# carries on exactly as it does for a vless server and does not need to know.
+#
+# sing-box is preferred because it speaks both. The official hysteria client
+# is used when it is the only one installed and the server is hysteria2.
+
+set -e
+
+. "${PWPLUS_LIB:-/usr/libexec}/pwplus-common.sh"
+
+NODE="$PWPLUS_ETC/bridge.json"
+PORT="$(cfg bridge_port 10808)"
+
+jget() {
+	sed -n "s/.*\"$1\"[ \t]*:[ \t]*\"\([^\"]*\)\".*/\1/p" "$NODE" 2>/dev/null | head -1
+	return 0
+}
+
+jnum() {
+	sed -n "s/.*\"$1\"[ \t]*:[ \t]*\([0-9][0-9]*\).*/\1/p" "$NODE" 2>/dev/null | head -1
+	return 0
+}
+
+jbool() {
+	grep -q "\"$1\"[ \t]*:[ \t]*true" "$NODE" 2>/dev/null && echo true || echo false
+	return 0
+}
+
+cmd_needed() {
+	[ -s "$NODE" ] || return 1
+	return 0
+}
+
+# --------------------------------------------------------------- sing-box
+
+singbox_config() {
+	_type="$(jget type)"
+	_server="$(jget server)"
+	_port="$(jnum port)"
+	_sni="$(jget sni)"
+	[ -n "$_sni" ] || _sni="$_server"
+	_insecure="$(jbool insecure)"
+
+	case "$_type" in
+		hysteria2)
+			_pass="$(jget password)"
+			_obfs="$(jget obfs)"
+			_obfspw="$(jget obfs_password)"
+			_ob=""
+			if [ -n "$_obfs" ]; then
+				_ob=",\"obfs\":{\"type\":\"$(json_escape "$_obfs")\",\"password\":\"$(json_escape "$_obfspw")\"}"
+			fi
+			_out="{\"type\":\"hysteria2\",\"tag\":\"out\",\"server\":\"$(json_escape "$_server")\",\"server_port\":$_port,\"password\":\"$(json_escape "$_pass")\"$_ob,\"tls\":{\"enabled\":true,\"server_name\":\"$(json_escape "$_sni")\",\"insecure\":$_insecure}}"
+			;;
+		tuic)
+			_uuid="$(jget uuid)"
+			_pass="$(jget password)"
+			_cc="$(jget congestion_control)"
+			[ -n "$_cc" ] || _cc=bbr
+			_out="{\"type\":\"tuic\",\"tag\":\"out\",\"server\":\"$(json_escape "$_server")\",\"server_port\":$_port,\"uuid\":\"$(json_escape "$_uuid")\",\"password\":\"$(json_escape "$_pass")\",\"congestion_control\":\"$(json_escape "$_cc")\",\"tls\":{\"enabled\":true,\"server_name\":\"$(json_escape "$_sni")\",\"insecure\":$_insecure,\"alpn\":[\"h3\"]}}"
+			;;
+		*)
+			return 1
+			;;
+	esac
+
+	cat > "$PWPLUS_BRIDGE_JSON" <<EOF
+{
+  "log": { "disabled": true },
+  "inbounds": [
+    {
+      "type": "mixed",
+      "tag": "in",
+      "listen": "127.0.0.1",
+      "listen_port": $PORT
+    }
+  ],
+  "outbounds": [ $_out ]
+}
+EOF
+	return 0
+}
+
+# --------------------------------------------------------------- hysteria
+
+hysteria_config() {
+	[ "$(jget type)" = "hysteria2" ] || return 1
+	_server="$(jget server)"
+	_port="$(jnum port)"
+	_sni="$(jget sni)"
+	[ -n "$_sni" ] || _sni="$_server"
+
+	# hysteria's own client reads YAML, not JSON.
+	{
+		printf 'server: %s:%s\n' "$_server" "$_port"
+		printf 'auth: %s\n' "$(jget password)"
+		printf 'tls:\n  sni: %s\n  insecure: %s\n' "$_sni" "$(jbool insecure)"
+		_obfs="$(jget obfs)"
+		if [ -n "$_obfs" ]; then
+			printf 'obfs:\n  type: %s\n  %s:\n    password: %s\n' \
+				"$_obfs" "$_obfs" "$(jget obfs_password)"
+		fi
+		printf 'socks5:\n  listen: 127.0.0.1:%s\n' "$PORT"
+		printf 'fastOpen: true\n'
+	} > "$PWPLUS_BRIDGE_JSON.yaml"
+	return 0
+}
+
+# ------------------------------------------------------------------- main
+
+cmd_config() {
+	cmd_needed || { echo "no bridge needed" >&2; return 1; }
+
+	if _sb="$(find_singbox)"; then
+		if singbox_config; then
+			echo "$PWPLUS_BRIDGE_JSON"
+			return 0
+		fi
+	fi
+	if _hy="$(find_hysteria)"; then
+		if hysteria_config; then
+			echo "$PWPLUS_BRIDGE_JSON.yaml"
+			return 0
+		fi
+	fi
+
+	say_message "The chosen server speaks $(jget type), which Xray cannot. Install sing-box on the settings page, or pick another server."
+	warn "no core installed that can carry $(jget type)"
+	return 1
+}
+
+# What passwall-plus.init hands to procd. Printed rather than run, so that the service
+# is a procd instance like any other and gets its respawning for free.
+cmd_command() {
+	cmd_needed || return 1
+	if _sb="$(find_singbox)" && singbox_config; then
+		echo "$_sb run -c $PWPLUS_BRIDGE_JSON"
+		return 0
+	fi
+	if _hy="$(find_hysteria)" && hysteria_config; then
+		echo "$_hy client -c $PWPLUS_BRIDGE_JSON.yaml"
+		return 0
+	fi
+	return 1
+}
+
+case "${1:-}" in
+	needed)  cmd_needed ;;
+	config)  cmd_config ;;
+	command) cmd_command ;;
+	*) echo "usage: $0 needed|config|command" >&2; exit 1 ;;
+esac

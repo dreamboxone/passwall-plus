@@ -1,0 +1,304 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+#
+# pwplus-stats - how much has gone through, without wearing the router out.
+#
+#   pwplus-stats sample   read the counters and add them up   (every few minutes)
+#   pwplus-stats flush    write the running total to disk
+#   pwplus-stats json     today, this week, this month, and a daily series
+#   pwplus-stats reset    forget everything
+#
+# Where the numbers come from.
+#
+# Xray counts its own bytes per outbound, and it will tell you if asked. That
+# is better than counting in the firewall in three ways: it is exact rather
+# than an approximation of which packets belonged to whom, it is the same on
+# an nftables router and an iptables one, and it separates what went through
+# the tunnel from what went straight out - which is the number that actually
+# matters once the Iran split is switched on.
+#
+# Two things about that interface are worth knowing, because both will
+# silently produce wrong figures if ignored: a counter that is still zero is
+# not reported at all, rather than reported as zero, and the order the
+# counters come back in changes between calls. So they are matched by name,
+# and a name that does not appear means nothing has gone that way yet.
+#
+# And where they are kept.
+#
+# The counters live in memory and reset whenever the core restarts, so what is
+# stored is the running sum of the differences. The sum lives in /var - which
+# is RAM - and only reaches flash once an hour and when the tunnel stops. A
+# sample every five minutes written straight to /etc would be a hundred
+# thousand flash writes a year to record something nobody reads more than
+# once a day, and on the sort of flash a router has, that is how routers die.
+
+set -e
+
+. "${PWPLUS_LIB:-/usr/libexec}/pwplus-common.sh"
+
+STATE="$PWPLUS_RUN/stats.state"
+DB="$PWPLUS_ETC/usage.db"
+FLUSH_EVERY="$(cfg stats_flush_seconds 3600)"
+
+api_port="$(cfg api_port 10853)"
+
+# ------------------------------------------------------------------ reading
+
+# name<TAB>bytes for every outbound counter the core is keeping.
+read_counters() {
+	_x="$(find_xray '')" || return 1
+	"$_x" api statsquery --server="127.0.0.1:$api_port" 2>/dev/null | awk '
+		BEGIN { RS = "{" }
+		{
+			n = ""; v = 0
+			if (match($0, /"name"[ \t]*:[ \t]*"[^"]*"/)) {
+				s = substr($0, RSTART, RLENGTH)
+				sub(/^"name"[ \t]*:[ \t]*"/, "", s)
+				sub(/"$/, "", s)
+				n = s
+			}
+			# A counter still at zero is omitted rather than sent as zero, so
+			# "no value here" has to mean nothing has gone this way yet - not
+			# "use the number from the next record", which is what pairing
+			# names and values positionally would silently do.
+			# Quoted or not. Xray wrote "value": "12345" and now writes
+			# "value": 12345, and a parser that only knew the first shape read
+			# every counter as zero - so the traffic page showed 0 B for ever
+			# while the tunnel carried megabytes. Nothing said anything was
+			# wrong: zero is a number, and a counter at zero is a legitimate
+			# answer for a tunnel that has just started.
+			if (match($0, /"value"[ \t]*:[ \t]*"?[0-9]+"?/)) {
+				s = substr($0, RSTART, RLENGTH)
+				gsub(/[^0-9]/, "", s)
+				v = s + 0
+			}
+			if (n != "") printf "%s\t%d\n", n, v
+		}'
+	return 0
+}
+
+get_state() { sed -n "s/^$1=//p" "$STATE" 2>/dev/null | head -1; }
+
+num() {
+	case "$1" in
+		''|*[!0-9]*) echo 0 ;;
+		*) echo "$1" ;;
+	esac
+	return 0
+}
+
+# How much has gone through since the last look. A counter that went backwards
+# means the core restarted and began counting from nothing again, so
+# everything it now reports is new.
+#
+# Written out rather than as `$((a >= b ? a - b : b))`: the conditional
+# operator is in the arithmetic every modern shell implements, and is missing
+# from a few of the trimmed busybox builds that end up on cheap routers.
+delta() {
+	if [ "$1" -ge "$2" ]; then
+		echo $(($1 - $2))
+	else
+		echo "$1"
+	fi
+	return 0
+}
+
+# ------------------------------------------------------------------ storing
+
+# One line per day: date, then the four totals. Four hundred lines is a year
+# and a bit, and about fifteen kilobytes.
+flush_day() {
+	_day="$1"; _pu="$2"; _pd="$3"; _du="$4"; _dd="$5"
+	[ -n "$_day" ] || return 0
+
+	_tmp="$PWPLUS_RUN/usage.new"
+	{
+		grep -v "^$_day	" "$DB" 2>/dev/null || true
+		printf '%s\t%s\t%s\t%s\t%s\n' "$_day" "$_pu" "$_pd" "$_du" "$_dd"
+	} | sort | tail -400 > "$_tmp"
+
+	write_if_changed "$_tmp" "$DB" || true
+	rm -f "$_tmp"
+	return 0
+}
+
+cmd_flush() {
+	_day="$(get_state day)"
+	[ -n "$_day" ] || return 0
+	flush_day "$_day" \
+		"$(num "$(get_state day_proxy_up)")" \
+		"$(num "$(get_state day_proxy_down)")" \
+		"$(num "$(get_state day_direct_up)")" \
+		"$(num "$(get_state day_direct_down)")"
+	sed -i '/^last_flush=/d' "$STATE" 2>/dev/null || true
+	echo "last_flush=$(date +%s)" >> "$STATE"
+	return 0
+}
+
+# ---------------------------------------------------------------- sampling
+
+cmd_sample() {
+	_now="$(date +%s)"
+	_today="$(date +%Y-%m-%d)"
+
+	# Before NTP has been anywhere near it, a router thinks it is 1970. Filing
+	# today's traffic under 1970-01-01 is not a rounding error, it is a row
+	# that never goes away and a month total that is wrong for ever.
+	case "$_today" in
+		19*|200*|201[0-9]*) log "clock is not set yet - not recording traffic"; return 0 ;;
+	esac
+
+	_counters="$(read_counters)" || { warn "the core is not answering its stats interface"; return 1; }
+	[ -n "$_counters" ] || return 0
+
+	_cpu="$(num "$(printf '%s\n' "$_counters" | awk -F'\t' '$1 == "outbound>>>proxy>>>traffic>>>uplink"   { print $2 }')")"
+	_cpd="$(num "$(printf '%s\n' "$_counters" | awk -F'\t' '$1 == "outbound>>>proxy>>>traffic>>>downlink" { print $2 }')")"
+	_cdu="$(num "$(printf '%s\n' "$_counters" | awk -F'\t' '$1 == "outbound>>>direct>>>traffic>>>uplink"   { print $2 }')")"
+	_cdd="$(num "$(printf '%s\n' "$_counters" | awk -F'\t' '$1 == "outbound>>>direct>>>traffic>>>downlink" { print $2 }')")"
+
+	_lpu="$(num "$(get_state last_proxy_up)")"
+	_lpd="$(num "$(get_state last_proxy_down)")"
+	_ldu="$(num "$(get_state last_direct_up)")"
+	_ldd="$(num "$(get_state last_direct_down)")"
+
+	_dpu="$(delta "$_cpu" "$_lpu")"
+	_dpd="$(delta "$_cpd" "$_lpd")"
+	_ddu="$(delta "$_cdu" "$_ldu")"
+	_ddd="$(delta "$_cdd" "$_ldd")"
+
+	_day="$(get_state day)"
+	_apu="$(num "$(get_state day_proxy_up)")"
+	_apd="$(num "$(get_state day_proxy_down)")"
+	_adu="$(num "$(get_state day_direct_up)")"
+	_add="$(num "$(get_state day_direct_down)")"
+
+	if [ -n "$_day" ] && [ "$_day" != "$_today" ]; then
+		# Midnight. Put yesterday to bed before starting today, or a day's
+		# traffic quietly lands in the wrong day.
+		flush_day "$_day" "$_apu" "$_apd" "$_adu" "$_add"
+		_apu=0; _apd=0; _adu=0; _add=0
+	fi
+
+	_apu=$((_apu + _dpu))
+	_apd=$((_apd + _dpd))
+	_adu=$((_adu + _ddu))
+	_add=$((_add + _ddd))
+
+	_lastflush="$(num "$(get_state last_flush)")"
+
+	cat > "$STATE" <<EOF
+day=$_today
+last_proxy_up=$_cpu
+last_proxy_down=$_cpd
+last_direct_up=$_cdu
+last_direct_down=$_cdd
+day_proxy_up=$_apu
+day_proxy_down=$_apd
+day_direct_up=$_adu
+day_direct_down=$_add
+last_flush=$_lastflush
+EOF
+
+	if [ $((_now - _lastflush)) -ge "$FLUSH_EVERY" ]; then
+		cmd_flush
+	fi
+	return 0
+}
+
+# ------------------------------------------------------------------ report
+
+cmd_json() {
+	_today="$(date +%Y-%m-%d)"
+	_month="$(date +%Y-%m)"
+
+	# Only count what is in memory towards today if it *is* today's.
+	_day="$(get_state day)"
+	_lpu=0; _lpd=0; _ldu=0; _ldd=0
+	if [ "$_day" = "$_today" ]; then
+		_lpu="$(num "$(get_state day_proxy_up)")"
+		_lpd="$(num "$(get_state day_proxy_down)")"
+		_ldu="$(num "$(get_state day_direct_up)")"
+		_ldd="$(num "$(get_state day_direct_down)")"
+	fi
+
+	awk -F'\t' \
+		-v today="$_today" -v month="$_month" \
+		-v lpu="$_lpu" -v lpd="$_lpd" -v ldu="$_ldu" -v ldd="$_ldd" '
+		# A date turned into a plain day number, so that "the last seven days"
+		# is subtraction and not string comparison across a month boundary.
+		# Neither busybox date nor busybox awk can be relied on for this:
+		# `date -d @seconds` is a compile-time option and awk has no strftime.
+		function daynum(s,   y, m, d, era, yoe, doy, doe) {
+			y = substr(s, 1, 4) + 0
+			m = substr(s, 6, 2) + 0
+			d = substr(s, 9, 2) + 0
+			if (m <= 2) y -= 1
+			era = int((y >= 0 ? y : y - 399) / 400)
+			yoe = y - era * 400
+			doy = int((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5) + d - 1
+			doe = yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy
+			return era * 146097 + doe - 719468
+		}
+		{
+			d = $1
+			pu[d] = $2 + 0; pd[d] = $3 + 0; du[d] = $4 + 0; dd[d] = $5 + 0
+			days[d] = 1
+		}
+		END {
+			# Whatever has accumulated since the last write to disk belongs to
+			# today as much as what is already stored, or the page would show
+			# a figure that only moves once an hour.
+			pu[today] = lpu; pd[today] = lpd; du[today] = ldu; dd[today] = ldd
+			days[today] = 1
+
+			n = 0
+			for (d in days) { order[n++] = d }
+			# insertion sort: the list is at most a few hundred and this needs
+			# no sort function that busybox awk does not have
+			for (i = 1; i < n; i++) {
+				k = order[i]
+				for (j = i - 1; j >= 0 && order[j] > k; j--) order[j + 1] = order[j]
+				order[j + 1] = k
+			}
+
+			tpu = tpd = tdu = tdd = 0
+			wpu = wpd = wdu = wdd = 0
+			mpu = mpd = mdu = mdd = 0
+			series = ""
+			weekfrom = daynum(today) - 6
+			start = n - 30; if (start < 0) start = 0
+			for (i = 0; i < n; i++) {
+				d = order[i]
+				if (d == today) { tpu = pu[d]; tpd = pd[d]; tdu = du[d]; tdd = dd[d] }
+				if (daynum(d) >= weekfrom) { wpu += pu[d]; wpd += pd[d]; wdu += du[d]; wdd += dd[d] }
+				if (substr(d, 1, 7) == month) { mpu += pu[d]; mpd += pd[d]; mdu += du[d]; mdd += dd[d] }
+				if (i >= start)
+					series = series (series == "" ? "" : ",") \
+						sprintf("{\"d\":\"%s\",\"up\":%d,\"down\":%d,\"dup\":%d,\"ddown\":%d}",
+							d, pu[d], pd[d], du[d], dd[d])
+			}
+			printf "{"
+			printf "\"today\":{\"up\":%d,\"down\":%d,\"direct_up\":%d,\"direct_down\":%d},", tpu, tpd, tdu, tdd
+			printf "\"week\":{\"up\":%d,\"down\":%d,\"direct_up\":%d,\"direct_down\":%d},", wpu, wpd, wdu, wdd
+			printf "\"month\":{\"up\":%d,\"down\":%d,\"direct_up\":%d,\"direct_down\":%d},", mpu, mpd, mdu, mdd
+			printf "\"days\":[%s]}", series
+		}' "$DB" 2>/dev/null
+	return 0
+}
+
+cmd_reset() {
+	rm -f "$DB" "$STATE"
+	log "traffic history cleared"
+	return 0
+}
+
+case "${1:-sample}" in
+	sample) cmd_sample ;;
+	flush)  cmd_flush ;;
+	json)   cmd_json ;;
+	reset)  cmd_reset ;;
+	*) echo "usage: $0 sample|flush|json|reset" >&2; exit 1 ;;
+esac
