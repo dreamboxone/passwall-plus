@@ -1,6 +1,6 @@
 <div dir="rtl">
 
-# ovpn — تونل سراسری برای روتر OpenWrt
+#Passwall+ — تونل سراسری برای روتر OpenWrt
 
 **نسخه ۱.۰.۰** · پشتیبانی و تماس: [t.me/routekernel1](https://t.me/routekernel1)
 🇬🇧 **[English guide: README.md](README.md)**
