@@ -8,7 +8,7 @@
 # builders so the two formats can never drift apart.
 
 VERSION=1.0.0
-RELEASE=1
+RELEASE=2
 PKGVER="$VERSION-r$RELEASE"
 LICENSE="GPL-3.0-only"
 URL="https://github.com/dreamboxone/ovpn"
