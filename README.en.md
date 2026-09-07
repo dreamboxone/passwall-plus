@@ -3,24 +3,23 @@
 **Version 1.0.0** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
 🇮🇷 **[راهنمای فارسی: README.md](README.md)**
 
-Install it, press **Connect**, and every device on your network goes through
-the tunnel. No settings on your phone, no settings on your laptop, nothing to
-paste in.
+Install it on the router, press **Connect**, and from that moment every device
+on your network — phone, laptop, TV, console — goes through the tunnel. You
+install nothing on any of them and paste no config anywhere.
 
-The router keeps a list of servers, reads a fresh one every quarter of an
-hour, and finds one that works. Optionally it sends Iranian sites straight out
-and only tunnels the rest. It shows you how much you have used, by day, by
-week and by month.
+The router keeps the server list itself, fetches a fresh one every quarter of
+an hour, and finds one that actually works. If you want it to, Iranian traffic
+skips the tunnel and goes straight out. And it shows you what you have used:
+today, the last seven days, this month.
 
-Built on [Xray](https://github.com/XTLS/Xray-core). It does not need PassWall2
-or any other package, it does not touch their settings, and if a core is
-already installed it uses that one rather than a second copy.
+It runs on [Xray](https://github.com/XTLS/Xray-core). It does not need
+PassWall2 or any other package and does not touch their settings. If the router
+already has an Xray core, it uses that one rather than downloading a second
+copy.
 
-Developed on **OpenWrt 25.12**, target `ipq40xx/chromium`, architecture
-`arm_cortex-a7_neon-vfpv4`. Releases also carry `.ipk` packages for **24.10
-and 23.05**, across four architectures.
+---
 
-### What the router needs
+## 1. Before you install: has your router got room?
 
 | | Minimum | Comfortable |
 |---|---|---|
@@ -29,313 +28,374 @@ and 23.05**, across four architectures.
 | **CPU** | any architecture Xray publishes a build for | two cores or more |
 
 **Flash.** The package itself is about **13 MB**, because it carries the Xray
-core. A router that already has `xray-core` — because PassWall2 pulled it in —
-uses that one and downloads nothing. The Iranian routing data is optional and
-counted separately: 25 MB for the full pair, about 2 MB for the `-lite` pair.
-Space is checked before every download and one that will not fit is refused,
-because filling a router's overlay remounts it read-only and from then on
-nothing works.
+core. If the router already has `xray-core` — because PassWall2 pulled it in —
+Passwall+ uses that one and downloads nothing. The Iranian routing data is
+optional and counted separately: 25 MB for the full pair, about 2 MB for the
+`-lite` pair.
 
-**RAM.** The running core uses 40–80 MB. It works on a 128 MB router, but with
-a hundred-server list turn **Checked at once** down from 30 to 10 in the
-settings: the first pass opens thirty handshakes at once, and on a small
-router that, rather than the tunnel itself, is what brings it to its knees.
+Routers with **32 MB of flash**, which is most older models, do not have room,
+unless you add USB storage.
+
+**RAM.** The running core takes 40–80 MB. It works on a 128 MB router, but if
+you use a hundred-config subscription, turn **Checked at once** down from 30 to
+10 in the settings. That number is how many handshakes go out at once, and on a
+small router it is what puts it under pressure — not the tunnel itself.
 
 **CPU.** Throughput is decided by TLS, not by core count. Measured on the
 reference router — four Cortex-A7 cores at 717 MHz — **1.6 MB/s** through the
-tunnel, and choosing a server out of 98 took **8.8 seconds**. A slower
-single-core CPU does the same work, more slowly.
-
-Routers with **32 MB of flash**, which is most older models, do not have room
-for this without external storage.
+tunnel, and choosing a server out of 98 configs took **8.8 seconds**. A weaker
+CPU does the same work, more slowly.
 
 ---
 
-## How it chooses a server
+## 2. Install
 
-This is the part that used to be slow, and it is worth a paragraph.
+Every release carries both package formats, because OpenWrt changed package
+manager in 25.12. Take the pair that matches your router:
 
-A hundred servers used to mean a hundred simultaneous connections held open by
-one process for half a minute, on every single connect. Now it happens in two
-passes:
-
-1. **One TCP handshake to every server**, thirty at a time. On a typical list
-   this takes about eight seconds and throws out a third to a half of them
-   before anything expensive happens. A server that will not complete a
-   handshake cannot carry anything, and finding that out costs three packets.
-2. **The survivors, nearest first, measured properly ten at a time** — a
-   complete web request through each one, timed end to end, which is the only
-   thing that proves a route works. As soon as one comes back fast enough
-   (under a second by default) that is the answer, and the rest are never
-   measured.
-
-So connecting normally costs one small batch, not the whole list. The results
-are kept, so when the chosen server dies later the router takes the next one
-down the list rather than starting again.
-
-> **Why a handshake and not a ping.** Most of these servers sit behind
-> Cloudflare, where a ping is answered by the edge and tells you nothing about
-> the server behind it — and many working servers drop ICMP entirely. So ping
-> keeps servers that do not work and discards servers that do. A handshake to
-> the real port asks the same question of the thing that matters, for the same
-> three packets. Ping is available under **First pass** in the settings if you
-> want it.
-
----
-
-## 1. Install
-
-Releases ship both package formats, because OpenWrt changed package manager in
-25.12. Take the pair that matches your router:
-
-| Your OpenWrt | Package manager | Files to download |
+| Your OpenWrt | Package manager | The two files you need |
 |---|---|---|
 | 25.12 and later | `apk` | `passwall-plus-<version>.<arch>.apk` and `luci-app-passwall-plus-<version>.apk` |
 | 24.10, 23.05 | `opkg` | `passwall-plus_<version>_<arch>.ipk` and `luci-app-passwall-plus_<version>_all.ipk` |
 
-Your architecture is `DISTRIB_ARCH` in `/etc/openwrt_release` (on 23.05 and
-24.10, `opkg print-architecture` prints it too). The `luci-app-passwall-plus` package
-fits every router.
+Your architecture is on the `DISTRIB_ARCH` line of `/etc/openwrt_release`. The
+`luci-app-passwall-plus` package has no architecture and fits every router.
 
-**OpenWrt 25.12 and later:**
+### The easy way: from LuCI itself
+
+In LuCI go to **System → Software** and press **Upload Package…**. Upload and
+install the main file first, then the `luci-app-…` one. After the second, press
+**Ctrl+F5** once so the new page appears.
+
+### The other way: from a terminal
 
 ```sh
-scp passwall-plus-*.apk luci-app-passwall-plus-*.apk root@192.168.1.1:/tmp/
+scp -O passwall-plus-*.apk luci-app-passwall-plus-*.apk root@192.168.1.1:/tmp/
 ssh root@192.168.1.1 'apk add --allow-untrusted /tmp/passwall-plus-*.apk /tmp/luci-app-passwall-plus-*.apk'
 ```
 
-**OpenWrt 24.10 and 23.05:**
+On 24.10 and 23.05, instead of the second command:
 
 ```sh
-scp passwall-plus_*.ipk luci-app-passwall-plus_*.ipk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'opkg update && opkg install /tmp/passwall-plus_*.ipk /tmp/luci-app-passwall-plus_*.ipk'
+ssh root@192.168.1.1 'opkg install /tmp/passwall-plus_*.ipk /tmp/luci-app-passwall-plus_*.ipk'
 ```
 
-**The router needs working internet while you install.** Several things Passwall+
-relies on are not in a stock OpenWrt image — `kmod-nft-tproxy`, `curl`,
-`ip-full` — and the package manager fetches them as it installs. Do this on a
-connection that works, before you need the tunnel.
+> Write `-O` with a capital letter. Most OpenWrt routers have no sftp service
+> and plain `scp` fails on them with `sftp-server: not found`; `-O` makes it use
+> the older method instead.
 
-If that step went wrong, or you installed the file by hand, go to
-**Settings → Does this router have what it needs?**. It asks the running
-system three questions — can it redirect traffic, can it do policy routing,
-can it fetch over HTTPS — and offers to install whatever is missing. It never
-touches `xray-core`, so a router that already has PassWall2 is left alone.
+### The router needs working internet while you install
 
-Then open LuCI → **Services → Passwall+**.
+Several things Passwall+ relies on are not in a stock OpenWrt image —
+`kmod-nft-tproxy`, `curl`, `ip-full` — and the package manager fetches them as
+it installs. So do this on a connection that works, **before** you need the
+tunnel.
 
-Nothing runs after installation. The tunnel stays off until you press
+If that step went wrong, or you installed the file by hand, go to **Settings**
+and scroll to **Does this router have what it needs?**. It puts three questions
+to the running system — can it redirect traffic, can it do policy routing, can
+it fetch over HTTPS — and installs whatever is missing at the press of a button.
+It never touches `xray-core`, so a router that has PassWall2 is left alone.
+
+Nothing runs by itself after installation. The tunnel stays off until you press
 **Connect**.
 
 ---
 
-## 2. Using it
+## 3. Your first connection
 
-Three pages.
+1. In LuCI go to **Services → Passwall+**.
+2. As the page opens, the router starts measuring servers straight away. Watch
+   the progress bar.
+3. When the bar turns green, press **Connect**.
+
+That is all. If the default subscription cannot be read, or you have no list at
+all, go to the **Servers** page, put one of your own configs into **Servers
+added by hand**, and come back.
+
+**If PassWall2 is running on the same router, turn it off first.** Two
+transparent proxies fight over the same packets and the loser is your
+connection. If Passwall+ sees PassWall2 redirecting traffic, it says so at the
+top of the page.
+
+---
+
+## 4. The three pages you will see
 
 ### Status
 
-| | |
+| Button | What it does |
 |---|---|
-| **Connect** | Finds a server and sends every LAN device through it. |
-| **Disconnect** | Stops the tunnel. Your network goes back to normal immediately. |
-| **Choose again** | Throws away the current choice and measures from scratch. |
+| **Connect** | Finds a server and sends every device on the network through it |
+| **Disconnect** | Stops the tunnel. Your network goes back to normal immediately |
+| **Choose again** | Throws away the current choice and measures from scratch |
 
-Measuring starts when the page opens, not when you press the button, so by the
-time you have read this far the router is usually done. The bar says which
-pass is running and counts real servers, not guessed seconds.
+Measuring starts **when the page opens**, not when you press the button — so by
+the time you have decided, the answer is usually ready. The progress bar says
+which pass is running and counts real servers, not guessed seconds.
 
-**Connected** means traffic is actually going through the tunnel — the process
-is alive *and* the rules are in place. A core running with no rules in front
-of it is not a connection, and this page will not call it one.
+**Connected means traffic is genuinely going through the tunnel** — the process
+is alive *and* the firewall rules are in place. A core that is running with no
+rules in front of it is not a connection, and this page will not call it one.
 
-Below that, **Traffic through the tunnel**: today, the last seven days and this
-month as rings, upload against download, with the last fortnight as bars. The
-counters are read from the core every five minutes and added up in memory;
-they reach storage once an hour, so watching this page does not wear the
-router's flash out.
+Below that is **Traffic through the tunnel**: today, the last seven days and
+this month as rings, upload against download, plus the last fortnight as bars.
+The numbers are read from the core every five minutes and added up in RAM, and
+reach the router's storage **once an hour** — so leaving this page open does not
+wear the flash out.
 
 ### Servers
 
-Your subscriptions, and any servers you want to add by hand — one share link
-per entry: `vless`, `vmess`, `trojan`, `ss`, `socks`, `hysteria2` or `tuic`. A
-subscription that hands back one base64 block is understood as well as a plain
-list. Hand-added servers are tried before the subscription list.
+At the top you choose which sources may be used:
 
-Underneath is every server the router knows about, with what was measured for
-it, and a button to use any one of them instead of the automatic choice.
+| Option | Means |
+|---|---|
+| **Mine and the subscriptions** | Hand-added configs and every subscription that is on (the default) |
+| **Only the ones I added by hand** | The subscriptions are not even fetched |
+| **Only the subscriptions** | Hand-added configs are set aside |
 
-Most of the **Measured** column will be empty, and that is deliberate: the
-whole point is to stop measuring once a good server is found.
+This decides who gets **measured**, not who wins. The server that answers
+fastest is the one used, wherever it came from. A hand-added config **joins**
+the list rather than replacing it. If you want one particular server used, press
+**Use this one** beside it further down the page.
+
+**Subscriptions.** You give the address and it is read every quarter of an hour.
+You do not need to know what format it is in: a plain list of configs, one
+base64 block, or a whole JSON file — an Xray config, a sing-box config, a Clash
+list. WireGuard is read too.
+
+**Servers added by hand.** Put your own config here — `vless`, `vmess`,
+`trojan`, `ss`, `socks`, `hysteria2`, `tuic` or `wireguard`. If you leave the
+Name box empty, the name written after the `#` in the config itself is used,
+even if it is in Persian.
+
+**The table at the bottom.** Every server the router knows about, with what was
+measured for it:
+
+- **Reachable in** — one TCP handshake to the server. Filled in for all of them.
+- **Measured** — a complete request through the server. **Most of this column is
+  empty on purpose**, because measuring stops as soon as a server that is fast
+  enough is found.
+
+The **Check every server** button fills in the first column for all of them,
+without disturbing a tunnel that is already carrying traffic.
 
 ### Settings
 
-**Send Iranian traffic direct** is the tick box. Iranian sites and addresses
-skip the tunnel; everything else goes through it. It needs two data files,
-which are downloaded with the **Update** buttons under **Routing data**. The
-addresses are editable — the default is
-[Chocolate4U/Iran-v2ray-rules](https://github.com/Chocolate4U/Iran-v2ray-rules).
+The ones that matter most:
 
-> **On size.** The full `geoip.dat` is about 17 MB and `geosite.dat` about
-> 8 MB. That is more than the free space on a great many routers. The same
-> project publishes **`geoip-lite.dat` (38 KB)** and **`geosite-lite.dat`
-> (2 MB)**, which contain the Iranian categories and nothing else — if the
-> full ones will not fit, put those addresses in the boxes instead. Either way
-> the free space is checked first and a download that will not fit is refused
-> rather than half written. Filling a router's overlay does not merely fail to
-> save the file; it remounts read-only, and then nothing works.
+**Send Iranian traffic direct.** Iranian sites and addresses skip the tunnel. It
+needs two data files, fetched with the **Update** buttons under **Routing
+data**.
 
-The file is also checked before it replaces the one already there: a download
-that came back as an error page is still a file of roughly the right size, and
-installing it does not make routing worse — it stops the core starting at all.
+> **On size.** The full `geoip.dat` is about 17 MB and `geosite.dat` about 8 MB
+> — more than the free space on a great many routers. The same project also
+> publishes `geoip-lite.dat` (38 KB) and `geosite-lite.dat` (2 MB), which carry
+> the Iranian categories and nothing else; if the full ones will not fit, put
+> those addresses in the same boxes. Either way the free space is checked first
+> and a download that will not fit is **refused** rather than half written:
+> filling a router's overlay remounts it read-only, and from that moment nothing
+> works.
 
-**Cores** installs sing-box or hysteria. You only need one if you have a server
-that speaks `hysteria2` or `tuic`, which Xray does not; the extra core is then
-run as a local helper for that one server and everything else works exactly as
-before. Xray itself can be updated here too.
+**Cores.** If you have a server that speaks `hysteria2` or `tuic` — which Xray
+does not — install sing-box or hysteria here. That core is then run as a local
+helper for that one server and nothing else changes. What each project has
+published is shown beside what is installed, and the button says **Update to
+…**.
 
-### Every setting
+**Language.** English or Persian. Save, then reload the page once.
 
-The page carries the ones worth changing. The rest live in `/etc/config/passwall-plus`,
-an ordinary UCI file, where each default is written out with the reasoning
-beside it. Names in brackets are the UCI options.
+---
 
-**Routing**
+## 5. How a server is chosen
 
-| Setting | Default | What it does |
-|---|---|---|
-| Send Iranian traffic direct `route_ir` | off | Iranian sites and addresses skip the tunnel; everything else goes through it. Needs the routing data below. Until that is downloaded the setting does nothing at all, deliberately: a core asked for a geo file it has not got refuses to start rather than carrying on without it. |
-| Address data `geoip_url` | Chocolate4U `geoip.dat` | Where the Iranian address list is fetched from. Editable, which is how the 38 KB `-lite` file gets used on a router with no room for the full one. |
-| Name data `geosite_url` | Chocolate4U `geosite.dat` | The same for names. |
-| Iranian resolver `ir_dns` | *none* | Which resolver answers Iranian names while the split is on. A list of the public Iranian ones with nothing chosen. Nothing chosen is a real answer and the shipped one: the split still works, only the lookup takes the ordinary path — and no Iranian resolver gets to see every name this router asks for. Choose one if an Iranian CDN is answering you with a foreign edge. |
-| Block advertising `block_ads` | off | Refuses known advertising and tracking domains, for every device on the network. There is no separate list and nothing extra to download: the names come from the `category-ads-all` category **inside `geosite.dat`** — the same *Name data* file the Update button fetches, which is a repackaging of the community domain list that most of these tools use. So this needs the routing data present, exactly as the Iran split does, and it blocks by name rather than by address. |
-| Block BitTorrent `block_torrent` | on | BitTorrent through a free server is how a free server stops existing. |
+You do not need to know this, but if you are curious: choosing happens in **two
+passes**, which is why it takes seconds rather than half a minute.
 
-**Network**
+1. **One TCP handshake to every server**, thirty at a time. On a typical list
+   this takes about eight seconds and throws out a third to a half of them
+   before anything expensive happens. A server that will not complete a
+   handshake cannot carry anything.
+2. **The survivors, nearest first, ten at a time** — this time a complete web
+   request through each one. As soon as one comes back under a second, that is
+   the one, and the rest are never run.
 
-| Setting | Default | What it does |
-|---|---|---|
-| Name lookups `dns_mode` | Through dnsmasq | `dnsmasq` keeps the router's own resolver answering and moves only its upstream into the tunnel, so DHCP names, `/etc/hosts` and the printer keep working. `direct` sends every query straight into the tunnel: outside names resolve, names on your own network stop. `off` changes nothing, for a router with its own arrangement. |
-| Catch hardcoded resolvers `dns_hijack` | on | A phone set to ask 8.8.8.8 directly gets its answers from outside the tunnel and then connects to whatever it was told. This forces those queries back through the router. |
-| IPv6 `ipv6` | Refuse while connected | Almost nothing on a free server list carries IPv6, and a client that prefers it leaves without the tunnel while looking perfectly healthy. Refusing it makes the client fall back to IPv4, which is tunnelled. Set it to *leave alone* only on a connection that is IPv6 only. |
-| Refuse QUIC `block_quic` | off | Drops UDP 443 before it reaches the tunnel, so browsers fall back to TCP. Worth turning on when the chosen server carries UDP badly. Off by default because where UDP does work QUIC is the faster path — measured on a real server, YouTube loads over QUIC through the tunnel perfectly well. |
-| Firewall `firewall_backend` | automatic | nftables or iptables, decided at run time. Automatic is right unless the router has both and the wrong one is being picked. |
-| Interfaces to tunnel `lan_zone` | *every LAN interface* | Read from this router rather than typed. Unset — how it ships — every LAN interface is tunnelled, which is what almost everyone wants. Choose one to pick traffic up from that interface only. |
-| Reconnect after a reboot `autostart` | off | Makes the boot symlink, so the tunnel comes back after a power cut. |
+The results are kept, so when the chosen server dies later the router takes the
+next one down the list rather than starting again.
 
-**Choosing a server**
+> **Why a handshake and not a ping.** Most of these servers sit behind
+> Cloudflare, where the ping is answered by the CDN edge — which tells you
+> nothing about the server itself. Plenty of healthy servers do not answer pings
+> at all. So ping keeps servers that do not work and discards servers that do.
+> If you want ping anyway, it is under **First pass** in the settings.
 
-| Setting | Default | What it does |
-|---|---|---|
-| Servers to use `sources` | Mine and the subscriptions | Which servers are allowed into the running: both, only the ones added by hand, or only the subscriptions. It decides who may be measured, not who wins — whichever server answers fastest is the one used, wherever it came from, and a server added by hand joins the list rather than replacing it. On *only mine* the subscriptions are not even fetched, which on a censored connection saves a minute of waiting on an address that hangs rather than refusing. To insist on one particular server, press **Use this one** beside it on the Servers page. |
-| First pass `prefilter` | TCP handshake | How a server is judged worth measuring properly. A handshake to its real port is the right test. A ping is cheaper and wrong often enough to matter: a server behind a CDN answers pings at the edge whatever state it is in, and plenty of working servers drop ICMP entirely. *Ping, then handshake* is the strictest and discards the most. |
-| Good enough `good_ms` | 1000 | The first server measured faster than this is the one used. Lower means a better server and a longer wait. |
-| Measured at a time `batch_size` | 10 | How many of the survivors are measured properly at once. |
-| Batches at most `max_batches` | 5 | How far down the list to keep going when nothing is fast enough. |
-| Checked at once `sift_parallel` | 30 | How many handshakes run in parallel in the first pass. Lower it on a router that struggles. |
+---
 
-**Traffic**
+## 6. Every setting
+
+The ones worth changing are on the page. The rest live in
+`/etc/config/passwall-plus`, an ordinary UCI file. The name in backticks is the
+option in that file.
+
+### Routing
 
 | Setting | Default | What it does |
 |---|---|---|
-| Save to flash every `stats_flush_seconds` | 3600 s | Totals are added up in memory every five minutes; this is how often that sum is written to storage. Lower loses less to a power cut and wears the flash faster. |
+| Send Iranian traffic direct `route_ir` | off | Iranian traffic skips the tunnel. Until the routing data is downloaded it deliberately does nothing |
+| Address data `geoip_url` | Chocolate4U | Where the Iranian address list comes from. Editable, for when you want the `-lite` file |
+| Name data `geosite_url` | Chocolate4U | The same, for names |
+| Iranian resolver `ir_dns` | *none* | Which resolver answers Iranian names while the split is on. Leaving it empty is a real answer: the split works without one, and no Iranian resolver gets to see what you ask for. Pick one if an Iranian CDN is answering you with a foreign node |
+| Block advertising `block_ads` | off | Blocks advertising and tracking domains, for every device on the network. No separate list is downloaded: the names come from the `category-ads-all` category inside the same `geosite.dat` |
+| Block BitTorrent `block_torrent` | on | BitTorrent through a free server is how a free server stops existing |
 
-**In the file only.** These have no box on the page because changing them is
-rare and getting them wrong is quiet.
+### Network
+
+| Setting | Default | What it does |
+|---|---|---|
+| Name lookups `dns_mode` | Through dnsmasq | `dnsmasq` means the router's own resolver keeps answering and only its upstream moves into the tunnel, so the names of your own devices and your printer keep working. `direct` sends every query straight into the tunnel and you lose the local names |
+| Catch hardcoded resolvers `dns_hijack` | on | A phone that asks 8.8.8.8 directly gets its answer from outside the tunnel and then connects to whatever it was told. This brings those queries back to the router |
+| IPv6 `ipv6` | refuse | Almost no free server carries IPv6, and a client that prefers it leaves without the tunnel — while looking perfectly healthy doing so. Refusing it sends the client back to IPv4 |
+| Refuse QUIC `block_quic` | off | Drops UDP 443 before the tunnel so the browser falls back to TCP. Turn it on only when your server carries UDP badly |
+| Firewall `firewall_backend` | automatic | nftables or iptables. Automatic is right unless the router has both |
+| Interfaces to tunnel `lan_zone` | *all* | Read from the router itself. Empty means every LAN interface |
+| Reconnect after a reboot `autostart` | off | The tunnel comes back by itself after a reboot or a power cut |
+
+### Choosing a server
+
+| Setting | Default | What it does |
+|---|---|---|
+| Servers to use `sources` | Mine and the subscriptions | Which sources are allowed in |
+| First pass `prefilter` | TCP handshake | How it is decided that a server is worth measuring properly |
+| Good enough (ms) `good_ms` | 1000 | The first server faster than this is the one used. Lower means a better server and a longer wait |
+| Measured at a time `batch_size` | 10 | How many are measured properly at once |
+| Batches at most `max_batches` | 5 | How far down the list to keep going when none is good enough |
+| Checked at once `sift_parallel` | 30 | How many handshakes at once. **Turn this down on a small router** |
+
+### Traffic
+
+| Setting | Default | What it does |
+|---|---|---|
+| Save to flash every (s) `stats_flush_seconds` | 3600 | Totals are added up in RAM every five minutes; this is how often that sum is written to flash. Lower loses less to a power cut and wears the flash faster |
+
+### In the file only
+
+These are not on the page, because changing them is rare and getting them wrong
+is quiet.
 
 | Option | Default | What it does |
 |---|---|---|
-| `tproxy_port` `dns_port` `api_port` `bridge_port` | 1082, 1053, 10853, 10808 | Where the tunnel, the resolver, the statistics interface and the protocol helper listen. Change only if something else on the router already has one of them. |
-| `sift_timeout` | 2 s | How long a first-pass handshake is given. |
-| `test_timeout` | 6 s | How long a full request through a server is given. |
-| `test_url` | `gstatic.com/generate_204` | What is fetched to measure a server. |
-| `fresh_seconds` | 3600 s | A measurement younger than this is used as it stands instead of being taken again. |
-| `max_nodes` | 300 | A ceiling on one round of candidates. |
-| `geo_dir` | `/etc/passwall-plus/geo` | Where the routing data is kept. Another front-end's copy in `/usr/share/xray` or `/usr/share/v2ray` is used if there is one, rather than downloading twenty-five megabytes a second time. |
-| `remote_dns` | `1.1.1.1` | The resolver used through the tunnel for everything that is not Iranian. |
-| `core_dir` | `/usr/libexec/passwall-plus` | Where downloaded cores are kept. Point it at a USB stick on a router whose flash is too small for sing-box. |
-| `core_xray` | *empty* | Forces a particular Xray. Empty means: use whichever one on this router accepts the generated configuration, preferring one that is already installed. |
-| `loglevel` | `warning` | What the core writes to the system log. `debug` is a great deal of output and worth it only while chasing something. |
-| `https_probe` | a small file on GitHub | What the dependency check fetches to prove the router can reach an HTTPS address at all. Only ever downloaded to `/dev/null`. |
+| `tproxy_port` `dns_port` `api_port` `bridge_port` | 1082, 1053, 10853, 10808 | The ports the tunnel, the resolver, the statistics interface and the protocol helper listen on |
+| `sift_timeout` | 2 s | How long each handshake is given |
+| `test_timeout` | 6 s | How long each full request is given |
+| `test_url` | `gstatic.com/generate_204` | What is fetched to measure a server |
+| `fresh_seconds` | 3600 s | A measurement younger than this is not taken again |
+| `max_nodes` | 300 | A ceiling on the configs in one round |
+| `geo_dir` | `/etc/passwall-plus/geo` | Where the routing data is kept. If another program has the same files in `/usr/share/xray`, those are used |
+| `remote_dns` | `1.1.1.1` | The resolver used through the tunnel for everything that is not Iranian |
+| `core_dir` | `/usr/libexec/passwall-plus` | Where downloaded cores are kept. Point it at USB storage on a router short of flash |
+| `core_xray` | *empty* | Forces one particular Xray |
+| `loglevel` | `warning` | What the core writes to the log. `debug` is a great deal of output |
 
-Subscriptions and hand-added servers are UCI sections in the same file —
-`config subscription` with a `name`, a `url` and `enabled`, and `config node`
-with a `name`, a `link` and `enabled`. Anything the Servers page can do can be
-done by editing that file, and the other way round.
+Subscriptions and hand-added configs are UCI sections in the same file. Anything
+the Servers page does can be done by editing it, and the other way round.
 
 ---
 
-## 3. Uninstall
+## 7. If it does not work
 
-```sh
-ssh root@192.168.1.1
-/etc/init.d/passwall-plus stop
-apk del luci-app-passwall-plus passwall-plus          # opkg remove ... on 24.10 and older
-```
+**It says there is no server list yet.** No subscription could be read and you
+have no hand-added config. Check the subscription address on the Servers page,
+or — more reliably — paste in one of your own configs. On a censored connection
+the subscription address usually will not open until the tunnel is up, and the
+tunnel will not come up without a server; one hand-added config breaks that
+circle.
 
-That removes the service, the core and the web page, and takes the scheduled
-jobs out of the router's crontab.
+**It says servers answered but none completed a request.** The servers are there
+and something between you and them is stopping the traffic. Press **Choose
+again**, and if it says the same thing, change the list.
 
-Removing the packages leaves your settings behind on purpose. To erase those
-too, including any routing data and traffic history:
+**It says no server answered at all.** The list has gone stale, or your
+connection is blocking all of them. The router reads a fresh list every quarter
+of an hour and repairs itself when the tunnel should be up and is not, so
+sometimes the answer is to wait.
 
-```sh
-rm -rf /etc/config/passwall-plus /etc/passwall-plus
-```
+**It connects but a site will not open.** First check the Status page really
+does say **Connected**. If it does:
 
-Nothing else is touched — no firewall zone, no other package's configuration.
-The routing rules exist only while the tunnel is up.
+- If PassWall2 is also running, turn it off.
+- Turn on **Refuse QUIC** in the settings. Some servers carry UDP badly and the
+  browser gets stuck on QUIC.
+- Press **Choose again** to pick a different server.
 
----
-
-## 4. If something does not work
-
-**It says no server could be reached.** Look at what the page says underneath.
-"*N of M servers answered a handshake, but none completed a request*" means the
-servers are there and something between you and them is stopping the traffic.
-"*No server answered at all*" means the list is stale or the connection is
-blocking them outright. The router reads a new list every quarter of an hour
-and repairs itself when the tunnel should be up and is not.
-
-**Some sites open and others do not.** Usually name resolution. Check
+**Some sites open and some do not.** Usually name resolution. Check that
 **Settings → Name lookups** is on *Through dnsmasq*.
 
-**Devices on my own network stopped resolving.** That is what *Through dnsmasq*
-prevents; *Straight into the tunnel* has this trade-off by design.
+**The names of my own devices stopped resolving.** That is exactly what *Through
+dnsmasq* prevents; *Straight into the tunnel* has that problem by design.
 
-**Iran routing does not seem to do anything.** The status page says
-*Iran split is on, but the routing data is missing* when the files have not
-been downloaded. Until then everything goes through the tunnel, on purpose —
-asking the core for a geo file it has not got stops it starting at all.
+**I turned the Iran split on and it seems to do nothing.** If the files are not
+downloaded, the status page says *Iran split is on, but the routing data is
+missing* and until then everything goes through the tunnel. If the router has
+geo files left by another program and they do not carry the Iranian categories,
+Passwall+ brings the tunnel up **without** the split and says so at the top of
+the page.
 
-**PassWall is also installed.** Both pages will warn you. Two transparent
-proxies fight over the same packets; run one at a time.
+**The traffic figures are stuck at zero.** The core is not answering its
+statistics interface. Look at the log.
 
-**Nothing is tunnelled but it says connected.** It should not — that specific
-lie was fixed. If you see it, `/usr/libexec/pwplus-rules status` says what is
-actually loaded, and `logread -e passwall-plus` says what happened.
+**I want to see what is actually happening:**
+
+```sh
+logread -e passwall-plus
+/usr/libexec/pwplus-rules status
+```
+
+The second one says whether the firewall rules really loaded and how much
+traffic they have taken.
 
 Support and contact: [t.me/routekernel1](https://t.me/routekernel1)
 
 ---
 
-If you want to know in more detail what was checked, what was wrong and how
-each thing was confirmed — and what is still not covered by a test — see
+## 8. Uninstall
+
+```sh
+/etc/init.d/passwall-plus stop
+apk del luci-app-passwall-plus passwall-plus
+```
+
+On 24.10 and 23.05 write `opkg remove` instead of `apk del`.
+
+That removes the service, the core and the web page, and takes the scheduled
+jobs out of the router's crontab. Your settings are left behind **on purpose**.
+To erase those too, including the routing data and the traffic history:
+
+```sh
+rm -rf /etc/config/passwall-plus /etc/passwall-plus
+```
+
+Nothing else is touched: no firewall zone, no other package's configuration. The
+routing rules exist only while the tunnel is up.
+
+---
+
+If you want to know in more detail what was checked, what was wrong and how each
+thing was confirmed — and what is still not covered by a test — see
 [AUDIT.md](AUDIT.md).
 
 ---
 
-## 5. Licence
+## 9. Licence
 
 GPL-3.0-only. Xray-core is licensed by its own authors under MPL-2.0.
 
 ---
 
-## 6. Thanks
+## 10. Thanks
 
 The default server list is the **TOP 100** collection published by
 [@Raydikalx](https://t.me/raydikalx), gathered and kept current as free, public
-work. The Iran routing data is
+work. The Iranian routing data is
 [Chocolate4U/Iran-v2ray-rules](https://github.com/Chocolate4U/Iran-v2ray-rules).
 This project runs no servers of its own: it measures what those lists offer and
 picks whichever answers fastest from where you are. Without them there would be
