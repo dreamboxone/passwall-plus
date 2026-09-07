@@ -2,7 +2,7 @@
 
 # ovpn — تونل سراسری برای روتر OpenWrt
 
-**نسخه ۲.۰.۰** · پشتیبانی و تماس: [t.me/routekernel1](https://t.me/routekernel1)
+**نسخه ۱.۰.۰** · پشتیبانی و تماس: [t.me/routekernel1](https://t.me/routekernel1)
 🇬🇧 **[English guide: README.md](README.md)**
 
 نصبش کن، **Connect** را بزن، و تمام دستگاه‌های شبکه‌ات از تونل رد می‌شوند. نه
@@ -20,7 +20,8 @@
 `arm_cortex-a7_neon-vfpv4`. هر ریلیز فایل `.ipk` برای **۲۴.۱۰ و ۲۳.۰۵** هم
 دارد، روی چهار معماری.
 
-**در ۲.۰.۰ چه چیزی عوض شد و چرا:** [AUDIT.md](AUDIT.md).
+**چه چیزهایی بررسی شد، چه چیزی خراب بود، و چه چیزی هنوز تست ندارد:**
+[AUDIT.md](AUDIT.md) را ببین.
 
 ---
 

@@ -37,6 +37,10 @@ function b64init(   i, chars) {
 	for (i = 1; i <= 64; i++) B64[substr(chars, i, 1)] = i - 1
 	for (i = 1; i < 256; i++) CHR[i] = sprintf("%c", i)
 	CHR[0] = ""
+	# The other direction, for the one place that has to know what a byte is
+	# worth rather than what it looks like: trimming a name without cutting a
+	# UTF-8 character in half.
+	for (i = 1; i < 256; i++) ORD[CHR[i]] = i
 }
 
 # Decoding in awk rather than by piping to base64 is worth the twenty lines:
@@ -105,12 +109,29 @@ function urldec(s,   out, i, c, h, v) {
 # A server name is decoration. It arrives with channel advertising, control
 # characters and occasionally a whole line of emoji in it, so keep it short
 # and printable and let the rest go.
-function clean_label(s) {
+function clean_label(s,   c) {
 	s = urldec(s)
 	gsub(/[[:cntrl:]]/, " ", s)
 	gsub(/\|.*$/, "", s)
 	gsub(/^[ \t]+|[ \t]+$/, "", s)
-	if (length(s) > 48) s = substr(s, 1, 48)
+	if (length(s) > 48) {
+		s = substr(s, 1, 48)
+		# This runs in the C locale, where length() counts bytes, so 48 is 48
+		# bytes and a Persian, Arabic or Chinese name is two or three bytes a
+		# character. Cutting at a fixed count therefore lands in the middle of
+		# a character about as often as not, and half a character is not a
+		# shorter name - it is a byte sequence that is no longer UTF-8, and it
+		# travels all the way to the web interface as a broken one. So walk
+		# back off any continuation bytes, and then off the lead byte whose
+		# body has just been removed.
+		while (length(s) > 0) {
+			c = ORD[substr(s, length(s), 1)]
+			if (c >= 128 && c < 192) { s = substr(s, 1, length(s) - 1); continue }
+			if (c >= 192) s = substr(s, 1, length(s) - 1)
+			break
+		}
+		gsub(/[ \t]+$/, "", s)
+	}
 	return s
 }
 
@@ -202,6 +223,20 @@ function stream(net, sec, host, path, sni, fp, alpn, pbk, sid, spx, svc, hdr, mo
 		s = s ",\"xhttpSettings\":{\"path\":\"" jesc(path != "" ? path : "/") "\""
 		if (host != "") s = s ",\"host\":\"" jesc(host) "\""
 		if (mode != "") s = s ",\"mode\":\"" jesc(mode) "\""
+		# `extra` is where xhttp keeps everything that has no query parameter
+		# of its own: the padding range, xmux, the separate download
+		# connection. It travels in the link as one whole JSON object, so it
+		# is passed through as JSON and not quoted into a string - and it is
+		# passed through at all because dropping it means connecting on terms
+		# the server was not told about. Real links carry it: every xhttp
+		# server seen so far sets xPaddingBytes.
+		#
+		# Only something shaped like an object is taken. A malformed one would
+		# be refused by the core along with the whole outbound, which costs
+		# that one server - the same as any other unusable entry, and handled
+		# the same way.
+		if (XEXTRA ~ /^\{.*\}$/ && XEXTRA !~ /[[:cntrl:]]/)
+			s = s ",\"extra\":" XEXTRA
 		s = s "}"
 	} else if (net == "httpupgrade") {
 		s = s ",\"httpupgradeSettings\":{\"path\":\"" jesc(path != "" ? path : "/") "\""
@@ -243,6 +278,8 @@ function emit(label, proto, payload,   key, tag) {
 function do_vmess(body,   j, k, v, o, label) {
 	j = b64(body)
 	if (j !~ /"add"/) return
+	# One link must never inherit the previous one's xhttp settings.
+	XEXTRA = ""
 	split("", o)
 	# a flat object, so a plain key scan needs no JSON parser
 	while (match(j, /"[A-Za-z0-9_-]+"[ \t]*:[ \t]*("[^"]*"|-?[0-9.]+|true|false|null)/)) {
@@ -284,6 +321,7 @@ function do_vless(body,   label, uuid, query, p, sec, flow, enc) {
 	sec = qs(query, "security"); if (sec == "") sec = "none"
 	flow = qs(query, "flow")
 	enc = qs(query, "encryption"); if (enc == "") enc = "none"
+	XEXTRA = qs(query, "extra")
 
 	emit(label, "vless", \
 		"{\"protocol\":\"vless\",\"settings\":{\"vnext\":[{" \
@@ -312,6 +350,7 @@ function do_trojan(body,   label, pass, query, p, sec) {
 
 	# trojan is TLS by definition; a link that does not say so still means it
 	sec = qs(query, "security"); if (sec == "" || sec == "none") sec = "tls"
+	XEXTRA = qs(query, "extra")
 
 	emit(label, "trojan", \
 		"{\"protocol\":\"trojan\",\"settings\":{\"servers\":[{" \

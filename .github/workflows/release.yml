@@ -8,7 +8,7 @@
 # Tests run on every push and every pull request. Packages are built for a
 # version tag, or by hand:
 #
-#     git tag v2.0.0 && git push origin v2.0.0
+#     git tag v1.0.0 && git push origin v1.0.0
 
 name: Build and release packages
 

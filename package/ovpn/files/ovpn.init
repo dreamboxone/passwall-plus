@@ -47,10 +47,32 @@ start_service() {
 	# Prefer a core the router already has; fall back to our own copy. The
 	# candidate has to accept this exact configuration to be chosen, which is
 	# a question no version number can answer.
-	PROG="$(find_xray "$OVPN_CONFIG_JSON")" || {
+	PROG="$(find_xray "$OVPN_CONFIG_JSON")" || PROG=""
+
+	# Refused by every core on the router. When the configuration named a geo
+	# category, that is the likeliest reason and it is worth one more try
+	# without: geoip.dat and geosite.dat found on a router are not necessarily
+	# the pair this expects - another front-end's copy carries different
+	# categories, and asking for one it has not got makes the core refuse the
+	# whole file. Connected without the split beats not connected, as long as
+	# the page says which of the two happened.
+	if [ -z "$PROG" ] && grep -q 'geoip:ir\|geosite:ir\|geosite:category-ads-all' "$OVPN_CONFIG_JSON" 2>/dev/null; then
+		if "$MKCONFIG" nogeo > "$OVPN_CONFIG_JSON.nogeo" 2>/dev/null &&
+		   PROG="$(find_xray "$OVPN_CONFIG_JSON.nogeo")"; then
+			mv -f "$OVPN_CONFIG_JSON.nogeo" "$OVPN_CONFIG_JSON"
+			chmod 600 "$OVPN_CONFIG_JSON"
+			log "the core would not read the routing data - connected with the Iran split off"
+			say_message "The routing data on this router is not the pair this expects: the core refused geoip:ir and geosite:ir. Connected with the Iran split off. Press Update beside the routing data on the settings page to fetch the right files."
+		else
+			rm -f "$OVPN_CONFIG_JSON.nogeo"
+			PROG=""
+		fi
+	fi
+
+	if [ -z "$PROG" ]; then
 		log "no xray on this router can run the generated configuration"
 		return 1
-	}
+	fi
 	log "using $PROG"
 
 	# A server speaking a protocol Xray does not know needs a second program

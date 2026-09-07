@@ -45,12 +45,29 @@ api_port="$(cfg api_port 10853)"
 route_ir="$(cfg_bool route_ir 0)"
 block_ads="$(cfg_bool block_ads 0)"
 block_torrent="$(cfg_bool block_torrent 1)"
-ir_dns="$(cfg ir_dns 178.22.122.100)"
+# Empty on purpose, and empty is a real answer: no Iranian resolver, Iranian
+# names answered by the same resolver as everything else. A default given here
+# would make "none" impossible to express, because an empty setting is read as
+# no setting and the default comes back in its place.
+ir_dns="$(cfg ir_dns '')"
 remote_dns="$(cfg remote_dns 1.1.1.1)"
 loglevel="$(cfg loglevel warning)"
 
 PRIVATE_V4='"0.0.0.0/8","10.0.0.0/8","100.64.0.0/10","127.0.0.0/8","169.254.0.0/16","172.16.0.0/12","192.168.0.0/16","224.0.0.0/4","240.0.0.0/4"'
 PRIVATE_V6='"::1/128","fc00::/7","fe80::/10"'
+
+# `ovpn-mkconfig nogeo` writes the same configuration with no geo category in
+# it at all. It exists for one situation: the router has geoip.dat and
+# geosite.dat, they are found, the rules are written - and the core still
+# refuses them, because the files came from somewhere that does not carry the
+# categories this asks for. A tunnel that will not start is a worse outcome
+# than a tunnel without the split, so the caller can ask for the second.
+FORCE_NO_GEO=0
+if [ "${1:-}" = "nogeo" ]; then
+	FORCE_NO_GEO=1
+	route_ir=0
+	block_ads=0
+fi
 
 # The split needs both files. Anything less and the rules below stay out.
 geo=""
@@ -105,12 +122,17 @@ add_rule '{"type":"field","network":"tcp,udp","outboundTag":"proxy"}'
 
 # -------------------------------------------------------------------- dns
 
-if [ "$route_ir" = "1" ]; then
-	# Iranian names have to be answered by a resolver inside Iran, or the
+if [ "$route_ir" = "1" ] && [ -n "$ir_dns" ]; then
+	# Iranian names are better answered by a resolver inside Iran, or the
 	# answer names a foreign edge of an Iranian CDN and the "direct" route
 	# then goes the long way round for no reason. That resolver is at an
 	# Iranian address, so the geoip:ir rule above already sends the query to
 	# it directly - it is not asked through the tunnel it is meant to avoid.
+	#
+	# With no resolver chosen the split still works: the rules above still
+	# send Iranian names and Iranian addresses straight out. Only the lookup
+	# itself goes the ordinary way, which costs an Iranian CDN answering with
+	# a foreign edge now and then, and nothing else.
 	dns_servers="{\"address\":\"$ir_dns\",\"domains\":[\"geosite:ir\"],\"expectIPs\":[\"geoip:ir\"]},\"tcp://$remote_dns\",\"tcp://8.8.8.8\""
 else
 	dns_servers="\"tcp://$remote_dns\",\"tcp://8.8.8.8\""

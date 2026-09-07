@@ -142,9 +142,16 @@ if [ -x "$RIG/core/xray" ]; then
 	# With the split on and no geo files, the geo rules must NOT appear -
 	# Xray refuses to start when asked for a geoip file that is not there, so
 	# writing them anyway turns a missing optional download into no internet.
+	#
+	# OVPN_GEO_SEARCH is emptied because "missing" has to mean missing. A
+	# router that already runs another front-end has that project's geoip.dat
+	# and geosite.dat in /usr/share, geo_dir finds them there on purpose - it
+	# is twenty-five megabytes not worth downloading twice - and this test
+	# would then be measuring that router's files rather than the case it
+	# means to describe.
 	rig_set route_ir 1
 	rig_set geo_dir "$RIG/etc/nowhere"
-	sh "$RIG/lib/ovpn-mkconfig" > "$WORK/cfg_nogeo.json" 2>/dev/null
+	OVPN_GEO_SEARCH="" sh "$RIG/lib/ovpn-mkconfig" > "$WORK/cfg_nogeo.json" 2>/dev/null
 	if grep -q 'geoip:ir' "$WORK/cfg_nogeo.json"; then
 		bad "the split stays out when the geo files are missing"
 	else

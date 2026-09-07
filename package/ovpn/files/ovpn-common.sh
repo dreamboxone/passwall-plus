@@ -116,11 +116,33 @@ xray_paths() {
 find_xray() {
 	_cfg="$1"
 	_pref="$(cfg core_xray '')"
+	# The configuration is offered to the core exactly as the service will run
+	# it, and that includes telling it where geoip.dat and geosite.dat are.
+	#
+	# Without this the test is not the same question as the run. A core reads
+	# geo files from its own asset directory - /usr/share/xray, or wherever it
+	# was built to look - and ours are in /etc/ovpn/geo, so a configuration
+	# naming geosite:ir was handed to a core that then looked somewhere else,
+	# found either nothing or a different project's file with no ir category
+	# in it, and refused the lot. Every core refused it for the same reason,
+	# find_xray ran out of candidates, and the service gave up with "no xray on
+	# this router can run the generated configuration" - on a router where the
+	# files were present, correct, and thirty megabytes of them.
+	#
+	# It only bit with the Iran split switched on, because that is the only
+	# thing that puts a geo category in the configuration. With it off the
+	# same router connected perfectly, which is what made it look like a
+	# problem with the split rather than with where the core was told to look.
+	_geo="$(geo_dir)" || _geo=""
 	for _x in $_pref $(xray_paths); do
 		[ -n "$_x" ] || continue
 		[ -x "$_x" ] || continue
 		if [ -n "$_cfg" ]; then
-			"$_x" run -test -config "$_cfg" >/dev/null 2>&1 || continue
+			if [ -n "$_geo" ]; then
+				XRAY_LOCATION_ASSET="$_geo" "$_x" run -test -config "$_cfg" >/dev/null 2>&1 || continue
+			else
+				"$_x" run -test -config "$_cfg" >/dev/null 2>&1 || continue
+			fi
 		else
 			"$_x" version >/dev/null 2>&1 || continue
 		fi
@@ -230,6 +252,37 @@ human_size() {
 	return 0
 }
 
+# Where else the same file lives, when the address it was asked for cannot be
+# reached.
+#
+# Everything this program fetches by default - the server list, the routing
+# data - is published on raw.githubusercontent.com, and that host is among the
+# first things to disappear on the connection this exists to repair. The
+# chicken and egg is real: the list cannot be read until the tunnel is up, and
+# the tunnel cannot come up without the list. So a fetch that fails outright is
+# tried again through two public mirrors of the same GitHub path before it is
+# called a failure. They serve the identical file out of the identical public
+# repository, and nothing this program fetches is private.
+#
+# Only raw.githubusercontent.com addresses have mirrors. A subscription hosted
+# anywhere else is fetched exactly as it was written and nowhere else.
+mirrors_for() {
+	case "$1" in
+		https://raw.githubusercontent.com/*)
+			_rest="${1#https://raw.githubusercontent.com/}"
+			_u="${_rest%%/*}"; _rest="${_rest#*/}"
+			_r="${_rest%%/*}"; _rest="${_rest#*/}"
+			_b="${_rest%%/*}"; _p="${_rest#*/}"
+			# fewer than four parts: there is no file path to rewrite
+			[ -n "$_u" ] && [ -n "$_r" ] && [ -n "$_b" ] || return 0
+			[ -n "$_p" ] && [ "$_p" != "$_b" ] || return 0
+			echo "https://cdn.jsdelivr.net/gh/$_u/$_r@$_b/$_p"
+			echo "https://ghproxy.net/https://raw.githubusercontent.com/$_u/$_r/$_b/$_p"
+			;;
+	esac
+	return 0
+}
+
 # Refuse a download that will not fit, before a byte of it is written.
 #
 # A router that fills its overlay does not merely fail to save the file: it
@@ -273,7 +326,16 @@ download_checked() {
 
 	_tmp="$_dest.part"
 	rm -f "$_tmp"
-	if ! curl -fsSL --connect-timeout 15 --max-time 900 --retry 2 -o "$_tmp" "$_url"; then
+	_ok=0
+	for _try in "$_url" $(mirrors_for "$_url"); do
+		if curl -fsSL --connect-timeout 15 --max-time 900 --retry 2 -o "$_tmp" "$_try"; then
+			_ok=1
+			[ "$_try" = "$_url" ] || log "$_url was unreachable - took it from $_try instead"
+			break
+		fi
+		rm -f "$_tmp"
+	done
+	if [ "$_ok" != "1" ]; then
 		rm -f "$_tmp"
 		say_message "Download failed: $_url"
 		warn "download failed: $_url"
@@ -299,9 +361,17 @@ download_checked() {
 # to start, so a half-finished download must read as "no geo data" and not as
 # "geo data". A router that already has them from another front-end is worth
 # using rather than downloading twenty-five megabytes a second time.
+# Where else a router may already have these files, because another front-end
+# put them there. Overridable for the same reason the roots at the top of this
+# file are: a test that means to say "this router has no routing data" has to
+# be able to mean it, even when the machine it runs on has somebody else's
+# copy. `${VAR-default}` rather than `${VAR:-default}`, so that an empty value
+# is honoured as an answer instead of read as no answer.
+OVPN_GEO_SEARCH="${OVPN_GEO_SEARCH-/usr/share/xray /usr/local/share/xray /usr/share/v2ray}"
+
 geo_dir() {
 	_d="$(cfg geo_dir "$OVPN_ETC/geo")"
-	for _c in "$_d" /usr/share/xray /usr/local/share/xray /usr/share/v2ray; do
+	for _c in "$_d" $OVPN_GEO_SEARCH; do
 		[ -n "$_c" ] || continue
 		if [ -s "$_c/geoip.dat" ] && [ -s "$_c/geosite.dat" ]; then
 			echo "$_c"

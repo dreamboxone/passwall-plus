@@ -35,6 +35,66 @@ function pill(text, colour) {
 	}, text);
 }
 
+/* --------------------------------------------------- the name in the link
+
+   Practically every share link ends in #something, and that something is the
+   name whoever published it gave the server. A reader who pastes a link and
+   leaves the name box empty meant that name, so there is no reason to make
+   them type it a second time.
+
+   It is percent-encoded UTF-8, so a Persian name arrives as %D8%B9%D9%84%DB%8C
+   and has to be decoded rather than shown as it stands. Some links are not
+   encoded at all and carry the characters directly; decodeURIComponent throws
+   on those, which is what the catch is for. */
+function decodeName(s) {
+	s = String(s || '');
+	if (!s) return '';
+	try { s = decodeURIComponent(s.replace(/\+/g, ' ')); } catch (e) { /* raw already */ }
+	s = s.replace(/[\x00-\x1f\x7f]/g, ' ').replace(/\s+/g, ' ').trim();
+	if (s.length > 60) s = s.slice(0, 60).trim();
+	return s;
+}
+
+/* vmess is the one that hides its name in the middle rather than at the end:
+   the whole link is one base64 object and the name is its "ps" field. atob
+   hands back bytes, so a non-English name has to be read back as UTF-8 or it
+   comes out as one wrong character per byte. */
+function vmessName(link) {
+	try {
+		var b = link.replace(/^vmess:\/\//i, '').replace(/[#?].*$/, '')
+		            .replace(/-/g, '+').replace(/_/g, '/');
+		while (b.length % 4) b += '=';
+		var raw = atob(b), bytes = new Uint8Array(raw.length);
+		for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+		var o = JSON.parse(new TextDecoder('utf-8').decode(bytes));
+		return decodeName(o.ps || o.remarks || '');
+	} catch (e) {
+		return '';
+	}
+}
+
+function nameFromLink(text) {
+	/* By line, not by whitespace: names have spaces in them, and splitting on
+	   every space would take “سرور خانه” down to “سرور”. Only a second link
+	   on the same line ends the first one's name. */
+	var lines = String(text || '').split(/[\r\n]+/);
+	for (var i = 0; i < lines.length; i++) {
+		var l = lines[i].trim(), name = '';
+		if (l.indexOf('://') < 0) continue;
+		var h = l.indexOf('#');
+		if (h >= 0) {
+			name = l.slice(h + 1);
+			var m = name.match(/\s+[a-z][a-z0-9+.-]*:\/\//i);
+			if (m) name = name.slice(0, m.index);
+			name = decodeName(name);
+		} else if (/^vmess:\/\//i.test(l)) {
+			name = vmessName(l.split(/\s+/)[0]);
+		}
+		if (name) return name;
+	}
+	return '';
+}
+
 function renderNodes(d) {
 	var box = document.getElementById('ovpn-nodelist');
 	if (!box) return;
@@ -176,6 +236,18 @@ return view.extend({
 			if (!/:\/\//.test(value))
 				return _('That does not look like a share link');
 			return true;
+		};
+		/* Written after the name, which is why this can fill it in: the empty
+		   name has already been removed by the time this runs. A name the
+		   reader typed is left exactly as they typed it. */
+		o.write = function(section_id, value) {
+			var rv = form.TextValue.prototype.write.apply(this, [ section_id, value ]);
+			if (!this.map.data.get(this.map.config, section_id, 'name')) {
+				var got = nameFromLink(value);
+				if (got)
+					this.map.data.set(this.map.config, section_id, 'name', got);
+			}
+			return rv;
 		};
 
 		o = s.option(form.Flag, 'enabled', _('On'));

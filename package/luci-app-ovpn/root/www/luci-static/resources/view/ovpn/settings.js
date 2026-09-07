@@ -13,6 +13,25 @@
 'require rpc';
 'require poll';
 'require ui';
+'require uci';
+'require network';
+
+/* The public Iranian resolvers, offered rather than typed. Nothing is chosen
+   by default and nothing has to be: with none of them selected the Iran split
+   still sends Iranian names and addresses straight out, and only the lookup
+   itself takes the ordinary path. Picking one means that resolver sees every
+   name this router looks up, which is a decision worth making deliberately. */
+var IR_RESOLVERS = [
+	'178.22.122.100',
+	'185.51.200.2',
+	'78.157.42.101',
+	'10.202.10.202',
+	'10.202.10.102',
+	'10.202.10.10',
+	'10.202.10.11',
+	'185.55.226.26',
+	'185.55.225.25'
+];
 
 var callSystem = rpc.declare({ object: 'luci.ovpn', method: 'system', expect: { '': {} } });
 var callAction = rpc.declare({ object: 'luci.ovpn', method: 'action',
@@ -183,11 +202,37 @@ function renderSystem(d) {
 
 return view.extend({
 	load: function() {
-		return callSystem().catch(function() { return {}; });
+		return Promise.all([
+			callSystem().catch(function() { return {}; }),
+			/* What this router actually has, rather than a name the reader
+			   has to know already and type correctly. */
+			network.getNetworks().catch(function() { return []; }),
+			/* So that a value already in the file can be offered back even
+			   when it is not one of the ones listed here. Replacing a setting
+			   with a list is only safe if the list can hold what was there. */
+			uci.load('ovpn').catch(function() { return null; })
+		]);
 	},
 
 	render: function(data) {
-		var m, s, o;
+		var m, s, o, i;
+		var sys = (data && data[0]) || {};
+		var nets = (data && data[1]) || [];
+
+		/* Every device carrying a network, as the router names it. wan is
+		   left out on purpose: this setting says which side of the router to
+		   pick traffic up from, and picking it up from the wan side would be
+		   redirecting the internet into itself. */
+		var devs = [], seen = {};
+		nets.forEach(function(net) {
+			var name = net.getName();
+			if (name == 'loopback' || name.indexOf('wan') === 0) return;
+			var dev = net.getDevice();
+			var d = dev ? dev.getName() : null;
+			if (!d || d == 'lo' || seen[d]) return;
+			seen[d] = true;
+			devs.push([ d, d + ' (' + name + ')' ]);
+		});
 
 		m = new form.Map('ovpn', _('Settings'));
 
@@ -207,10 +252,18 @@ return view.extend({
 			_('Where geosite.dat comes from.'));
 		o.depends('route_ir', '1');
 
-		o = s.option(form.Value, 'ir_dns', _('Iranian resolver'),
-			_('Used for Iranian names when the split is on. It has to be inside Iran, or an Iranian CDN answers with a foreign edge and “direct” takes the long way round.'));
+		o = s.option(form.ListValue, 'ir_dns', _('Iranian resolver'),
+			_('Used for Iranian names when the split is on. One inside Iran keeps an Iranian CDN from answering with a foreign edge, which would send “direct” the long way round. Leave it unset and the split still works — only the lookup takes the ordinary path, and no Iranian resolver sees what this router asks for.'));
 		o.depends('route_ir', '1');
-		o.placeholder = '178.22.122.100';
+		o.value('', '');
+		for (i = 0; i < IR_RESOLVERS.length; i++)
+			o.value(IR_RESOLVERS[i], IR_RESOLVERS[i]);
+		/* Whatever was already set, if it is not one of the above. A list
+		   that cannot hold the existing value would silently change it on the
+		   next save. */
+		var curdns = uci.get('ovpn', 'config', 'ir_dns');
+		if (curdns && IR_RESOLVERS.indexOf(curdns) < 0)
+			o.value(curdns, curdns);
 
 		o = s.option(form.Flag, 'block_ads', _('Block advertising'),
 			_('Also needs the routing data.'));
@@ -254,9 +307,14 @@ return view.extend({
 		o.value('iptables', 'iptables');
 		o.default = 'auto';
 
-		o = s.option(form.Value, 'lan_zone', _('Interfaces to tunnel'),
-			_('Empty means every LAN interface. Otherwise a space separated list of device names, for example “br-lan”.'));
-		o.placeholder = _('every LAN interface');
+		o = s.option(form.ListValue, 'lan_zone', _('Interfaces to tunnel'),
+			_('Read from this router. Left unset — which is how it ships — every LAN interface is tunnelled, which is what almost everyone wants. Choose one to pick traffic up from that interface only.'));
+		o.value('', '');
+		for (i = 0; i < devs.length; i++)
+			o.value(devs[i][0], devs[i][1]);
+		var curlan = uci.get('ovpn', 'config', 'lan_zone');
+		if (curlan && !seen[curlan])
+			o.value(curlan, curlan);
 
 		o = s.option(form.Flag, 'autostart', _('Reconnect after a reboot'));
 		o.rmempty = false;
@@ -305,6 +363,16 @@ return view.extend({
 
 		return m.render().then(function(mapEl) {
 			var extra = E('div', { 'style': 'margin-top:24px' }, [
+				/* The theme gives every select a fixed width, so an option
+				   whose text is longer than that is simply cut off - the box
+				   ends up narrower than the words inside it and the reader
+				   cannot see what is selected. Sizing to the content fixes
+				   the cause rather than shortening the wording to fit. */
+				E('style', { 'type': 'text/css' },
+					'.cbi-value select, select.cbi-input-select {' +
+					'width:auto;min-width:14em;max-width:100%;' +
+					'text-overflow:ellipsis}'),
+
 				E('div', {
 					'id': 'ovpn-job',
 					'style': 'display:none;margin-bottom:14px;padding:9px 12px;border-radius:7px;' +
@@ -335,7 +403,7 @@ return view.extend({
 				return callSystem().then(renderSystem).catch(function() {});
 			}, 5);
 
-			renderSystem(data);
+			renderSystem(sys);
 			return E([], [ mapEl, extra ]);
 		});
 	}

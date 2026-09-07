@@ -1,6 +1,6 @@
 # ovpn — a router-wide tunnel for OpenWrt
 
-**Version 2.0.0** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
+**Version 1.0.0** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
 🇮🇷 **[راهنمای فارسی: README.fa.md](README.fa.md)**
 
 Install it, press **Connect**, and every device on your network goes through
@@ -20,7 +20,8 @@ Developed on **OpenWrt 25.12**, target `ipq40xx/chromium`, architecture
 `arm_cortex-a7_neon-vfpv4`. Releases also carry `.ipk` packages for **24.10
 and 23.05**, across four architectures.
 
-**What changed in 2.0.0, and why:** [AUDIT.md](AUDIT.md).
+**What was checked, what was wrong, and what is still not covered by a test:**
+[AUDIT.md](AUDIT.md).
 
 ---
 

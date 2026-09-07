@@ -63,8 +63,13 @@ function donut(title, up, down) {
 	/* An empty ring must read as "nothing yet" rather than as "all download". */
 	if (total === 0) ring = [ ring[0] ];
 
+	/* Transparent on purpose. Themes paint a background on every svg they
+	   find - it is there for the bandwidth graphs, which are drawn on it -
+	   and a ring drawn on that turns into a pale square sitting on the card
+	   in a colour belonging to neither. The ring is the drawing; the card
+	   behind it is the background. */
 	var g = svg('svg', { viewBox: '0 0 120 120', width: 120, height: 120,
-	                     style: 'display:block' }, ring);
+	                     style: 'display:block;background:transparent' }, ring);
 
 	return E('div', { 'style': 'text-align:center;flex:1 1 140px;min-width:140px' }, [
 		E('div', { 'style': 'font-size:12px;opacity:.65;margin-bottom:6px' }, title),

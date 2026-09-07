@@ -37,8 +37,22 @@ fetch_one() {
 	[ "$enabled" = "1" ] || return 0
 	[ -n "$url" ] || return 0
 
+	# The address as written, then the mirrors of it, because the default list
+	# is on a host that is blocked from precisely the connections this program
+	# exists to fix. The mirrors are given a shorter leash than the address the
+	# user actually asked for: this runs every quarter of an hour, and three
+	# long timeouts in a row is a quarter of an hour spent waiting.
 	_tmp="$OVPN_RUN/sub.$_sec"
-	if ! curl -fsSL --connect-timeout 15 --max-time 90 --retry 1 -o "$_tmp" "$url" 2>/dev/null; then
+	_got=0
+	for _try in "$url" $(mirrors_for "$url"); do
+		if curl -fsSL --connect-timeout 10 --max-time 60 --retry 1 -o "$_tmp" "$_try" 2>/dev/null; then
+			_got=1
+			[ "$_try" = "$url" ] || log "subscription '$name': unreachable, read from $_try instead"
+			break
+		fi
+		rm -f "$_tmp"
+	done
+	if [ "$_got" != "1" ]; then
 		printf '%s\t%s\t0\t0\t%s\n' "$name" "$url" "download failed" >> "$SUBS_STATUS"
 		warn "subscription '$name': download failed"
 		rm -f "$_tmp"
@@ -93,7 +107,14 @@ cmd_fetch() {
 			cp -f "$OVPN_NODE_CACHE" "$LINKS"
 			return 0
 		fi
-		say_message "No subscription could be read, and there is no saved list to fall back on"
+		# Deliberately no message on the front page here. Failing to read a
+		# subscription is only half a fact: a router with a server added by
+		# hand connects perfectly well without one, and telling that user
+		# their list is unreadable - on the page they came to press Connect
+		# on, before they have pressed anything - is alarming and wrong.
+		# Which source failed and why is on the Servers page, beside the
+		# source. The front page is told once, by cmd_build, and only when
+		# there is genuinely nothing left to connect through.
 		warn "no subscription answered and nothing saved"
 		return 1
 	fi
@@ -113,13 +134,38 @@ cmd_fetch() {
 
 add_node() {
 	_sec="$1"
-	local link enabled
+	local link name enabled
 	config_get link "$_sec" link ""
+	config_get name "$_sec" name ""
 	config_get_bool enabled "$_sec" enabled 1
 	[ "$enabled" = "1" ] || return 0
 	[ -n "$link" ] || return 0
-	# One section may hold several links pasted at once.
-	printf '%s\n' "$link" | tr ' ' '\n' >> "$OVPN_RUN/manual.txt"
+
+	# One section may hold several links pasted at once, separated by spaces
+	# or by newlines. Splitting on every space - which is what this did - cuts
+	# a name in half: a link ending "#سرور خانه" became "#سرور" plus a stray
+	# word that parses as nothing at all. Names with spaces in them are
+	# ordinary, so split only where a new link actually begins.
+	#
+	# A name typed into the web interface is the name the reader gave this
+	# server, and it should be the name they see in the list afterwards rather
+	# than whatever the channel that published the link called it. The parser
+	# reads names from after the #, so that is where it is put - and only when
+	# the link has none of its own, because a name that came with the link is
+	# not ours to overwrite.
+	printf '%s\n' "$link" | NAME="$name" LC_ALL=C awk '
+		{
+			gsub(/[ \t]+[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "\n&")
+			n = split($0, lines, "\n")
+			for (i = 1; i <= n; i++) {
+				l = lines[i]
+				gsub(/^[ \t]+|[ \t]+$/, "", l)
+				if (l == "") continue
+				if (ENVIRON["NAME"] != "" && index(l, "#") == 0)
+					l = l "#" ENVIRON["NAME"]
+				print l
+			}
+		}' >> "$OVPN_RUN/manual.txt"
 	return 0
 }
 
@@ -141,13 +187,29 @@ cmd_build() {
 	fi
 	rm -f "$OVPN_RUN/manual.txt"
 
+	# Whether there was anything at all to read decides which of two very
+	# different things went wrong, so it is worth knowing before the file goes.
+	_had=0
+	if grep -q '://' "$OVPN_RUN/build.txt" 2>/dev/null; then
+		_had=1
+	fi
+
 	_limit="$(cfg max_nodes 300)"
 	LC_ALL=C awk -v LIMIT="$_limit" -f "$PARSE" < "$OVPN_RUN/build.txt" > "$OVPN_CANDIDATES.new" 2>/dev/null || true
 	rm -f "$OVPN_RUN/build.txt"
 
 	if [ ! -s "$OVPN_CANDIDATES.new" ]; then
 		rm -f "$OVPN_CANDIDATES.new"
-		say_message "Nothing in the list could be read as a server"
+		if [ "$_had" = "1" ]; then
+			say_message "Nothing in the list could be read as a server"
+		else
+			# The one case that genuinely stops the user from connecting, and
+			# the only one this page says anything about. It names the way out,
+			# because on a censored connection the list address is unreachable
+			# until the tunnel is up and the tunnel needs a server first - and
+			# one link pasted in by hand breaks that circle.
+			say_message "There is no server list yet: no subscription could be read and none has been saved before. Add one server by hand on the Servers page - a single share link is enough - or check the subscription address there."
+		fi
 		warn "no usable servers in the list"
 		return 1
 	fi
