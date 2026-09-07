@@ -318,7 +318,7 @@ jobs:
 
           Then open LuCI, go to **Services -> ovpn** and press **Connect**.
 
-          Full guide: README.md (English), README.fa.md (فارسی).
+          راهنمای کامل: README.md · Full guide in English: README.en.md
           NOTES
           sed -i 's/^          //' notes.md
 

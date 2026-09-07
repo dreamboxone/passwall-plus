@@ -1,324 +1,325 @@
-# ovpn — a router-wide tunnel for OpenWrt
+<div dir="rtl">
 
-**Version 1.0.0** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
-🇮🇷 **[راهنمای فارسی: README.fa.md](README.fa.md)**
+# ovpn — تونل سراسری برای روتر OpenWrt
 
-Install it, press **Connect**, and every device on your network goes through
-the tunnel. No settings on your phone, no settings on your laptop, nothing to
-paste in.
+**نسخه ۱.۰.۰** · پشتیبانی و تماس: [t.me/routekernel1](https://t.me/routekernel1)
+🇬🇧 **[English guide: README.en.md](README.en.md)**
 
-The router keeps a list of servers, reads a fresh one every quarter of an
-hour, and finds one that works. Optionally it sends Iranian sites straight out
-and only tunnels the rest. It shows you how much you have used, by day, by
-week and by month.
+نصبش کن، **Connect** را بزن، و تمام دستگاه‌های شبکه‌ات از تونل رد می‌شوند. نه
+تنظیمی روی موبایل، نه روی لپ‌تاپ، نه هیچ چیزی که جایی paste کنی.
 
-Built on [Xray](https://github.com/XTLS/Xray-core). It does not need PassWall2
-or any other package, it does not touch their settings, and if a core is
-already installed it uses that one rather than a second copy.
+روتر یک لیست سرور نگه می‌دارد، هر ربع ساعت نسخهٔ تازه می‌خواند و سروری که کار
+می‌کند پیدا می‌کند. اگر بخواهی، ترافیک ایران را مستقیم می‌فرستد و فقط بقیه را
+تونل می‌کند. و نشان می‌دهد چقدر مصرف کرده‌ای — روزانه، هفتگی و ماهانه.
 
-Developed on **OpenWrt 25.12**, target `ipq40xx/chromium`, architecture
-`arm_cortex-a7_neon-vfpv4`. Releases also carry `.ipk` packages for **24.10
-and 23.05**, across four architectures.
+بر پایهٔ [Xray](https://github.com/XTLS/Xray-core) ساخته شده. به PassWall2 یا
+هیچ پکیج دیگری نیاز ندارد، به تنظیمات آن‌ها دست نمی‌زند، و اگر هسته‌ای از قبل
+روی روتر نصب باشد از همان استفاده می‌کند نه از یک نسخهٔ دوم.
 
-**What was checked, what was wrong, and what is still not covered by a test:**
-[AUDIT.md](AUDIT.md).
+روی **OpenWrt 25.12** توسعه داده شده، تارگت `ipq40xx/chromium`، معماری
+`arm_cortex-a7_neon-vfpv4`. هر ریلیز فایل `.ipk` برای **۲۴.۱۰ و ۲۳.۰۵** هم
+دارد، روی چهار معماری.
 
 ---
 
-## How it chooses a server
+## سرور را چطور انتخاب می‌کند
 
-This is the part that used to be slow, and it is worth a paragraph.
+این همان قسمتی است که قبلاً کند بود و ارزش یک پاراگراف را دارد.
 
-A hundred servers used to mean a hundred simultaneous connections held open by
-one process for half a minute, on every single connect. Now it happens in two
-passes:
+قبلاً صد سرور یعنی صد اتصال هم‌زمان که یک پروسه نیم دقیقه بازشان نگه می‌داشت —
+هر بار که وصل می‌شدی. حالا در دو مرحله انجام می‌شود:
 
-1. **One TCP handshake to every server**, thirty at a time. On a typical list
-   this takes about eight seconds and throws out a third to a half of them
-   before anything expensive happens. A server that will not complete a
-   handshake cannot carry anything, and finding that out costs three packets.
-2. **The survivors, nearest first, measured properly ten at a time** — a
-   complete web request through each one, timed end to end, which is the only
-   thing that proves a route works. As soon as one comes back fast enough
-   (under a second by default) that is the answer, and the rest are never
-   measured.
+۱. **یک دست‌دادن TCP به همهٔ سرورها**، سی‌تا سی‌تا. روی یک لیست معمولی حدود
+   **هشت ثانیه** طول می‌کشد و یک‌سوم تا نصف سرورها را قبل از هر کار سنگینی کنار
+   می‌گذارد. سروری که دست‌دادن را کامل نکند هیچ چیزی را نمی‌تواند حمل کند، و
+   فهمیدنش سه بسته خرج دارد.
 
-So connecting normally costs one small batch, not the whole list. The results
-are kept, so when the chosen server dies later the router takes the next one
-down the list rather than starting again.
+۲. **بازمانده‌ها، نزدیک‌ترین اول، ده‌تا ده‌تا اندازه‌گیری واقعی** — یک درخواست
+   وب کامل از داخل هر کدام، که تنها چیزی است که ثابت می‌کند مسیر کار می‌کند.
+   به‌محض اینکه یکی زیر آستانه (پیش‌فرض یک ثانیه) جواب داد، همان جواب است و
+   بقیهٔ دسته‌ها اصلاً اجرا نمی‌شوند.
 
-> **Why a handshake and not a ping.** Most of these servers sit behind
-> Cloudflare, where a ping is answered by the edge and tells you nothing about
-> the server behind it — and many working servers drop ICMP entirely. So ping
-> keeps servers that do not work and discards servers that do. A handshake to
-> the real port asks the same question of the thing that matters, for the same
-> three packets. Ping is available under **First pass** in the settings if you
-> want it.
+پس وصل شدن معمولاً هزینهٔ یک دستهٔ کوچک را دارد، نه کل لیست. نتیجه‌ها نگه داشته
+می‌شوند، بنابراین وقتی سرور انتخاب‌شده بعداً از کار افتاد، روتر سراغ نفر بعدی
+لیست می‌رود نه اینکه از اول شروع کند.
+
+> **چرا دست‌دادن و نه پینگ.** تو خواستی با ICMP فیلتر شود و این گزینه هست
+> (**First pass** در تنظیمات)، ولی پیش‌فرض نیست و به نظرم نباید باشد: بیشتر این
+> سرورها پشت Cloudflare هستند، جایی که پینگ را لبهٔ CDN جواب می‌دهد و دربارهٔ
+> سروری که پشتش است هیچ چیزی نمی‌گوید — و خیلی از سرورهای سالم اصلاً ICMP را
+> جواب نمی‌دهند. یعنی پینگ هم سرورهای خراب را نگه می‌دارد و هم سرورهای سالم را
+> دور می‌ریزد. دست‌دادن به پورت واقعی، همان سؤال را از چیزی که اهمیت دارد
+> می‌پرسد، با همان سه بسته.
 
 ---
 
-## 1. Install
+## ۱. نصب
 
-Releases ship both package formats, because OpenWrt changed package manager in
-25.12. Take the pair that matches your router:
+هر ریلیز هر دو فرمت را دارد، چون OpenWrt در ۲۵.۱۲ پکیج‌منیجرش را عوض کرد. جفتی
+را بردار که به روترت می‌خورد:
 
-| Your OpenWrt | Package manager | Files to download |
+| OpenWrt تو | پکیج‌منیجر | فایل‌هایی که باید بگیری |
 |---|---|---|
-| 25.12 and later | `apk` | `ovpn-<version>.<arch>.apk` and `luci-app-ovpn-<version>.apk` |
-| 24.10, 23.05 | `opkg` | `ovpn_<version>_<arch>.ipk` and `luci-app-ovpn_<version>_all.ipk` |
+| ۲۵.۱۲ و بالاتر | `apk` | `ovpn-<version>.<arch>.apk` و `luci-app-ovpn-<version>.apk` |
+| ۲۴.۱۰ و ۲۳.۰۵ | `opkg` | `ovpn_<version>_<arch>.ipk` و `luci-app-ovpn_<version>_all.ipk` |
 
-Your architecture is `DISTRIB_ARCH` in `/etc/openwrt_release` (on 23.05 and
-24.10, `opkg print-architecture` prints it too). The `luci-app-ovpn` package
-fits every router.
+معماری روترت `DISTRIB_ARCH` داخل `/etc/openwrt_release` است. پکیج
+`luci-app-ovpn` به همهٔ روترها می‌خورد.
 
-**OpenWrt 25.12 and later:**
+**OpenWrt ۲۵.۱۲ و بالاتر:**
+
+<div dir="ltr">
 
 ```sh
 scp ovpn-*.apk luci-app-ovpn-*.apk root@192.168.1.1:/tmp/
 ssh root@192.168.1.1 'apk add --allow-untrusted /tmp/ovpn-*.apk /tmp/luci-app-ovpn-*.apk'
 ```
 
-**OpenWrt 24.10 and 23.05:**
+</div>
+
+**OpenWrt ۲۴.۱۰ و ۲۳.۰۵:**
+
+<div dir="ltr">
 
 ```sh
 scp ovpn_*.ipk luci-app-ovpn_*.ipk root@192.168.1.1:/tmp/
 ssh root@192.168.1.1 'opkg update && opkg install /tmp/ovpn_*.ipk /tmp/luci-app-ovpn_*.ipk'
 ```
 
-**The router needs working internet while you install.** Several things ovpn
-relies on are not in a stock OpenWrt image — `kmod-nft-tproxy`, `curl`,
-`ip-full` — and the package manager fetches them as it installs. Do this on a
-connection that works, before you need the tunnel.
+</div>
 
-If that step went wrong, or you installed the file by hand, go to
-**Settings → Does this router have what it needs?**. It asks the running
-system three questions — can it redirect traffic, can it do policy routing,
-can it fetch over HTTPS — and offers to install whatever is missing. It never
-touches `xray-core`, so a router that already has PassWall2 is left alone.
+**موقع نصب، روتر باید اینترنت داشته باشد.** چند چیزی که ovpn لازم دارد در ایمیج
+استاندارد OpenWrt نیست — `kmod-nft-tproxy` و `curl` و `ip-full` — و پکیج‌منیجر
+موقع نصب آن‌ها را می‌گیرد. این کار را روی یک اتصال سالم انجام بده، قبل از اینکه
+به تونل احتیاج پیدا کنی.
 
-Then open LuCI → **Services → ovpn**.
+اگر این مرحله خراب شد، یا فایل را دستی نصب کردی، برو به
+**Settings ← Does this router have what it needs?**. آنجا سه سؤال از سیستمِ در
+حال اجرا می‌پرسد — می‌تواند ترافیک را منحرف کند؟ می‌تواند policy routing انجام
+دهد؟ می‌تواند HTTPS بگیرد؟ — و هرچه کم است را نصب می‌کند. هیچ‌وقت به `xray-core`
+دست نمی‌زند، پس روتری که PassWall2 دارد دست‌نخورده می‌ماند.
 
-Nothing runs after installation. The tunnel stays off until you press
-**Connect**.
+بعد در LuCI برو به **Services ← ovpn**.
+
+بعد از نصب هیچ چیزی اجرا نمی‌شود. تا **Connect** را نزنی تونل خاموش است.
 
 ---
 
-## 2. Using it
+## ۲. استفاده
 
-Three pages.
+سه صفحه.
 
 ### Status
 
 | | |
 |---|---|
-| **Connect** | Finds a server and sends every LAN device through it. |
-| **Disconnect** | Stops the tunnel. Your network goes back to normal immediately. |
-| **Choose again** | Throws away the current choice and measures from scratch. |
+| **Connect** | یک سرور پیدا می‌کند و همهٔ دستگاه‌های شبکه را از آن رد می‌کند. |
+| **Disconnect** | تونل را قطع می‌کند. شبکه بلافاصله به حالت عادی برمی‌گردد. |
+| **Choose again** | انتخاب فعلی را دور می‌ریزد و از اول اندازه می‌گیرد. |
 
-Measuring starts when the page opens, not when you press the button, so by the
-time you have read this far the router is usually done. The bar says which
-pass is running and counts real servers, not guessed seconds.
+اندازه‌گیری وقتی صفحه باز می‌شود شروع می‌شود، نه وقتی دکمه را می‌زنی — پس تا
+همین‌جا که خوانده‌ای، روتر معمولاً کارش تمام شده. نوار پیشرفت می‌گوید کدام
+مرحله در حال اجراست و سرورهای واقعی را می‌شمارد، نه ثانیه‌های حدسی.
 
-**Connected** means traffic is actually going through the tunnel — the process
-is alive *and* the rules are in place. A core running with no rules in front
-of it is not a connection, and this page will not call it one.
+**Connected** یعنی ترافیک واقعاً از تونل می‌رود — هم پروسه زنده است و هم قوانین
+سر جایشان هستند. هسته‌ای که اجرا شده ولی قانونی جلویش نیست، اتصال نیست، و این
+صفحه دیگر به آن اتصال نمی‌گوید.
 
-Below that, **Traffic through the tunnel**: today, the last seven days and this
-month as rings, upload against download, with the last fortnight as bars. The
-counters are read from the core every five minutes and added up in memory;
-they reach storage once an hour, so watching this page does not wear the
-router's flash out.
+پایین‌تر **Traffic through the tunnel** است: امروز، هفت روز اخیر و این ماه به
+شکل حلقه‌های گرد، آپلود در برابر دانلود، به‌علاوهٔ دو هفتهٔ اخیر به شکل میله.
+شمارنده‌ها هر پنج دقیقه از هسته خوانده و در حافظه جمع می‌شوند و **ساعتی یک بار**
+روی حافظهٔ روتر نوشته می‌شوند — یعنی نگاه کردن به این صفحه فلش روتر را نمی‌سوزاند.
 
 ### Servers
 
-Your subscriptions, and any servers you want to add by hand — one share link
-per entry: `vless`, `vmess`, `trojan`, `ss`, `socks`, `hysteria2` or `tuic`. A
-subscription that hands back one base64 block is understood as well as a plain
-list. Hand-added servers are tried before the subscription list.
+اشتراک‌هایت، و سرورهایی که دستی اضافه می‌کنی — هر ورودی یک لینک اشتراک‌گذاری:
+`vless`، `vmess`، `trojan`، `ss`، `socks`، `hysteria2` یا `tuic`. اشتراکی که یک
+بلوک base64 برمی‌گرداند هم مثل لیست ساده فهمیده می‌شود. سرورهای دستی قبل از لیست
+اشتراک امتحان می‌شوند.
 
-Underneath is every server the router knows about, with what was measured for
-it, and a button to use any one of them instead of the automatic choice.
+پایینش همهٔ سرورهایی که روتر می‌شناسد، با هرچه برایشان اندازه‌گیری شده، و یک
+دکمه که هر کدام را به‌جای انتخاب خودکار استفاده کنی.
 
-Most of the **Measured** column will be empty, and that is deliberate: the
-whole point is to stop measuring once a good server is found.
+بیشتر ستون **Measured** خالی است و این عمدی است: کل هدف این است که به‌محض پیدا
+شدن یک سرور خوب، اندازه‌گیری متوقف شود.
 
 ### Settings
 
-**Send Iranian traffic direct** is the tick box. Iranian sites and addresses
-skip the tunnel; everything else goes through it. It needs two data files,
-which are downloaded with the **Update** buttons under **Routing data**. The
-addresses are editable — the default is
-[Chocolate4U/Iran-v2ray-rules](https://github.com/Chocolate4U/Iran-v2ray-rules).
+**Send Iranian traffic direct** همان تیک است. سایت‌ها و آدرس‌های ایرانی از تونل
+رد نمی‌شوند و بقیه می‌شوند. دو فایل داده لازم دارد که با دکمه‌های **Update** زیر
+**Routing data** دانلود می‌شوند. آدرس‌ها قابل ویرایش‌اند؛ پیش‌فرض
+[Chocolate4U/Iran-v2ray-rules](https://github.com/Chocolate4U/Iran-v2ray-rules)
+است.
 
-> **On size.** The full `geoip.dat` is about 17 MB and `geosite.dat` about
-> 8 MB. That is more than the free space on a great many routers. The same
-> project publishes **`geoip-lite.dat` (38 KB)** and **`geosite-lite.dat`
-> (2 MB)**, which contain the Iranian categories and nothing else — if the
-> full ones will not fit, put those addresses in the boxes instead. Either way
-> the free space is checked first and a download that will not fit is refused
-> rather than half written. Filling a router's overlay does not merely fail to
-> save the file; it remounts read-only, and then nothing works.
+> **دربارهٔ حجم.** فایل کامل `geoip.dat` حدود ۱۷ مگابایت و `geosite.dat` حدود
+> ۸ مگابایت است. این از فضای خالی خیلی از روترها بیشتر است. همان پروژه
+> **`geoip-lite.dat` (۳۸ کیلوبایت)** و **`geosite-lite.dat` (۲ مگابایت)** را هم
+> منتشر می‌کند که دسته‌های ایران را دارند و چیز دیگری ندارند — اگر کامل‌ها جا
+> نمی‌شوند، آن آدرس‌ها را در همان باکس‌ها بگذار. در هر حال فضای خالی اول چک
+> می‌شود و دانلودی که جا نمی‌شود **رد می‌شود** نه اینکه نصفه نوشته شود. پر شدن
+> overlay روتر فقط به معنی ذخیره نشدن فایل نیست؛ روتر read-only می‌شود و از آن
+> لحظه هیچ چیزی کار نمی‌کند.
 
-The file is also checked before it replaces the one already there: a download
-that came back as an error page is still a file of roughly the right size, and
-installing it does not make routing worse — it stops the core starting at all.
+فایل قبل از اینکه جای فایل قبلی را بگیرد هم بررسی می‌شود: دانلودی که در واقع یک
+صفحهٔ خطا بوده هم یک فایل است با تقریباً همان حجم، و نصب کردنش مسیریابی را بدتر
+نمی‌کند — باعث می‌شود هسته اصلاً بالا نیاید.
 
-**Cores** installs sing-box or hysteria. You only need one if you have a server
-that speaks `hysteria2` or `tuic`, which Xray does not; the extra core is then
-run as a local helper for that one server and everything else works exactly as
-before. Xray itself can be updated here too.
+**Cores** سینگ‌باکس یا هیستریا را نصب می‌کند. فقط وقتی لازم است که سروری داشته
+باشی که `hysteria2` یا `tuic` حرف می‌زند، که Xray بلد نیست؛ آن وقت آن هسته به
+عنوان یک کمکی محلی فقط برای همان یک سرور اجرا می‌شود و بقیهٔ چیزها دقیقاً مثل
+قبل کار می‌کنند. Xray را هم می‌شود از همین‌جا آپدیت کرد.
 
-### Every setting
+### همهٔ تنظیمات
 
-The page carries the ones worth changing. The rest live in `/etc/config/ovpn`,
-an ordinary UCI file, where each default is written out with the reasoning
-beside it. Names in brackets are the UCI options.
+آن‌هایی که ارزش عوض کردن دارند روی صفحه‌اند. بقیه در `/etc/config/ovpn` هستند —
+یک فایل معمولی UCI که کنار هر پیش‌فرض، دلیلش هم نوشته شده. نام داخل بک‌تیک، نام
+گزینهٔ UCI است.
 
 **Routing**
 
-| Setting | Default | What it does |
+| تنظیم | پیش‌فرض | چه کار می‌کند |
 |---|---|---|
-| Send Iranian traffic direct `route_ir` | off | Iranian sites and addresses skip the tunnel; everything else goes through it. Needs the routing data below. Until that is downloaded the setting does nothing at all, deliberately: a core asked for a geo file it has not got refuses to start rather than carrying on without it. |
-| Address data `geoip_url` | Chocolate4U `geoip.dat` | Where the Iranian address list is fetched from. Editable, which is how the 38 KB `-lite` file gets used on a router with no room for the full one. |
-| Name data `geosite_url` | Chocolate4U `geosite.dat` | The same for names. |
-| Iranian resolver `ir_dns` | *none* | Which resolver answers Iranian names while the split is on. A list of the public Iranian ones with nothing chosen. Nothing chosen is a real answer and the shipped one: the split still works, only the lookup takes the ordinary path — and no Iranian resolver gets to see every name this router asks for. Choose one if an Iranian CDN is answering you with a foreign edge. |
-| Block advertising `block_ads` | off | Refuses known advertising and tracking domains. Needs the routing data too. |
-| Block BitTorrent `block_torrent` | on | BitTorrent through a free server is how a free server stops existing. |
+| Send Iranian traffic direct `route_ir` | خاموش | سایت‌ها و آدرس‌های ایرانی از تونل رد نمی‌شوند، بقیه می‌شوند. به دادهٔ مسیریابی نیاز دارد. تا وقتی آن دانلود نشده، این تنظیم عمداً هیچ کاری نمی‌کند: هسته‌ای که از او فایل geo خواسته شود و نداشته باشد، اصلاً بالا نمی‌آید — به‌جای اینکه بدون آن ادامه دهد. |
+| Address data `geoip_url` | `geoip.dat` از Chocolate4U | لیست آدرس‌های ایران از کجا گرفته شود. قابل ویرایش است، و همین است که روی روتر کم‌جا می‌شود فایل ۳۸ کیلوبایتی `-lite` را گذاشت. |
+| Name data `geosite_url` | `geosite.dat` از Chocolate4U | همان، برای نام‌ها. |
+| Iranian resolver `ir_dns` | *هیچ‌کدام* | وقتی تفکیک روشن است، چه resolverی به نام‌های ایرانی جواب بدهد. فهرستی از resolverهای عمومی ایران، با گزینهٔ اول خالی. «هیچ‌کدام» یک پاسخ واقعی است و پیش‌فرض هم همین است: تفکیک بدون آن هم کار می‌کند، فقط خودِ lookup مسیر عادی را می‌رود — و هیچ resolver ایرانی هر نامی را که این روتر می‌پرسد نمی‌بیند. اگر یک CDN ایرانی با نودِ خارجی جوابت می‌دهد، یکی را انتخاب کن. |
+| Block advertising `block_ads` | خاموش | دامنه‌های شناخته‌شدهٔ تبلیغات و ردیابی را رد می‌کند، برای همهٔ دستگاه‌های شبکه. **لیست جداگانه‌ای وجود ندارد و چیز اضافه‌ای دانلود نمی‌شود:** نام‌ها از دستهٔ `category-ads-all` که **داخل خودِ `geosite.dat`** است می‌آیند — همان فایل *Name data* که دکمهٔ Update می‌گیرد، و بسته‌بندی‌شدهٔ همان لیست دامنه‌های عمومی است که بیشتر این ابزارها استفاده می‌کنند. پس دقیقاً مثل تفکیک ایران به دادهٔ مسیریابی نیاز دارد، و بر اساس **نام** مسدود می‌کند نه آدرس. |
+| Block BitTorrent `block_torrent` | روشن | تورنت روی سرور رایگان، همان چیزی است که سرور رایگان را از بین می‌برد. |
 
 **Network**
 
-| Setting | Default | What it does |
+| تنظیم | پیش‌فرض | چه کار می‌کند |
 |---|---|---|
-| Name lookups `dns_mode` | Through dnsmasq | `dnsmasq` keeps the router's own resolver answering and moves only its upstream into the tunnel, so DHCP names, `/etc/hosts` and the printer keep working. `direct` sends every query straight into the tunnel: outside names resolve, names on your own network stop. `off` changes nothing, for a router with its own arrangement. |
-| Catch hardcoded resolvers `dns_hijack` | on | A phone set to ask 8.8.8.8 directly gets its answers from outside the tunnel and then connects to whatever it was told. This forces those queries back through the router. |
-| IPv6 `ipv6` | Refuse while connected | Almost nothing on a free server list carries IPv6, and a client that prefers it leaves without the tunnel while looking perfectly healthy. Refusing it makes the client fall back to IPv4, which is tunnelled. Set it to *leave alone* only on a connection that is IPv6 only. |
-| Refuse QUIC `block_quic` | off | Drops UDP 443 before it reaches the tunnel, so browsers fall back to TCP. Worth turning on when the chosen server carries UDP badly. Off by default because where UDP does work QUIC is the faster path — measured on a real server, YouTube loads over QUIC through the tunnel perfectly well. |
-| Firewall `firewall_backend` | automatic | nftables or iptables, decided at run time. Automatic is right unless the router has both and the wrong one is being picked. |
-| Interfaces to tunnel `lan_zone` | *every LAN interface* | Read from this router rather than typed. Unset — how it ships — every LAN interface is tunnelled, which is what almost everyone wants. Choose one to pick traffic up from that interface only. |
-| Reconnect after a reboot `autostart` | off | Makes the boot symlink, so the tunnel comes back after a power cut. |
+| Name lookups `dns_mode` | از راه dnsmasq | `dnsmasq` یعنی resolver خود روتر جواب می‌دهد و فقط upstream آن وارد تونل می‌شود، پس نام‌های DHCP و `/etc/hosts` و پرینتر سر جایشان می‌مانند. `direct` هر پرسش را مستقیم داخل تونل می‌فرستد: نام‌های بیرون حل می‌شوند، نام‌های شبکهٔ خودت نه. `off` هیچ چیزی را عوض نمی‌کند، برای روتری که ترتیب خودش را دارد. |
+| Catch hardcoded resolvers `dns_hijack` | روشن | گوشی‌ای که مستقیم از 8.8.8.8 می‌پرسد، جوابش را از بیرون تونل می‌گیرد و بعد به هر آدرسی که گفته‌اند وصل می‌شود. این، آن پرسش‌ها را به روتر برمی‌گرداند. |
+| IPv6 `ipv6` | رد شود تا وقتی وصل است | تقریباً هیچ سروری در لیست‌های رایگان IPv6 ندارد، و کلاینتی که IPv6 را ترجیح می‌دهد بدون تونل بیرون می‌رود و ظاهرش هم کاملاً سالم است. رد کردنش کلاینت را به IPv4 برمی‌گرداند که تونل می‌شود. فقط روی اتصالی که فقط IPv6 است روی «رها کن» بگذار. |
+| Refuse QUIC `block_quic` | خاموش | UDP/443 را قبل از تونل drop می‌کند تا مرورگر به TCP برگردد. وقتی می‌ارزد که سرور انتخاب‌شده UDP را بد حمل کند. پیش‌فرض خاموش است چون هرجا UDP کار کند QUIC مسیر سریع‌تری است — روی سرور واقعی سنجیده شد: یوتیوب از داخل تونل روی QUIC بی‌عیب بالا می‌آید. |
+| Firewall `firewall_backend` | خودکار | nftables یا iptables، تصمیم در زمان اجرا. خودکار درست است مگر روتر هر دو را داشته باشد و اشتباهی انتخاب شود. |
+| Interfaces to tunnel `lan_zone` | *همهٔ اینترفیس‌های LAN* | از خود روتر خوانده می‌شود، نه تایپ. خالی — که حالت پیش‌فرض است — یعنی همهٔ اینترفیس‌های LAN تونل می‌شوند، که چیزی است که تقریباً همه می‌خواهند. یکی را انتخاب کن تا فقط ترافیک همان اینترفیس برداشته شود. |
+| Reconnect after a reboot `autostart` | خاموش | لینک بوت را می‌سازد تا تونل بعد از قطع برق برگردد. |
 
 **Choosing a server**
 
-| Setting | Default | What it does |
+| تنظیم | پیش‌فرض | چه کار می‌کند |
 |---|---|---|
-| Servers to use `sources` | Mine and the subscriptions | Which servers are allowed into the running: both, only the ones added by hand, or only the subscriptions. It decides who may be measured, not who wins — whichever server answers fastest is the one used, wherever it came from, and a server added by hand joins the list rather than replacing it. On *only mine* the subscriptions are not even fetched, which on a censored connection saves a minute of waiting on an address that hangs rather than refusing. To insist on one particular server, press **Use this one** beside it on the Servers page. |
-| First pass `prefilter` | TCP handshake | How a server is judged worth measuring properly. A handshake to its real port is the right test. A ping is cheaper and wrong often enough to matter: a server behind a CDN answers pings at the edge whatever state it is in, and plenty of working servers drop ICMP entirely. *Ping, then handshake* is the strictest and discards the most. |
-| Good enough `good_ms` | 1000 | The first server measured faster than this is the one used. Lower means a better server and a longer wait. |
-| Measured at a time `batch_size` | 10 | How many of the survivors are measured properly at once. |
-| Batches at most `max_batches` | 5 | How far down the list to keep going when nothing is fast enough. |
-| Checked at once `sift_parallel` | 30 | How many handshakes run in parallel in the first pass. Lower it on a router that struggles. |
+| Servers to use `sources` | مالِ من و اشتراک‌ها | چه سرورهایی اجازه دارند وارد کار شوند: هر دو، فقط آن‌هایی که دستی اضافه شده‌اند، یا فقط اشتراک‌ها. این تعیین می‌کند چه کسی *سنجیده* شود، نه چه کسی برنده شود — سروری استفاده می‌شود که سریع‌ترین جواب را بدهد، از هر جا که آمده باشد، و سرور دستی به لیست **اضافه** می‌شود نه اینکه جایش را بگیرد. روی «فقط مالِ من» اشتراک‌ها اصلاً خوانده نمی‌شوند، که روی اتصال فیلترشده یک دقیقه انتظار روی آدرسی که به‌جای رد کردن هنگ می‌کند صرفه‌جویی است. اگر می‌خواهی یک سرور مشخص حتماً استفاده شود، در صفحهٔ Servers کنارش **Use this one** را بزن. |
+| First pass `prefilter` | TCP handshake | سرور چطور ارزش اندازه‌گیری کامل پیدا می‌کند. یک handshake به پورت واقعی‌اش تست درست است. پینگ ارزان‌تر است و به‌قدر کافی اشتباه می‌کند: سروری پشت CDN، پینگ را لبه جواب می‌دهد هرچه حال خود سرور باشد، و خیلی از سرورهای سالم اصلاً ICMP را می‌اندازند. «پینگ، بعد handshake» سخت‌گیرترین است و بیشترین را دور می‌ریزد. |
+| Good enough `good_ms` | ۱۰۰۰ | اولین سروری که سریع‌تر از این اندازه گرفته شود، همان استفاده می‌شود. کمترش یعنی سرور بهتر و انتظار بیشتر. |
+| Measured at a time `batch_size` | ۱۰ | چند تا از بازمانده‌ها همزمان کامل اندازه گرفته شوند. |
+| Batches at most `max_batches` | ۵ | وقتی هیچ‌کدام به‌قدر کافی سریع نیست، تا کجای لیست ادامه بدهد. |
+| Checked at once `sift_parallel` | ۳۰ | در پاس اول چند handshake موازی برود. روی روتر ضعیف کمترش کن. |
 
 **Traffic**
 
-| Setting | Default | What it does |
+| تنظیم | پیش‌فرض | چه کار می‌کند |
 |---|---|---|
-| Save to flash every `stats_flush_seconds` | 3600 s | Totals are added up in memory every five minutes; this is how often that sum is written to storage. Lower loses less to a power cut and wears the flash faster. |
+| Save to flash every `stats_flush_seconds` | ۳۶۰۰ ثانیه | جمع‌ها هر پنج دقیقه در حافظه اضافه می‌شوند؛ این می‌گوید هر چند وقت آن جمع روی حافظهٔ دائمی نوشته شود. کمترش یعنی با قطع برق کمتر از دست می‌رود و فلش زودتر فرسوده می‌شود. |
 
-**In the file only.** These have no box on the page because changing them is
-rare and getting them wrong is quiet.
+**فقط در فایل.** این‌ها روی صفحه باکس ندارند، چون عوض کردنشان نادر است و اشتباه
+کردنشان بی‌صدا.
 
-| Option | Default | What it does |
+| گزینه | پیش‌فرض | چه کار می‌کند |
 |---|---|---|
-| `tproxy_port` `dns_port` `api_port` `bridge_port` | 1082, 1053, 10853, 10808 | Where the tunnel, the resolver, the statistics interface and the protocol helper listen. Change only if something else on the router already has one of them. |
-| `sift_timeout` | 2 s | How long a first-pass handshake is given. |
-| `test_timeout` | 6 s | How long a full request through a server is given. |
-| `test_url` | `gstatic.com/generate_204` | What is fetched to measure a server. |
-| `fresh_seconds` | 3600 s | A measurement younger than this is used as it stands instead of being taken again. |
-| `max_nodes` | 300 | A ceiling on one round of candidates. |
-| `geo_dir` | `/etc/ovpn/geo` | Where the routing data is kept. Another front-end's copy in `/usr/share/xray` or `/usr/share/v2ray` is used if there is one, rather than downloading twenty-five megabytes a second time. |
-| `remote_dns` | `1.1.1.1` | The resolver used through the tunnel for everything that is not Iranian. |
-| `core_dir` | `/usr/libexec/ovpn` | Where downloaded cores are kept. Point it at a USB stick on a router whose flash is too small for sing-box. |
-| `core_xray` | *empty* | Forces a particular Xray. Empty means: use whichever one on this router accepts the generated configuration, preferring one that is already installed. |
-| `loglevel` | `warning` | What the core writes to the system log. `debug` is a great deal of output and worth it only while chasing something. |
-| `https_probe` | a small file on GitHub | What the dependency check fetches to prove the router can reach an HTTPS address at all. Only ever downloaded to `/dev/null`. |
+| `tproxy_port` `dns_port` `api_port` `bridge_port` | ۱۰۸۲، ۱۰۵۳، ۱۰۸۵۳، ۱۰۸۰۸ | تونل، resolver، رابط آمار و کمکیِ پروتکل روی چه پورتی گوش می‌دهند. فقط وقتی عوض کن که چیز دیگری روی روتر یکی از این‌ها را گرفته باشد. |
+| `sift_timeout` | ۲ ثانیه | به handshake پاس اول چقدر فرصت داده شود. |
+| `test_timeout` | ۶ ثانیه | به یک درخواست کامل از داخل سرور چقدر فرصت داده شود. |
+| `test_url` | `gstatic.com/generate_204` | برای اندازه‌گیری سرور چه چیزی گرفته شود. |
+| `fresh_seconds` | ۳۶۰۰ ثانیه | اندازه‌گیری جوان‌تر از این، دوباره گرفته نمی‌شود و همان استفاده می‌شود. |
+| `max_nodes` | ۳۰۰ | سقف کاندیداها در یک دور. |
+| `geo_dir` | `/etc/ovpn/geo` | دادهٔ مسیریابی کجا نگه داشته شود. اگر نسخهٔ برنامهٔ دیگری در `/usr/share/xray` یا `/usr/share/v2ray` باشد از همان استفاده می‌شود، به‌جای دانلود دوبارهٔ ۲۵ مگابایت. |
+| `remote_dns` | `1.1.1.1` | resolverی که از داخل تونل برای هر چیز غیرایرانی استفاده می‌شود. |
+| `core_dir` | `/usr/libexec/ovpn` | هسته‌های دانلودشده کجا بمانند. روی روتری که فلشش برای sing-box کم است، به یک فلش USB اشاره بده. |
+| `core_xray` | *خالی* | یک Xray مشخص را اجبار می‌کند. خالی یعنی: هر کدام روی این روتر کانفیگ تولیدشده را قبول کرد، با ترجیح آنکه از قبل نصب است. |
+| `loglevel` | `warning` | هسته چه چیزی در لاگ سیستم بنویسد. `debug` خروجی خیلی زیادی است و فقط موقع دنبال کردن یک مشکل می‌ارزد. |
+| `https_probe` | یک فایل کوچک روی گیت‌هاب | بررسی وابستگی‌ها چه چیزی را می‌گیرد تا ثابت شود روتر اصلاً می‌تواند به یک آدرس HTTPS برسد. همیشه فقط به `/dev/null` دانلود می‌شود. |
 
-Subscriptions and hand-added servers are UCI sections in the same file —
-`config subscription` with a `name`, a `url` and `enabled`, and `config node`
-with a `name`, a `link` and `enabled`. Anything the Servers page can do can be
-done by editing that file, and the other way round.
+اشتراک‌ها و سرورهای دستی هم بخش‌های UCI در همان فایل‌اند — `config subscription`
+با `name` و `url` و `enabled`، و `config node` با `name` و `link` و `enabled`.
+هر کاری که صفحهٔ Servers می‌کند با ویرایش آن فایل هم می‌شود، و برعکس.
 
 ---
 
-## 3. Uninstall
+## ۳. حذف
+
+<div dir="ltr">
 
 ```sh
 ssh root@192.168.1.1
 /etc/init.d/ovpn stop
-apk del luci-app-ovpn ovpn          # opkg remove ... on 24.10 and older
+apk del luci-app-ovpn ovpn          # opkg remove ... روی ۲۴.۱۰ و پایین‌تر
 ```
 
-That removes the service, the core and the web page, and takes the scheduled
-jobs out of the router's crontab.
+</div>
 
-Removing the packages leaves your settings behind on purpose. To erase those
-too, including any routing data and traffic history:
+این سرویس و هسته و صفحهٔ وب را پاک می‌کند و کارهای زمان‌بندی‌شده را از crontab
+روتر برمی‌دارد.
+
+حذف پکیج‌ها تنظیماتت را عمداً باقی می‌گذارد. برای پاک کردن آن‌ها هم، به‌همراه
+دادهٔ مسیریابی و تاریخچهٔ مصرف:
+
+<div dir="ltr">
 
 ```sh
 rm -rf /etc/config/ovpn /etc/ovpn
 ```
 
-Nothing else is touched — no firewall zone, no other package's configuration.
-The routing rules exist only while the tunnel is up.
+</div>
+
+به هیچ چیز دیگری روی روتر دست زده نمی‌شود — نه زون فایروال، نه تنظیمات پکیج
+دیگر. قوانین مسیریابی فقط تا وقتی تونل بالاست وجود دارند.
 
 ---
 
-## 4. If something does not work
+## ۴. اگر کار نکرد
 
-**It says no server could be reached.** Look at what the page says underneath.
-"*N of M servers answered a handshake, but none completed a request*" means the
-servers are there and something between you and them is stopping the traffic.
-"*No server answered at all*" means the list is stale or the connection is
-blocking them outright. The router reads a new list every quarter of an hour
-and repairs itself when the tunnel should be up and is not.
+**می‌گوید هیچ سروری در دسترس نبود.** به جمله‌ای که پایینش می‌نویسد نگاه کن.
+«*N of M servers answered a handshake, but none completed a request*» یعنی
+سرورها هستند و چیزی بین تو و آن‌ها جلوی ترافیک را می‌گیرد. «*No server answered
+at all*» یعنی لیست کهنه است یا اتصال کلاً آن‌ها را بسته. روتر هر ربع ساعت لیست
+تازه می‌خواند و وقتی تونل باید بالا باشد و نیست خودش را تعمیر می‌کند.
 
-**Some sites open and others do not.** Usually name resolution. Check
-**Settings → Name lookups** is on *Through dnsmasq*.
+**بعضی سایت‌ها باز می‌شوند و بعضی نه.** معمولاً حل نام است. چک کن
+**Settings ← Name lookups** روی *Through dnsmasq* باشد.
 
-**Devices on my own network stopped resolving.** That is what *Through dnsmasq*
-prevents; *Straight into the tunnel* has this trade-off by design.
+**اسم دستگاه‌های شبکهٔ خودم دیگر حل نمی‌شود.** دقیقاً همان چیزی است که
+*Through dnsmasq* جلویش را می‌گیرد؛ حالت *Straight into the tunnel* این ایراد
+را ذاتاً دارد.
 
-**Iran routing does not seem to do anything.** The status page says
-*Iran split is on, but the routing data is missing* when the files have not
-been downloaded. Until then everything goes through the tunnel, on purpose —
-asking the core for a geo file it has not got stops it starting at all.
+**تفکیک ایران انگار کاری نمی‌کند.** صفحهٔ وضعیت وقتی فایل‌ها دانلود نشده باشند
+می‌نویسد *Iran split is on, but the routing data is missing*. تا آن موقع همه
+چیز از تونل می‌رود، و این عمدی است — اگر از هسته فایل geo بخواهی که ندارد،
+اصلاً بالا نمی‌آید.
 
-**PassWall is also installed.** Both pages will warn you. Two transparent
-proxies fight over the same packets; run one at a time.
+**PassWall هم نصب است.** هر دو صفحه هشدار می‌دهند. دو پروکسی شفاف سر یک بسته
+دعوا می‌کنند؛ هر بار یکی را روشن بگذار.
 
-**Nothing is tunnelled but it says connected.** It should not — that specific
-lie was fixed. If you see it, `/usr/libexec/ovpn-rules status` says what is
-actually loaded, and `logread -e ovpn` says what happened.
+**هیچ چیز تونل نمی‌شود ولی می‌گوید connected.** نباید بگوید — دقیقاً همین دروغ
+اصلاح شده. اگر دیدی، `/usr/libexec/ovpn-rules status` می‌گوید واقعاً چه چیزی
+لود شده و `logread -e ovpn` می‌گوید چه اتفاقی افتاده.
 
-Support and contact: [t.me/routekernel1](https://t.me/routekernel1)
-
----
-
-## 5. Building and testing it yourself
-
-```sh
-sh build/build-core.sh x86_64          # fetch the Xray core
-RIG_XRAY=$PWD/prebuilt/x86_64/xray sh test/run.sh
-sh build/build-ipk.sh x86_64           # packages land in dist/
-```
-
-The tests run the shipped scripts themselves against a real Xray and a real
-`nft`, rather than against a description of what those accept. That distinction
-is the whole reason this version exists — see [AUDIT.md](AUDIT.md).
+پشتیبانی و تماس: [t.me/routekernel1](https://t.me/routekernel1)
 
 ---
 
-## 6. Licence
-
-GPL-3.0-only. Xray-core is licensed by its own authors under MPL-2.0.
+اگر می‌خواهی دقیق‌تر بدانی چه چیزهایی بررسی شده، چه چیزی خراب بوده و چطور
+تأیید شده — و چه چیزی هنوز تست ندارد — [AUDIT.md](AUDIT.md) را ببین.
 
 ---
 
-## 7. Thanks
+## ۵. لایسنس
 
-The default server list is the **TOP 100** collection published by
-[@Raydikalx](https://t.me/raydikalx), gathered and kept current as free, public
-work. The Iran routing data is
-[Chocolate4U/Iran-v2ray-rules](https://github.com/Chocolate4U/Iran-v2ray-rules).
-This project runs no servers of its own: it measures what those lists offer and
-picks whichever answers fastest from where you are. Without them there would be
-nothing here to measure. Thank you.
+GPL-3.0-only. هستهٔ Xray زیر لایسنس MPL-2.0 نویسندگان خودش است.
+
+---
+
+## ۶. تشکر
+
+لیست پیش‌فرض سرورها مجموعهٔ **TOP 100** است که
+[@Raydikalx](https://t.me/raydikalx) منتشر می‌کند و به‌صورت رایگان و عمومی
+جمع‌آوری و به‌روز نگه می‌دارد. دادهٔ مسیریابی ایران از
+[Chocolate4U/Iran-v2ray-rules](https://github.com/Chocolate4U/Iran-v2ray-rules)
+است. این پروژه حتی یک سرور هم از خودش ندارد: چیزی را که آن لیست‌ها ارائه
+می‌دهند اندازه می‌گیرد و سریع‌ترین را از جایی که تو هستی انتخاب می‌کند. بدون
+آن‌ها اینجا چیزی برای اندازه‌گیری نبود. ممنون.
+
+</div>
