@@ -1,216 +1,261 @@
-# Audit of ovpn 1.0.1
+# Audit of ovpn 1.0.0
 
-What was wrong with the previous version, how each thing was confirmed, and
-what was done about it. Everything below was checked against a real Xray
-26.3.27, a real nftables, and the live server list — not read and reasoned
-about. Where I first suspected something and turned out to be wrong, that is
-recorded too, because a fix for a problem that does not exist is its own kind
-of bug.
+What was found wrong before this version was released, how each thing was
+confirmed, and what was done about it.
+
+Everything below was measured on a real router — an OpenWrt 25.12.5 build on
+`ipq40xx`, `arm_cortex-a7_neon-vfpv4`, with PassWall2 installed alongside — in
+front of a real Xray 26.3.27, a real nftables, real servers and a real browser
+on the network. Nothing here was arrived at by reading the code and reasoning
+about it. Where I suspected something and turned out to be wrong, that is
+written down too: a fix for a problem that does not exist is its own kind of
+bug, and the list of things that turned out to be fine is the more useful half
+of an audit.
 
 ---
 
-## 1. One bad server in the list stopped everything
+## 1. The Iran split made the tunnel impossible to start
 
-**The most important finding.** This is almost certainly the "it gave many
-errors and did not work" you describe.
+**Severity: the tunnel never came up at all.**
 
-Version 1.0.1 built **one** Xray configuration containing all hundred servers
-at once — a hundred inbounds, a hundred outbounds, a hundred routing rules —
-and started it to measure them. Xray validates a configuration as a whole. One
-unusable entry anywhere in it and the core refuses to start at all.
-
-`ovpn-update` then reported this as:
+Switch on *Send Iranian traffic direct*, and the service failed with:
 
 ```
 no xray on this router can run the generated configuration
 ```
 
-and, one line later, selection failed completely. Not "ninety-nine servers
-measured, one skipped" — **nothing measured, no server chosen, no connection**,
-for as long as that entry stayed in the list.
+on a router carrying twenty-five megabytes of correct, current routing data in
+`/etc/ovpn/geo`.
 
-Confirmed by building v1's exact configuration from today's live list and
-adding one entry with an invalid TLS fingerprint:
+A core reads `geoip.dat` and `geosite.dat` from its own asset directory —
+`XRAY_LOCATION_ASSET`, defaulting to `/usr/share/xray` and the directory the
+binary sits in. Ours are in `/etc/ovpn/geo`. `find_xray` offers each candidate
+core the generated configuration and keeps the first that accepts it, which is
+the right way to choose a core — but it offered that configuration **without
+telling any of them where to look**. So each core went to its default asset
+directory, found either nothing or another front-end's file, and refused the
+whole configuration. Every candidate refused it for the same reason, the list
+of candidates ran out, and the service gave up.
 
-| configuration | Xray's verdict |
-|---|---|
-| today's 100 servers | accepted |
-| the same 100, plus one bad entry | **rejected — nothing can be measured** |
+Reproduced exactly, with the router's own settings and its own files:
 
-The kinds of entry that do this are ordinary and common in free lists: a
-REALITY public key that is not a valid key, a cipher Xray dropped years ago
-(`rc4-md5`), a fingerprint that does not exist. Both of the first two are in
-the test fixtures now because both were found in the wild.
-
-Today's list happens to be clean, so v1 would work today. It would go dark on
-any day a stranger's list contained one malformed line, and stay dark until
-they fixed it. Nothing about that failure points at the cause.
-
-**Fixed.** Servers are measured ten at a time. If a batch is refused, each of
-its members is offered to the core individually, the bad ones are written down
-so they are never tried again this boot, and the rest are measured normally.
-Covered by `test/test-config.sh` and `test/test-probe.sh`.
-
----
-
-## 2. Choosing a server cost far more than it needed to
-
-A hundred inbounds, a hundred outbounds and a hundred simultaneously open
-listening sockets is real work for a router with 128 MB of RAM — and it
-happened on every connection and every time the page was opened, even when the
-first server tried would have done.
-
-**Fixed**, and this is requirement 3. Two passes:
-
-1. **One TCP handshake to every server**, thirty at a time, two seconds each.
-   On today's list this takes **8 seconds** and removes **26 of 69** servers
-   before anything expensive happens. It also yields the handshake time, which
-   is a real measure of distance.
-2. **The survivors, best handshake first, measured properly ten at a time** —
-   a complete proxied HTTP request, which is the only thing that proves a route
-   works. The moment one comes back under the threshold (1000 ms by default),
-   that is the answer and the remaining batches never run.
-
-So the usual case is one small core holding ten sockets for a few seconds,
-instead of one large core holding a hundred for thirty. The ranked results are
-kept, so when the chosen server later dies the repair is "take the next one
-down the list", not another full sweep.
-
-### On ICMP
-
-You asked for ICMP ping as the first pass. I implemented it — `prefilter` in
-the settings takes `icmp`, `tcp` or `both` — but the default is `tcp`, and I
-think it should stay that way:
-
-- A great many of these servers sit behind Cloudflare. A ping is answered by
-  the CDN edge and says nothing whatever about the server behind it, so ICMP
-  keeps servers that do not work.
-- A great many others drop ICMP entirely while serving TCP perfectly, so ICMP
-  discards servers that do work.
-
-A TCP handshake to the server's real port asks the same question — are you
-there, and how far — of the thing that actually matters, and costs the same
-three packets. On today's list 43 of 69 servers completed a handshake; the
-gain you were after is fully realised, without the false answers.
-
----
-
-## 3. It wrote to flash every fifteen minutes, for ever
-
-`cmd_fetch` did this on every cron run, unconditionally:
-
-```sh
-mv -f "$tmp" "$LIST"          # /etc/ovpn/servers.list
-date -u +%s > "$STAMP"        # /etc/ovpn/last-update
+```
+failed to parse domain rule: geosite:ir > failed to load geosite: IR
+  > code not found in geosite.dat: IR
 ```
 
-That is two writes to the overlay every fifteen minutes — about **70,000 writes
-a year** — of a file that is usually byte-for-byte identical to the one already
-there. On the flash a cheap router has, this is how routers die.
+The `geosite.dat` it had found was PassWall2's, which carries different
+categories. The right file was thirty centimetres away in `/etc/ovpn/geo` and
+nothing had told the core about it.
 
-**Fixed.** The list is kept in RAM and copied to flash only when its contents
-actually changed (`write_if_changed`). The traffic counters, which are read
-every five minutes, are added up in RAM and reach flash once an hour and on
-shutdown — about 25 writes a day for something previously not recorded at all.
+It only bit with the split switched on, because that is the only thing that
+puts a geo category into the configuration. With it off, the same router
+connected perfectly — which is what made this look like a problem with the
+split rather than with where the core had been told to look.
 
----
+**Fixed** in `find_xray`: the configuration is now offered to each core exactly
+as the service will run it, asset directory included. Confirmed on the router —
+the same configuration that every core refused is now accepted by the first.
 
-## 4. Name lookups went round dnsmasq, not through it
-
-The firewall redirected every port 53 packet straight into Xray's own
-resolver. Outside names resolved correctly. Everything on the user's own
-network stopped resolving: DHCP names, `/etc/hosts`, the router's own
-hostname, the printer.
-
-**Fixed.** dnsmasq keeps answering and only its *upstream* is moved into the
-tunnel, via a drop-in file in the directory dnsmasq already watches — so local
-names keep working and outside lookups still go through the tunnel. Nothing is
-written to flash for this. The directory is discovered from dnsmasq's own
-generated configuration rather than assumed to be `/tmp/dnsmasq.d`, because
-OpenWrt names it after the config section and on most routers it is something
-like `/tmp/dnsmasq.cfg01411c.d` — a program that assumes the tidy name writes
-a file nothing ever reads, and then reports success.
+**And a second layer**, because a geo file found on a router is not necessarily
+the pair this expects: when every core still refuses a configuration that names
+a geo category, the tunnel is brought up once more without the split, and the
+page says that is what happened and why. Connected without the split beats a
+page reading *could not connect*.
 
 ---
 
-## 5. A twenty-second wait for a tunnel nobody had started
+## 2. Refusing QUIC refused nothing
 
-When `start_service` bailed out early — no server chosen yet — it returned 1,
-but `service_started` still ran and still waited its full twenty seconds for a
-socket that was never going to appear, then logged a failure about a tunnel
-nobody had asked for.
+**Severity: a setting that did nothing, silently, in the one case it exists
+for.**
 
-**Fixed** with a flag file: `service_started` returns immediately when
-`start_service` opened no instance.
+`block_quic` writes a rule refusing UDP 443 so that browsers fall back to TCP.
+It sat on the `forward` hook. A packet that the `prerouting` chain has handed
+to the local transparent-proxy socket never reaches `forward` at all, so the
+rule was never consulted.
 
-The related fix already in v1 — that `service_started`, not `start_service`,
-is where the wait belongs — is correct. I checked it against OpenWrt's
-`rc.common`: `start()` calls `rc_procd start_service` and then
-`service_started`, so it is the first hook that runs after procd has actually
-been told to start anything.
+Measured rather than reasoned about. With the setting **on**, a Chromium on the
+network still fetched twenty-two of YouTube's files over `h3` — which is QUIC,
+which is the thing the setting says it refuses:
+
+| | resources over h3 | UDP 443 packets dropped |
+|---|---|---|
+| rule on the forward hook | 22 | 0 |
+| rule in prerouting, ahead of tproxy | falls to reused sessions only | 72 |
+
+The comment above the rule explained why it was on `forward`: nftables has no
+`reject` in `prerouting`, and an earlier attempt to `reject` there made the
+whole ruleset fail to load. Both halves of that are true. The conclusion was
+wrong. `drop` is available in `prerouting`, and is what this needs — a browser
+races QUIC against TCP on a first connection, so a dropped attempt costs the
+race rather than the page.
+
+**Fixed** in both firewall backends: the rule moves into `prerouting`, after
+the reserved-address returns — so QUIC between two machines on the network is
+left alone — and ahead of the tproxy rules, which is the only position where it
+does anything.
+
+**And a test that would have caught it.** Every combination of settings was
+already generated and put in front of a real `nft`, and this rule passed every
+one of those checks the entire time it was doing nothing: it was valid, and
+unreachable. The suite now asserts *where* the rule is, not only that the
+ruleset loads.
 
 ---
 
-## 6. Smaller things, all confirmed by reading the code
+## 3. A warning about the one thing the reader had already done
 
-| | |
-|---|---|
-| **The comment about PassWall2's mark was wrong.** `ovpn-rules` claimed `0xff` was "the same value PassWall2 uses". PassWall2's mark is `0x50535732`. The claimed interoperability did not exist. | Comment corrected; the value kept, since it is the convention older transparent-proxy scripts settled on. |
-| **No divert rule for established sockets.** Every packet of every connection re-did the transparent-proxy lookup instead of being handed to the socket that already owned it. | Added, conditional on `kmod-nft-socket` actually being present — probed by loading a throwaway table, because `nft --check` tests syntax, not the kernel. |
-| **No file-descriptor limit.** The default 1024 is not many when every device on the network has its connections held open by one process. | `nofile 65535`. |
-| **Duplicate servers were measured repeatedly.** Today's list is 107 lines and **69 distinct servers**; v1 measured 100 entries, roughly a third of them repeats. | The parser now discards duplicates. |
-| **The version in the web interface was hardcoded** to `1.0.1` while the package said `1.0.1-r5`. | Written once at build time to `/etc/ovpn/version` and read from there; the build fails if the two disagree. |
-| **Only vmess, vless and shadowsocks were understood.** No trojan — which is common — and no base64 subscriptions, which is how most providers hand over a list at all. | trojan, socks, hysteria2 and tuic added; a base64 blob is decoded. |
-| **`/usr/bin` was created in the package** and nothing was put in it. | Gone. |
+Stopping PassWall2 leaves its `inet passwall2` table behind, empty. The check
+for a second transparent proxy asked whether that table existed, so on a router
+where PassWall2 had been switched off — exactly what the page was asking for —
+the front page still said:
+
+> PassWall is also redirecting traffic on this router. Two transparent proxies
+> will fight over the same packets.
+
+Confirmed both ways on the router: the table is present with PassWall2 stopped,
+and the rules inside it are only there when it is running. The check now asks
+whether anything in that table is still taking traffic — a `tproxy`, a
+`redirect` or a `dnat` — rather than whether the table exists.
+
+---
+
+## 4. The front page reported the wrong failure
+
+On a router that connects perfectly through a server added by hand, the page
+said, before anything had been pressed:
+
+> No subscription could be read, and there is no saved list to fall back on
+
+Reading a subscription and being able to connect are different facts. Opening
+the page starts a measurement, the measurement reads the sources, a source
+failed, and the failure went straight to the front page — past the fact that
+the router had a perfectly good server of its own and was about to connect
+through it.
+
+Which source failed and why belongs beside that source, on the Servers page,
+and was already there. The front page now speaks once, when there is genuinely
+nothing left to connect through, and names the way out of it.
+
+---
+
+## 5. The list's own address is blocked by the thing the list exists to fix
+
+The default server list is published on `raw.githubusercontent.com`, which is
+among the first things to disappear on the connection this program exists to
+repair. The circle is real: the list cannot be read until the tunnel is up, and
+the tunnel cannot come up without a server.
+
+A fetch that fails outright is now retried through two public mirrors of the
+same GitHub path — for the server list and for the routing data both. They
+serve the identical file out of the identical public repository. Only
+`raw.githubusercontent.com` addresses have mirrors; a subscription hosted
+anywhere else is fetched exactly as it was written and nowhere else.
+
+This does not remove the need for the cached list on disk, and does not replace
+adding one server by hand, which is still the reliable way out of a cold start.
+
+---
+
+## 6. Smaller things, all confirmed
+
+**`xhttp` links carry an `extra` object and it was being dropped.** Padding,
+`xmux`, the separate download connection — all of it travels in the link as one
+JSON object, and none of it was reaching the core, which means connecting on
+terms the server was never told about. Passed through as JSON now. Measured
+against a real server it changes nothing today; that is the good outcome and
+not a reason to keep guessing.
+
+**Several links pasted into one box were split on every space.** A link ending
+`#سرور خانه` became `#سرور` plus a stray word that parsed as nothing, and the
+name was quietly cut in half. They are split where a new link begins instead.
+
+**Names were trimmed to 48 bytes with no regard for where a character ended.**
+The parser runs in the C locale — deliberately, because a UTF-8 locale would
+re-encode every byte above 127 while decoding base64 and corrupt every
+non-English name. But that makes `length()` count bytes, and Persian is two
+bytes a character, so the trim landed mid-character about as often as not. Half
+a character is not a shorter name; it is a byte sequence that is no longer
+UTF-8, and it travelled all the way to the web interface as a broken one. It
+walks back to a character boundary now.
+
+**A link's own name is used when none was typed.** Practically every share link
+ends in `#something`. Someone who pastes one and leaves the name box empty
+meant that name, in percent-encoded UTF-8, or inside the base64 of a `vmess`
+link.
+
+**A test that could not fail.** `geo_dir` deliberately falls back to
+`/usr/share/xray` and `/usr/share/v2ray`, because twenty-five megabytes already
+on the router is not worth downloading twice. That made the test for *no
+routing data present* measure another front-end's files on any router that had
+them. The search path is a variable now and the test empties it, which is the
+only way for that test to mean what it says.
 
 ---
 
 ## Things I suspected and was wrong about
 
-Recorded because I nearly "fixed" all of them.
+Recorded because each of these was a plausible cause of "it connects but
+YouTube will not open", and each was measured and found innocent. Three of the
+four would have been shipped as fixes if I had trusted the reasoning.
 
-- **`allowInsecure`.** I added it to the parser to be tolerant of servers whose
-  certificate does not match. Xray **removed** it in 26.x and now refuses any
-  outbound carrying it — so it would have rejected *every* TLS server on the
-  list, on the newest core, all at once. Caught by putting each generated
-  outbound in front of the real binary. It is not in the shipped parser, and
-  there is a test asserting it never comes back.
-- **`fp=unsafe`.** Two servers in today's list carry it and it looks like a
-  mistake. It is a real uTLS value meaning "use Go's own TLS". My first fix
-  dropped it. Corrected: the fingerprint whitelist was checked value by value
-  against Xray 26.3 and now matches what the core actually accepts. An invented
-  fingerprint is still dropped — `bogusvalue` genuinely does refuse the whole
-  outbound — but only the fingerprint is dropped, not the server.
-- **`ca-bundle` was not in the dependencies.** I assumed HTTPS was broken on a
-  fresh router. It is not: OpenWrt's `libcurl` already depends on `ca-bundle`,
-  so it arrives transitively. It is now declared explicitly anyway, which
-  documents the requirement and covers a hand-built image, but it was not the
-  bug I thought it was.
-- **The CI action versions.** `actions/checkout@v7`, `upload-artifact@v7` and
-  `download-artifact@v8` looked wrong to me. They are all current and correct.
-- **OpenWrt 24 uses iptables.** It does not — OpenWrt has used nftables since
-  22.03, so 23.05, 24.10 and 25.12 are all nftables, and the thing that changed
-  in 25.12 is the package manager (`opkg` → `apk`), which the build already
-  handled by shipping both formats. Both firewall backends are implemented all
-  the same, because vendor builds and older releases in the field do still run
-  firewall3, and on one of those an nft-only client installs cleanly, reports
-  itself connected, and carries nothing.
+**The server.** Both of the user's own servers were put behind a throwaway
+SOCKS inbound and asked for real pages. Both carried YouTube's front page —
+877 KB of it — plus `i.ytimg.com` and `googlevideo.com`, at about 1.6 MB/s.
+Neither server was the problem, and swapping servers would have "fixed" it for
+exactly as long as the first server happened to be slow.
+
+**`h3` in the ALPN list.** One of the links advertises `h2,http/1.1,h3` on a
+TCP transport, which is nonsense — `h3` is HTTP/3, which is QUIC, which is not
+TCP — and stripping it looked like an obvious correctness fix. Measured with
+and without: no difference at all. A server that is not broken does not select
+it. Left alone; the link says what it says.
+
+**The missing `extra`.** Fixed on principle (§6) and measured before and after:
+no difference on this server today. Worth passing through, not worth claiming
+as a cure.
+
+**QUIC being unusable through the tunnel.** The strongest hypothesis, and the
+one the reporter's symptom fits best — YouTube is the most QUIC-heavy site
+there is, and most free servers carry UDP badly. Wrong here: twenty-two of
+YouTube's resources loaded over `h3` through this server, with everything
+working. `block_quic` therefore stays **off** by default. It is a remedy for a
+server that carries UDP badly, and it now works when it is switched on, which
+is more than it did before.
+
+**The DNS path.** Suspected because a poisoned or lost lookup looks exactly
+like "the tunnel works but that one site does not". Ran the whole generated
+configuration on spare ports and queried its own resolver: `www.youtube.com`,
+`googlevideo.com` and `digikala.ir` all resolved, and the Iranian name came
+back with Iranian addresses, which is the split working. Nothing wrong with it.
 
 ---
 
 ## What is still not covered by a test
 
-Being straight about the edges:
+Said plainly, because the value of the suite is in knowing where it ends.
 
-- **The transparent proxy path has never been run end to end**, because that
-  needs a router with clients on it. The ruleset is checked against a real
-  `nft`, the core is started and its sockets confirmed, and the selection runs
-  for real against stand-in servers — but "a laptop on the LAN loaded a page
-  through the tunnel" is not something CI can assert. It needs your router.
-- **The iptables backend is checked for syntax and structure, not behaviour.**
-  There is no firewall3 machine in CI. It follows the standard TPROXY recipe
-  and tears itself down in the right order, but it wants trying on a real
-  fw3 router before being trusted.
-- **hysteria2 and tuic servers have not been carried end to end.** The bridge
-  configuration is generated and the plumbing is there; no free list I can
-  reach publishes one to try it against.
+**The transparent proxy path, end to end, in CI.** The rules are generated for
+every combination of settings and loaded into a real `nft`, the positions that
+matter are asserted, and the whole path was driven by hand on the router for
+this release — PassWall2 stopped, tunnel up, a browser on the network fetching
+real pages, counters read back. None of that runs on a build machine, because
+it needs a second machine on a LAN behind the router.
+
+**The iptables backend against a real firewall3 router.** Written, and checked
+for the shape of what it emits. Never run on a router that actually uses it —
+every machine to hand runs nftables.
+
+**hysteria2 and tuic carrying real traffic.** The bridge is exercised as far as
+"the helper starts and offers a SOCKS port". Whether a real hysteria2 server
+carries a real page through it is untested.
+
+**The mirrors.** They only run when the primary address fails, which on a
+working connection it does not. The rewriting is unit-tested; the mirrors
+themselves being up is somebody else's uptime.
+
+**dnsmasq on a router with several instances.** PassWall2 runs three more, and
+the drop-in is written into the directory the generated configuration names. It
+was correct on the router tested. A router with a different arrangement of
+instances has not been tried.

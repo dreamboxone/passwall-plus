@@ -561,8 +561,17 @@ tunnel_running() {
 # Another transparent proxy on the same router will fight this one for the
 # same packets, and the loser is the user's connection.
 passwall_running() {
-	nft list table inet passwall2 >/dev/null 2>&1 && return 0
-	nft list table inet passwall >/dev/null 2>&1 && return 0
+	# Not "is the table there": stopping PassWall2 leaves an empty `inet
+	# passwall2` behind, and asking that question put "PassWall is also
+	# redirecting traffic on this router" on the front page of a router where
+	# it had been switched off - which is a warning about the one thing the
+	# reader has already done. Ask whether anything in it is still taking
+	# traffic instead.
+	for _t in "inet passwall2" "inet passwall"; do
+		# shellcheck disable=SC2086
+		nft list table $_t 2>/dev/null |
+			grep -q -e tproxy -e 'redirect to' -e ' dnat ' && return 0
+	done
 	# Only worth asking iptables on a router that is actually using it.
 	# On an nftables router this is iptables-nft, which is a process spawn and
 	# a translation layer to answer a question whose answer is always no.

@@ -168,8 +168,73 @@ that speaks `hysteria2` or `tuic`, which Xray does not; the extra core is then
 run as a local helper for that one server and everything else works exactly as
 before. Xray itself can be updated here too.
 
-Everything else — name handling, IPv6, QUIC, which firewall to use, how
-aggressively to measure — has a sensible default and an explanation next to it.
+### Every setting
+
+The page carries the ones worth changing. The rest live in `/etc/config/ovpn`,
+an ordinary UCI file, where each default is written out with the reasoning
+beside it. Names in brackets are the UCI options.
+
+**Routing**
+
+| Setting | Default | What it does |
+|---|---|---|
+| Send Iranian traffic direct `route_ir` | off | Iranian sites and addresses skip the tunnel; everything else goes through it. Needs the routing data below. Until that is downloaded the setting does nothing at all, deliberately: a core asked for a geo file it has not got refuses to start rather than carrying on without it. |
+| Address data `geoip_url` | Chocolate4U `geoip.dat` | Where the Iranian address list is fetched from. Editable, which is how the 38 KB `-lite` file gets used on a router with no room for the full one. |
+| Name data `geosite_url` | Chocolate4U `geosite.dat` | The same for names. |
+| Iranian resolver `ir_dns` | *none* | Which resolver answers Iranian names while the split is on. A list of the public Iranian ones with nothing chosen. Nothing chosen is a real answer and the shipped one: the split still works, only the lookup takes the ordinary path — and no Iranian resolver gets to see every name this router asks for. Choose one if an Iranian CDN is answering you with a foreign edge. |
+| Block advertising `block_ads` | off | Refuses known advertising and tracking domains. Needs the routing data too. |
+| Block BitTorrent `block_torrent` | on | BitTorrent through a free server is how a free server stops existing. |
+
+**Network**
+
+| Setting | Default | What it does |
+|---|---|---|
+| Name lookups `dns_mode` | Through dnsmasq | `dnsmasq` keeps the router's own resolver answering and moves only its upstream into the tunnel, so DHCP names, `/etc/hosts` and the printer keep working. `direct` sends every query straight into the tunnel: outside names resolve, names on your own network stop. `off` changes nothing, for a router with its own arrangement. |
+| Catch hardcoded resolvers `dns_hijack` | on | A phone set to ask 8.8.8.8 directly gets its answers from outside the tunnel and then connects to whatever it was told. This forces those queries back through the router. |
+| IPv6 `ipv6` | Refuse while connected | Almost nothing on a free server list carries IPv6, and a client that prefers it leaves without the tunnel while looking perfectly healthy. Refusing it makes the client fall back to IPv4, which is tunnelled. Set it to *leave alone* only on a connection that is IPv6 only. |
+| Refuse QUIC `block_quic` | off | Drops UDP 443 before it reaches the tunnel, so browsers fall back to TCP. Worth turning on when the chosen server carries UDP badly. Off by default because where UDP does work QUIC is the faster path — measured on a real server, YouTube loads over QUIC through the tunnel perfectly well. |
+| Firewall `firewall_backend` | automatic | nftables or iptables, decided at run time. Automatic is right unless the router has both and the wrong one is being picked. |
+| Interfaces to tunnel `lan_zone` | *every LAN interface* | Read from this router rather than typed. Unset — how it ships — every LAN interface is tunnelled, which is what almost everyone wants. Choose one to pick traffic up from that interface only. |
+| Reconnect after a reboot `autostart` | off | Makes the boot symlink, so the tunnel comes back after a power cut. |
+
+**Choosing a server**
+
+| Setting | Default | What it does |
+|---|---|---|
+| First pass `prefilter` | TCP handshake | How a server is judged worth measuring properly. A handshake to its real port is the right test. A ping is cheaper and wrong often enough to matter: a server behind a CDN answers pings at the edge whatever state it is in, and plenty of working servers drop ICMP entirely. *Ping, then handshake* is the strictest and discards the most. |
+| Good enough `good_ms` | 1000 | The first server measured faster than this is the one used. Lower means a better server and a longer wait. |
+| Measured at a time `batch_size` | 10 | How many of the survivors are measured properly at once. |
+| Batches at most `max_batches` | 5 | How far down the list to keep going when nothing is fast enough. |
+| Checked at once `sift_parallel` | 30 | How many handshakes run in parallel in the first pass. Lower it on a router that struggles. |
+
+**Traffic**
+
+| Setting | Default | What it does |
+|---|---|---|
+| Save to flash every `stats_flush_seconds` | 3600 s | Totals are added up in memory every five minutes; this is how often that sum is written to storage. Lower loses less to a power cut and wears the flash faster. |
+
+**In the file only.** These have no box on the page because changing them is
+rare and getting them wrong is quiet.
+
+| Option | Default | What it does |
+|---|---|---|
+| `tproxy_port` `dns_port` `api_port` `bridge_port` | 1082, 1053, 10853, 10808 | Where the tunnel, the resolver, the statistics interface and the protocol helper listen. Change only if something else on the router already has one of them. |
+| `sift_timeout` | 2 s | How long a first-pass handshake is given. |
+| `test_timeout` | 6 s | How long a full request through a server is given. |
+| `test_url` | `gstatic.com/generate_204` | What is fetched to measure a server. |
+| `fresh_seconds` | 3600 s | A measurement younger than this is used as it stands instead of being taken again. |
+| `max_nodes` | 300 | A ceiling on one round of candidates. |
+| `geo_dir` | `/etc/ovpn/geo` | Where the routing data is kept. Another front-end's copy in `/usr/share/xray` or `/usr/share/v2ray` is used if there is one, rather than downloading twenty-five megabytes a second time. |
+| `remote_dns` | `1.1.1.1` | The resolver used through the tunnel for everything that is not Iranian. |
+| `core_dir` | `/usr/libexec/ovpn` | Where downloaded cores are kept. Point it at a USB stick on a router whose flash is too small for sing-box. |
+| `core_xray` | *empty* | Forces a particular Xray. Empty means: use whichever one on this router accepts the generated configuration, preferring one that is already installed. |
+| `loglevel` | `warning` | What the core writes to the system log. `debug` is a great deal of output and worth it only while chasing something. |
+| `https_probe` | a small file on GitHub | What the dependency check fetches to prove the router can reach an HTTPS address at all. Only ever downloaded to `/dev/null`. |
+
+Subscriptions and hand-added servers are UCI sections in the same file —
+`config subscription` with a `name`, a `url` and `enabled`, and `config node`
+with a `name`, a `link` and `enabled`. Anything the Servers page can do can be
+done by editing that file, and the other way round.
 
 ---
 

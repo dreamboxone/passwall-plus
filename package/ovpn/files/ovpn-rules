@@ -139,12 +139,26 @@ nft_ruleset() {
 		_divert="		meta l4proto tcp socket transparent 1 meta mark set $MARK counter accept"
 	fi
 
+	# Refusing QUIC has to happen in prerouting, ahead of the tproxy rules,
+	# because a packet handed to the local socket there never reaches the
+	# forward hook at all - which is where this rule used to sit, doing
+	# nothing. Measured rather than reasoned about: with the setting switched
+	# on, a browser on the network still fetched twenty-two of YouTube's files
+	# over h3, which is QUIC, which is the thing the setting says it refuses.
+	#
+	# It was put on the forward hook because nftables has no reject in
+	# prerouting and an earlier attempt to reject there made the whole ruleset
+	# fail to load. drop is available there, and is what this needs: a browser
+	# races QUIC against TCP on a first connection, so a dropped attempt costs
+	# the race rather than the page.
+	#
+	# It goes after the reserved-address returns, so QUIC between two machines
+	# on this network is left alone. Only what would have gone into the tunnel
+	# is refused.
 	_quic=""
 	if [ "$block_quic" = "1" ]; then
-		# nftables has no reject in prerouting, so this belongs on the forward
-		# hook. Putting it in prerouting made the whole ruleset fail to load
-		# the moment anyone switched it on.
-		_quic="		meta l4proto udp th dport 443 counter reject"
+		_quic="		meta l4proto udp th dport 443 counter drop
+"
 	fi
 
 	_v6=""
@@ -154,14 +168,13 @@ nft_ruleset() {
 	fi
 
 	_forward=""
-	if [ -n "$_v6" ] || [ -n "$_quic" ]; then
+	if [ -n "$_v6" ]; then
 		_forward="	chain forward {
 		type filter hook forward priority filter; policy accept;
 
 		iifname != { $_iflist } return
 		meta mark $BYPASS return
 $_v6
-$_quic
 	}
 "
 	fi
@@ -208,7 +221,7 @@ $_divert
 		meta l4proto { tcp, udp } th dport 53 return
 		ip daddr @reserved return
 		ip6 daddr @reserved6 return
-		meta l4proto tcp counter tproxy ip to 127.0.0.1:$tproxy_port meta mark set $MARK accept
+$_quic		meta l4proto tcp counter tproxy ip to 127.0.0.1:$tproxy_port meta mark set $MARK accept
 		meta l4proto udp counter tproxy ip to 127.0.0.1:$tproxy_port meta mark set $MARK accept
 	}
 
@@ -279,6 +292,13 @@ ipt_up() {
 	for _c in $RESERVED_V4; do
 		ipt -t mangle -A OVPN_PRE -d "$_c" -j RETURN
 	done
+	# Ahead of TPROXY and not on the forward chain, for the reason written out
+	# on the nftables side: a packet handed to the local socket here never
+	# reaches forward, so a rule there refuses nothing. DROP because the
+	# mangle table has no REJECT either.
+	if [ "$block_quic" = "1" ]; then
+		ipt -t mangle -A OVPN_PRE -p udp --dport 443 -j DROP
+	fi
 	# This is the rule everything else exists to reach, so unlike the ones
 	# above it is not allowed to fail quietly.
 	ipt_must -t mangle -A OVPN_PRE -p tcp -j TPROXY \
@@ -298,15 +318,6 @@ ipt_up() {
 		ipt_must -t nat -A OVPN_DNS -p tcp --dport 53 -j REDIRECT --to-ports "$_t" || return 1
 		for _d in $_devs; do
 			ipt_must -t nat -A PREROUTING -i "$_d" -j OVPN_DNS || return 1
-		done
-	fi
-
-	if [ "$block_quic" = "1" ]; then
-		ipt -t filter -N OVPN_FWD
-		ipt -t filter -A OVPN_FWD -m mark --mark "$BYPASS" -j RETURN
-		ipt -t filter -A OVPN_FWD -p udp --dport 443 -j REJECT
-		for _d in $_devs; do
-			ipt -t filter -I FORWARD -i "$_d" -j OVPN_FWD || true
 		done
 	fi
 

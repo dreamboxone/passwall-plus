@@ -102,4 +102,31 @@ case "$first" in
 	*) bad "port 53 is let past before the tproxy rules (got: $first)" ;;
 esac
 
+# Refusing QUIC has to happen in prerouting and ahead of the tproxy rules. A
+# packet handed to the local socket there never reaches the forward hook, so a
+# rule sitting on forward - which is where this one sat - refuses nothing at
+# all. It passed every syntax check in this file the whole time it was doing
+# nothing, which is what this asserts instead.
+rig_set block_quic 1
+sh "$RIG/lib/ovpn-rules" dump > "$WORK/rules.nft"
+pre=$(awk '/chain prerouting/, /^\t}/' "$WORK/rules.nft")
+if printf '%s\n' "$pre" | grep -q 'dport 443'; then
+	ok "the QUIC rule is in the prerouting chain"
+	q=$(printf '%s\n' "$pre" | grep -n 'dport 443' | head -1 | cut -d: -f1)
+	t=$(printf '%s\n' "$pre" | grep -n 'tproxy ip to' | head -1 | cut -d: -f1)
+	if [ -n "$q" ] && [ -n "$t" ] && [ "$q" -lt "$t" ]; then
+		ok "and ahead of the tproxy rules, which is the only place it works"
+	else
+		bad "and ahead of the tproxy rules, which is the only place it works"
+	fi
+else
+	bad "the QUIC rule is in the prerouting chain"
+fi
+if awk '/chain forward/, /^\t}/' "$WORK/rules.nft" | grep -q 'dport 443'; then
+	bad "the QUIC rule is not left on the forward hook, where it never runs"
+else
+	ok "the QUIC rule is not left on the forward hook, where it never runs"
+fi
+rig_set block_quic 0
+
 rig_report
