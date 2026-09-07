@@ -280,6 +280,17 @@ return view.extend({
 						});
 					})
 				}, _('Read the subscriptions now')),
+				E('button', {
+					'class': 'btn cbi-button cbi-button-neutral',
+					'style': 'margin-left:8px',
+					'click': ui.createHandlerFn(self, function() {
+						return callAction('measure_all', '').then(function() {
+							ui.addNotification(null,
+								E('p', {}, _('Knocking on every server once. The Reachable column will fill in as answers come back.')),
+								'info');
+						});
+					})
+				}, _('Check every server')),
 
 				E('h3', { 'style': 'margin-top:24px;display:flex;gap:10px;align-items:baseline' }, [
 					E('span', {}, _('Servers')),

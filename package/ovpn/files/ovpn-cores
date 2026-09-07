@@ -144,12 +144,15 @@ install_hysteria() {
 	}
 	# A plain executable, not an archive.
 	_url="https://github.com/$HYSTERIA_REPO/releases/latest/download/hysteria-linux-$_asset"
-	_tmp="$OVPN_RUN/hysteria.bin"
+	# _bin, not _tmp: the other two installers name their download for what it
+	# is, and this one did not - which is how it came to hand a helper the one
+	# variable name that helper was about to reuse.
+	_bin="$OVPN_RUN/hysteria.bin"
 
 	_size="$(remote_size "$_url")"
 	need_room $((_size * 2)) || return 1
-	download_checked "$_url" "$_tmp" "$_size" || return 1
-	install_binary "$_tmp" "$DIR/hysteria" hysteria
+	download_checked "$_url" "$_bin" "$_size" || return 1
+	install_binary "$_bin" "$DIR/hysteria" hysteria
 	return $?
 }
 
@@ -158,16 +161,80 @@ install_hysteria() {
 # Put it in place only once it has been seen to run. A download for the wrong
 # processor is the right size, the right name and completely inert, and it
 # would sit there looking installed until the day something tried to use it.
+# Is this an ELF at all, and is it for this machine?
+#
+# Asked of the file rather than guessed at from the failure. Bytes 0 to 3 of
+# an ELF header are the magic, 4 and 5 are its word size and byte order, and
+# 18 and 19 are the processor it was built for - so comparing those against a
+# program this router is already running answers the question outright.
+#
+# With dd and cmp, because that is what is actually here. A router's busybox
+# may be built without od, without hexdump and without cksum - this one has no
+# od and no cksum - and a check written on top of a missing tool does not fail
+# loudly, it compares one empty string with another and says yes to anything.
+elf_slice() {   # elf_slice <file> <destination> <offset> <length>
+	dd if="$1" bs=1 skip="$3" count="$4" of="$2" 2>/dev/null || return 1
+	[ -s "$2" ] || return 1
+	return 0
+}
+
+is_elf() {
+	[ -s "$1" ] || return 1
+	_want="$OVPN_RUN/.elf.want"
+	_got="$OVPN_RUN/.elf.got"
+	printf '\177ELF' > "$_want" 2>/dev/null || { rm -f "$_want"; return 0; }
+	if ! elf_slice "$1" "$_got" 0 4; then
+		rm -f "$_want" "$_got"
+		return 1
+	fi
+	if cmp -s "$_want" "$_got"; then _r=0; else _r=1; fi
+	rm -f "$_want" "$_got"
+	return "$_r"
+}
+
+same_arch() {
+	_ref=/bin/busybox
+	[ -r "$_ref" ] || _ref=/bin/sh
+	# Nothing to compare against is not a reason to refuse a download.
+	[ -r "$_ref" ] || return 0
+	_a="$OVPN_RUN/.elf.a"
+	_b="$OVPN_RUN/.elf.b"
+	rm -f "$_a" "$_b"
+	for _off in 4 18; do
+		_len=2
+		if ! elf_slice "$1" "$_a.part" "$_off" "$_len"; then rm -f "$_a" "$_b" "$_a.part"; return 0; fi
+		if ! elf_slice "$_ref" "$_b.part" "$_off" "$_len"; then rm -f "$_a" "$_b" "$_a.part" "$_b.part"; return 0; fi
+		cat "$_a.part" >> "$_a"
+		cat "$_b.part" >> "$_b"
+		rm -f "$_a.part" "$_b.part"
+	done
+	if cmp -s "$_a" "$_b"; then _r=0; else _r=1; fi
+	rm -f "$_a" "$_b"
+	return "$_r"
+}
+
 install_binary() {
 	_src="$1"; _dst="$2"; _name="$3"
 	mkdir -p "$(dirname "$_dst")"
 	chmod 0755 "$_src" 2>/dev/null || true
 
 	if ! "$_src" version >/dev/null 2>&1; then
+		# Three different things used to be reported as one, and the one was a
+		# guess: "probably built for a different processor". It is the least
+		# likely of the three, because the address the file came from is
+		# chosen from this router's own architecture - and saying it sends the
+		# reader looking for a build that is already the right build.
+		if ! is_elf "$_src"; then
+			_why="what came back is not a program at all - the address may have moved, or answered with an error page"
+		elif ! same_arch "$_src"; then
+			_why="it is built for a different processor than this router"
+		else
+			_why="it is built for this processor but would not start: $("$_src" version 2>&1 | head -1)"
+		fi
 		rm -f "$_src"
 		rm -rf "$OVPN_RUN/xtract"
-		say_message "The $_name that was downloaded will not run on this router - it is probably built for a different processor."
-		warn "$_name downloaded but will not run here"
+		say_message "The $_name that was downloaded could not be installed - $_why."
+		warn "$_name downloaded but will not run here: $_why"
 		return 1
 	fi
 
@@ -193,18 +260,95 @@ install_binary() {
 
 # -------------------------------------------------------------------- list
 
+# What each project has published, as last seen. Read from a file and never
+# from the network: this is printed for a page that polls every few seconds,
+# and asking GitHub three times on every poll would be both rude and slow.
+# `ovpn-cores latest` is what refreshes it, in the background.
+LATEST_CACHE="$OVPN_ETC/cores.latest"
+LATEST_MAX_AGE=43200        # twelve hours
+
+latest_of() {
+	sed -n "s/^$1	//p" "$LATEST_CACHE" 2>/dev/null | head -1
+	return 0
+}
+
+repo_of() {
+	case "$1" in
+		xray)     echo "$XRAY_REPO" ;;
+		sing-box) echo "$SINGBOX_REPO" ;;
+		hysteria) echo "$HYSTERIA_REPO" ;;
+	esac
+	return 0
+}
+
+# The published version, normalised to what the core itself prints so the two
+# can be compared at all: a tag is "v26.7.28" or "app/v2.12.2", and the binary
+# says "26.7.28" or "v2.12.2".
+tag_version() {
+	_t="$1"
+	_t="${_t##*/}"
+	echo "$_t"
+	return 0
+}
+
+cmd_latest() {
+	# Refresh only when it is old, unless asked to do it anyway. Three small
+	# requests twice a day is nothing; three on every page poll is a habit
+	# that gets a router rate-limited.
+	if [ "${1:-}" != "force" ] && [ -s "$LATEST_CACHE" ]; then
+		_age=$(( $(date +%s) - $(date -r "$LATEST_CACHE" +%s 2>/dev/null || echo 0) ))
+		[ "$_age" -ge 0 ] && [ "$_age" -lt "$LATEST_MAX_AGE" ] && return 0
+	fi
+
+	_tmp="$LATEST_CACHE.new"
+	: > "$_tmp"
+	for _c in xray sing-box hysteria; do
+		_repo="$(repo_of "$_c")"
+		[ -n "$_repo" ] || continue
+		# The tag is all that is wanted, so this is a small request and a
+		# short leash. A source that will not answer leaves the previous
+		# answer in place rather than blanking it.
+		_tag="$(curl -fsSL --connect-timeout 8 --max-time 20 \
+			"https://api.github.com/repos/$_repo/releases/latest" 2>/dev/null |
+			sed -n 's/.*"tag_name"[ \t]*:[ \t]*"\([^"]*\)".*/\1/p' | head -1)"
+		if [ -n "$_tag" ]; then
+			printf '%s\t%s\n' "$_c" "$(tag_version "$_tag")" >> "$_tmp"
+		else
+			_old="$(latest_of "$_c")"
+			[ -n "$_old" ] && printf '%s\t%s\n' "$_c" "$_old" >> "$_tmp"
+		fi
+	done
+	if [ -s "$_tmp" ]; then
+		mv -f "$_tmp" "$LATEST_CACHE"
+	else
+		rm -f "$_tmp"
+	fi
+	return 0
+}
+
 one() {
 	_name="$1"; _path="$2"
+	_latest="$(latest_of "$_name")"
 	if [ -n "$_path" ] && [ -x "$_path" ]; then
-		printf '{"name":"%s","installed":true,"path":"%s","version":"%s","bytes":%s,"ours":%s,"arch_ok":%s}' \
+		_have="$(core_version "$_path")"
+		# Different strings, not "newer": comparing version numbers written by
+		# three different projects is a way to be confidently wrong. The page
+		# shows both and the reader decides.
+		_new=false
+		if [ -n "$_latest" ] && [ -n "$_have" ] && \
+		   [ "${_latest#v}" != "${_have#v}" ]; then
+			_new=true
+		fi
+		printf '{"name":"%s","installed":true,"path":"%s","version":"%s","latest":"%s","update":%s,"bytes":%s,"ours":%s,"arch_ok":%s}' \
 			"$_name" "$(json_escape "$_path")" \
-			"$(json_escape "$(core_version "$_path")")" \
+			"$(json_escape "$_have")" \
+			"$(json_escape "$_latest")" "$_new" \
 			"$(wc -c < "$_path" | tr -d ' ')" \
 			"$(case "$_path" in "$DIR"/*) echo true ;; *) echo false ;; esac)" \
 			"$([ "$(asset_for "$_name")" != "-" ] && echo true || echo false)"
 	else
-		printf '{"name":"%s","installed":false,"path":"","version":"","bytes":0,"ours":false,"arch_ok":%s}' \
-			"$_name" \
+		printf '{"name":"%s","installed":false,"path":"","version":"","latest":"%s","update":false,"bytes":0,"ours":false,"arch_ok":%s}' \
+			"$_name" "$(json_escape "$_latest")" \
 			"$([ "$(asset_for "$_name")" != "-" ] && echo true || echo false)"
 	fi
 	return 0
@@ -256,5 +400,6 @@ case "${1:-list}" in
 		esac
 		;;
 	remove) clear_message; cmd_remove "${2:-}" ;;
-	*) echo "usage: $0 list|install <core>|remove <core>" >&2; exit 1 ;;
+	latest) cmd_latest "${2:-}" ;;
+	*) echo "usage: $0 list|install <core>|remove <core>|latest [force]" >&2; exit 1 ;;
 esac

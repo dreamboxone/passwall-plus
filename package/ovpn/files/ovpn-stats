@@ -64,7 +64,13 @@ read_counters() {
 			# "no value here" has to mean nothing has gone this way yet - not
 			# "use the number from the next record", which is what pairing
 			# names and values positionally would silently do.
-			if (match($0, /"value"[ \t]*:[ \t]*"[0-9]+"/)) {
+			# Quoted or not. Xray wrote "value": "12345" and now writes
+			# "value": 12345, and a parser that only knew the first shape read
+			# every counter as zero - so the traffic page showed 0 B for ever
+			# while the tunnel carried megabytes. Nothing said anything was
+			# wrong: zero is a number, and a counter at zero is a legitimate
+			# answer for a tunnel that has just started.
+			if (match($0, /"value"[ \t]*:[ \t]*"?[0-9]+"?/)) {
 				s = substr($0, RSTART, RLENGTH)
 				gsub(/[^0-9]/, "", s)
 				v = s + 0

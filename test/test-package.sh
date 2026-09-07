@@ -153,4 +153,38 @@ else
 	bad "these would kill a caller running under set -e: $FOUND"
 fi
 
+# A shared helper must not take a variable name away from whoever called it.
+#
+# There is no `local` in this shell, so every name a function assigns is
+# global. download_checked kept its partial file in _tmp; install_hysteria
+# kept the file it wanted in _tmp; and after the download the caller's path
+# pointed at the temporary name that had just been moved away. The core
+# downloaded perfectly and the program then reported that it "will not run on
+# this router - probably built for a different processor", about a build that
+# was correct. Driven for real here, over file://, because the collision only
+# shows when the helper actually runs.
+echo "== a helper does not overwrite its caller's variables"
+if command -v curl >/dev/null 2>&1; then
+	mkdir -p "$RIG/work"
+	PAYLOAD="$RIG/work/payload.bin"
+	dd if=/dev/urandom of="$PAYLOAD" bs=1024 count=8 2>/dev/null
+	cat > "$RIG/work/caller.sh" <<CALLER
+. "$RIG/lib/ovpn-common.sh"
+_tmp="$RIG/work/dest.bin"
+_url="file://$PAYLOAD"
+download_checked "\$_url" "\$_tmp" 8192 >/dev/null 2>&1 || exit 3
+printf '%s|%s\n' "\$_tmp" "\$_url"
+CALLER
+	GOT="$(OVPN_RUN="$RIG/run" OVPN_ETC="$RIG/etc" sh "$RIG/work/caller.sh" 2>/dev/null)"
+	check "$GOT" "$RIG/work/dest.bin|file://$PAYLOAD" \
+		"download_checked leaves the caller's _tmp and _url alone"
+	if [ -s "$RIG/work/dest.bin" ]; then
+		ok "and the file it was asked for is where it was asked to put it"
+	else
+		bad "and the file it was asked for is where it was asked to put it"
+	fi
+else
+	echo "  skip - no curl on this machine"
+fi
+
 rig_report

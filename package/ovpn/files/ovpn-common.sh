@@ -324,32 +324,41 @@ download_checked() {
 
 	space_for "$_size" "$_dir" || return 1
 
-	_tmp="$_dest.part"
-	rm -f "$_tmp"
-	_ok=0
-	for _try in "$_url" $(mirrors_for "$_url"); do
-		if curl -fsSL --connect-timeout 15 --max-time 900 --retry 2 -o "$_tmp" "$_try"; then
-			_ok=1
-			[ "$_try" = "$_url" ] || log "$_url was unreachable - took it from $_try instead"
+	# _dl_part and not _tmp. There is no `local` in this shell, so every name
+	# a helper assigns is a name it takes away from whoever called it - and
+	# this one was called by a function that kept the file it wanted in _tmp.
+	# The download then landed correctly, the caller's path was quietly
+	# rewritten to the temporary name underneath it, and the file it went on
+	# to install was the one that had just been moved away. What that looked
+	# like from the outside was a core that downloaded fine and then "would
+	# not run on this router - probably built for a different processor",
+	# which sent the reader hunting for a build that was already correct.
+	_dl_part="$_dest.part"
+	rm -f "$_dl_part"
+	_dl_ok=0
+	for _dl_try in "$_url" $(mirrors_for "$_url"); do
+		if curl -fsSL --connect-timeout 15 --max-time 900 --retry 2 -o "$_dl_part" "$_dl_try"; then
+			_dl_ok=1
+			[ "$_dl_try" = "$_url" ] || log "$_url was unreachable - took it from $_dl_try instead"
 			break
 		fi
-		rm -f "$_tmp"
+		rm -f "$_dl_part"
 	done
-	if [ "$_ok" != "1" ]; then
-		rm -f "$_tmp"
+	if [ "$_dl_ok" != "1" ]; then
+		rm -f "$_dl_part"
 		say_message "Download failed: $_url"
 		warn "download failed: $_url"
 		return 1
 	fi
 	# Half a file is worse than none: it looks installed and fails later.
-	_got="$(wc -c < "$_tmp" 2>/dev/null || echo 0)"
-	if [ "$_got" -lt 1024 ]; then
-		rm -f "$_tmp"
-		say_message "Download looks truncated ($(human_size "$_got")): $_url"
+	_dl_got="$(wc -c < "$_dl_part" 2>/dev/null || echo 0)"
+	if [ "$_dl_got" -lt 1024 ]; then
+		rm -f "$_dl_part"
+		say_message "Download looks truncated ($(human_size "$_dl_got")): $_url"
 		warn "download truncated: $_url"
 		return 1
 	fi
-	mv -f "$_tmp" "$_dest" || { rm -f "$_tmp"; return 1; }
+	mv -f "$_dl_part" "$_dest" || { rm -f "$_dl_part"; return 1; }
 	return 0
 }
 

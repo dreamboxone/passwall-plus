@@ -14,7 +14,6 @@
 'require poll';
 'require ui';
 'require uci';
-'require network';
 
 /* The public Iranian resolvers, offered rather than typed. Nothing is chosen
    by default and nothing has to be: with none of them selected the Iran split
@@ -168,6 +167,13 @@ function renderSystem(d) {
 			var value = [];
 			if (c.installed) {
 				value.push(pill(c.version || _('installed'), '#10b981'));
+				/* What the project has published, when it is not what is
+				   installed. Two different strings, not "newer" - version
+				   numbers written by three different projects are a way to be
+				   confidently wrong about which way round they go. Both are
+				   shown and the reader decides. */
+				if (c.update && c.latest)
+					value.push(pill('→ ' + c.latest, '#3b82f6'));
 				value.push(E('span', { 'style': 'opacity:.6;font-size:12px;font-family:monospace' },
 					c.path));
 				if (!c.ours)
@@ -177,11 +183,16 @@ function renderSystem(d) {
 				value.push(pill(_('no build for this router'), '#94a3b8'));
 			} else {
 				value.push(pill(_('not installed'), '#94a3b8'));
+				if (c.latest)
+					value.push(E('span', { 'style': 'opacity:.6;font-size:12px' },
+						_('latest is %s').format(c.latest)));
 			}
 
 			var actions = [];
 			if (c.arch_ok)
-				actions.push(btn(c.installed ? _('Update') : _('Install'), 'cbi-button-apply', function() {
+				actions.push(btn(c.installed
+					? (c.update && c.latest ? _('Update to %s').format(c.latest) : _('Update'))
+					: _('Install'), 'cbi-button-apply', function() {
 					return act('core_install', c.name, _('Downloading %s.').format(c.name));
 				}));
 			if (c.installed && c.ours && c.name != 'xray')
@@ -193,7 +204,11 @@ function renderSystem(d) {
 		});
 		cbox.appendChild(row(_('Free space'),
 			[ E('span', {}, bytes(cores.free)),
-			  E('span', { 'style': 'opacity:.6' }, cores.dir || '') ]));
+			  E('span', { 'style': 'opacity:.6' }, cores.dir || '') ],
+			[ btn(_('Check for new versions'), 'cbi-button-neutral', function() {
+					return act('cores_latest', '',
+						_('Asking each project what it has published. The versions above will fill in shortly.'));
+				}) ]));
 		cbox.appendChild(E('div', {
 			'style': 'font-size:12px;opacity:.7;margin-top:8px;line-height:1.6'
 		}, _('Xray carries the traffic. sing-box and hysteria are only needed for servers that speak hysteria2 or tuic, which Xray does not — one of them is then run as a local helper for that one server, and everything else works exactly as before.')));
@@ -203,10 +218,12 @@ function renderSystem(d) {
 return view.extend({
 	load: function() {
 		return Promise.all([
+			/* The interface list comes back inside this same answer. Asking
+			   LuCI's own network model for it instead is the thorough way and
+			   takes seconds on a small router - three or four of them between
+			   pressing Settings and the page appearing, for a dropdown with
+			   two entries in it. */
 			callSystem().catch(function() { return {}; }),
-			/* What this router actually has, rather than a name the reader
-			   has to know already and type correctly. */
-			network.getNetworks().catch(function() { return []; }),
 			/* So that a value already in the file can be offered back even
 			   when it is not one of the ones listed here. Replacing a setting
 			   with a list is only safe if the list can hold what was there. */
@@ -217,21 +234,16 @@ return view.extend({
 	render: function(data) {
 		var m, s, o, i;
 		var sys = (data && data[0]) || {};
-		var nets = (data && data[1]) || [];
 
 		/* Every device carrying a network, as the router names it. wan is
-		   left out on purpose: this setting says which side of the router to
-		   pick traffic up from, and picking it up from the wan side would be
-		   redirecting the internet into itself. */
+		   left out on purpose, on the router's side of this: the setting says
+		   which side to pick traffic up from, and picking it up from the wan
+		   side would be redirecting the internet into itself. */
 		var devs = [], seen = {};
-		nets.forEach(function(net) {
-			var name = net.getName();
-			if (name == 'loopback' || name.indexOf('wan') === 0) return;
-			var dev = net.getDevice();
-			var d = dev ? dev.getName() : null;
-			if (!d || d == 'lo' || seen[d]) return;
-			seen[d] = true;
-			devs.push([ d, d + ' (' + name + ')' ]);
+		(sys.interfaces || []).forEach(function(it) {
+			if (!it || !it.dev || seen[it.dev]) return;
+			seen[it.dev] = true;
+			devs.push([ it.dev, it.dev + ' (' + (it.net || '') + ')' ]);
 		});
 
 		m = new form.Map('ovpn', _('Settings'));
