@@ -10,6 +10,7 @@
 #   pwplus-nodes build    turn what we have into candidates
 #   pwplus-nodes update   both
 #   pwplus-nodes status   one line per subscription, for the web interface
+#   pwplus-nodes inuse    which hand-added section is the node in use
 #
 # Subscriptions and hand-added nodes both live in /etc/config/passwall-plus, as
 # `config subscription` and `config node` sections. Adding either is a UCI
@@ -34,50 +35,67 @@ PRE_TSV="$PWPLUS_RUN/pre.tsv"
 
 fetch_one() {
 	_sec="$1"
-	local url name enabled
+	local url name enabled content
 	config_get url "$_sec" url ""
 	config_get name "$_sec" name "$_sec"
+	config_get content "$_sec" content ""
 	config_get_bool enabled "$_sec" enabled 1
 
 	[ "$enabled" = "1" ] || return 0
-	[ -n "$url" ] || return 0
+	[ -n "$url" ] || [ -n "$content" ] || return 0
+	[ -n "$url" ] || url="a file"
 
-	# The address as written, then the mirrors of it, because the default list
-	# is on a host that is blocked from precisely the connections this program
-	# exists to fix. The mirrors are given a shorter leash than the address the
-	# user actually asked for: this runs every quarter of an hour, and three
-	# long timeouts in a row is a quarter of an hour spent waiting.
 	_tmp="$PWPLUS_RUN/sub.$_sec"
-	_got=0
-	_first=1
-	for _try in "$url" $(mirrors_for "$url"); do
-		if [ "$_first" = "1" ]; then
-			_ct=8; _mt=30; _rt=1
-		else
-			_ct=6; _mt=20; _rt=0
+
+	# A source the reader handed over as a file rather than as an address.
+	# There is nothing to fetch and nothing that can fail, so the body is
+	# simply put where a download would have put it and everything below
+	# runs exactly as it does for a fetched one - which already knows an
+	# Xray, sing-box or Clash configuration whole, a base64 block, and a
+	# plain list of links. A file therefore yields the same nodes it would
+	# have if it had been published at a URL, and nothing else in this
+	# program had to learn that files exist.
+	if [ -n "$content" ]; then
+		printf '%s\n' "$content" > "$_tmp"
+	else
+		# The address as written, then the mirrors of it, because the default list
+		# is on a host that is blocked from precisely the connections this program
+		# exists to fix. The mirrors are given a shorter leash than the address the
+		# user actually asked for: this runs every quarter of an hour, and three
+		# long timeouts in a row is a quarter of an hour spent waiting.
+		_got=0
+		_first=1
+		for _try in "$url" $(mirrors_for "$url"); do
+			if [ "$_first" = "1" ]; then
+				_ct=8; _mt=30; _rt=1
+			else
+				_ct=6; _mt=20; _rt=0
+			fi
+			_first=0
+			# A blocked address does not refuse, it hangs, so the whole point of
+			# these numbers is the worst case: three sources at the old timeouts
+			# was four minutes of a fifteen-minute schedule spent waiting. The
+			# list is a few kilobytes; twenty seconds is not a tight budget for it.
+			if curl -fsSL --connect-timeout "$_ct" --max-time "$_mt" --retry "$_rt" -o "$_tmp" "$_try" 2>/dev/null; then
+				_got=1
+				[ "$_try" = "$url" ] || log "subscription '$name': unreachable, read from $_try instead"
+				break
+			fi
+			rm -f "$_tmp"
+		done
+		if [ "$_got" != "1" ]; then
+			printf '%s\t%s\t0\t0\t%s\n' "$name" "$url" "download failed" >> "$SUBS_STATUS"
+			warn "subscription '$name': download failed"
+			rm -f "$_tmp"
+			return 0
 		fi
-		_first=0
-		# A blocked address does not refuse, it hangs, so the whole point of
-		# these numbers is the worst case: three sources at the old timeouts
-		# was four minutes of a fifteen-minute schedule spent waiting. The
-		# list is a few kilobytes; twenty seconds is not a tight budget for it.
-		if curl -fsSL --connect-timeout "$_ct" --max-time "$_mt" --retry "$_rt" -o "$_tmp" "$_try" 2>/dev/null; then
-			_got=1
-			[ "$_try" = "$url" ] || log "subscription '$name': unreachable, read from $_try instead"
-			break
-		fi
-		rm -f "$_tmp"
-	done
-	if [ "$_got" != "1" ]; then
-		printf '%s\t%s\t0\t0\t%s\n' "$name" "$url" "download failed" >> "$SUBS_STATUS"
-		warn "subscription '$name': download failed"
-		rm -f "$_tmp"
-		return 0
 	fi
 
 	# A subscription that answers with an error page, a login form or half a
-	# file must never replace what we already have.
-	if [ "$(wc -c < "$_tmp")" -lt 64 ]; then
+	# file must never replace what we already have. A file that was handed
+	# over rather than fetched cannot have been truncated on the way, and a
+	# short one is a short one on purpose - a single link is forty bytes.
+	if [ -z "$content" ] && [ "$(wc -c < "$_tmp")" -lt 64 ]; then
 		printf '%s\t%s\t0\t0\t%s\n' "$name" "$url" "answer too short" >> "$SUBS_STATUS"
 		warn "subscription '$name': answer too short"
 		rm -f "$_tmp"
@@ -311,10 +329,58 @@ cmd_status() {
 	return 0
 }
 
+# ------------------------------------------------------------------ in use
+
+# Which hand-added section, if any, is the node the tunnel is on.
+#
+# The candidate list does not carry where a node came from - it is one flat
+# file of everything, and the tag in it is a position in that file rather than
+# a name. So the question is answered the other way round: take the address
+# the tunnel actually settled on, and ask each hand-added section whether it
+# parses to that address.
+#
+# Not cheap enough to poll, and it is not polled. The web interface asks this
+# once, at the moment somebody presses Delete, because between opening the
+# page and pressing it the router may well have moved to a different node.
+inuse_one() {
+	_sec="$1"
+	local link
+	if [ -n "$INUSE_FOUND" ]; then
+		return 0
+	fi
+	config_get link "$_sec" link ""
+	[ -n "$link" ] || return 0
+	if printf '%s\n' "$link" | LC_ALL=C awk -f "$PARSE" 2>/dev/null |
+	   awk -F'\t' -v h="$INUSE_HOST" -v p="$INUSE_PORT" \
+	       '$4 == h && $5 + 0 == p + 0 { f = 1 } END { exit f ? 0 : 1 }'; then
+		INUSE_FOUND="$_sec"
+	fi
+	return 0
+}
+
+cmd_inuse() {
+	INUSE_HOST="$(sed -n 's/^host=//p' "$PWPLUS_BEST_META" 2>/dev/null | tail -1)"
+	INUSE_PORT="$(sed -n 's/^port=//p' "$PWPLUS_BEST_META" 2>/dev/null | tail -1)"
+	INUSE_FOUND=""
+	if [ -n "$INUSE_HOST" ] && [ -n "$INUSE_PORT" ]; then
+		config_load passwall-plus
+		config_foreach inuse_one node
+	fi
+	# active, and not merely chosen. A node picked last week and disconnected
+	# since is not one anybody needs protecting from deleting.
+	printf '{"section":"%s","host":"%s","port":"%s","active":%s}\n' \
+		"$(json_escape "$INUSE_FOUND")" \
+		"$(json_escape "$INUSE_HOST")" \
+		"$(json_escape "$INUSE_PORT")" \
+		"$([ "$(cfg_bool enabled 0)" = "1" ] && echo true || echo false)"
+	return 0
+}
+
 case "${1:-update}" in
 	fetch)  cmd_fetch ;;
 	build)  cmd_build ;;
 	update) cmd_fetch || true; cmd_build ;;
 	status) cmd_status ;;
-	*) echo "usage: $0 fetch|build|update|status" >&2; exit 1 ;;
+	inuse)  cmd_inuse ;;
+	*) echo "usage: $0 fetch|build|update|status|inuse" >&2; exit 1 ;;
 esac

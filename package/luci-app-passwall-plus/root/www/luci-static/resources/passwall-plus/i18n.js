@@ -49,8 +49,8 @@ var FA = {
 
 	/* ----------------------------------------------------- the three tests */
 	'Ping': 'پینگ',
-	'TCP': 'TCP',
-	'URL': 'URL',
+	'TCPing': 'TCPing',
+	'URL Test': 'تست URL',
 	'Test': 'تست',
 	'ICMP round trip to the address. Says nothing about the server behind it, which may not answer pings at all.':
 		'رفت‌وبرگشت ICMP تا آن آدرس. دربارهٔ سروری که پشتش است چیزی نمی‌گوید، و آن سرور ممکن است اصلاً به پینگ جواب ندهد.',
@@ -58,8 +58,6 @@ var FA = {
 		'یک هندشیک به همان پورتی که تونل استفاده می‌کند.',
 	'One whole request carried by this node. The only one that proves it works.':
 		'یک درخواست کامل که از همین نود عبور می‌کند. تنها تستی که ثابت می‌کند نود کار می‌کند.',
-	'Three questions, and they disagree often enough to be worth asking separately. Ping is the network and nothing else. TCP is a handshake to the port the tunnel will use. URL is a whole request carried by the node, and the only one of the three that proves it works.':
-		'سه سؤال جدا، و آن‌قدر با هم اختلاف دارند که ارزش پرسیدن جداگانه را داشته باشند. پینگ فقط شبکه را می‌سنجد. TCP یک هندشیک به پورتی است که تونل استفاده می‌کند. URL یک درخواست کامل از داخل نود است و تنها تستی است که کارکردن نود را ثابت می‌کند.',
 
 	/* ----------------------------------------------------------- the nodes */
 	'Node': 'نود',
@@ -69,7 +67,9 @@ var FA = {
 	'Measured': 'اندازه‌گیری‌شده',
 	'Reachable in': 'زمان دسترسی',
 	'in use': 'در حال استفاده',
-	'Use this one': 'همین را استفاده کن',
+	'Use': 'استفاده',
+	'This is the node the tunnel is using at the moment. Press Disconnect, or Choose again, before deleting it.':
+		'این همان نودی است که تونل الان از آن استفاده می‌کند. قبل از حذفش «قطع» یا «انتخاب دوباره» را بزنید.',
 	'Connecting through %s…': 'در حال اتصال از راه %s…',
 	'Nothing read yet. Press Read the subscriptions, or Connect on the main page.':
 		'هنوز چیزی خوانده نشده. «همین حالا اشتراک‌ها را بخوان» را بزنید، یا در صفحهٔ اصلی «اتصال».',
@@ -77,8 +77,8 @@ var FA = {
 		'نودها از کجا می‌آیند، و کدام‌ها را دستی اضافه می‌کنید. تغییرات از دفعهٔ بعدی که لیست خوانده شود اعمال می‌شوند.',
 	'Which nodes to use': 'از کدام نودها استفاده شود',
 	'Nodes to use': 'نودهای مورد استفاده',
-	'This decides who may be measured, not who wins: whichever node answers fastest is the one used, wherever it came from. A node added by hand joins the list rather than replacing it. To insist on one node, press “Use this one” beside it below.':
-		'این تعیین می‌کند چه کسی اندازه‌گیری شود، نه چه کسی برنده شود: هر نودی که سریع‌تر جواب بدهد همان استفاده می‌شود، از هر جا که آمده باشد. نودی که دستی اضافه می‌کنید به لیست اضافه می‌شود و جای آن را نمی‌گیرد. اگر روی یک نود خاص اصرار دارید، پایین همین صفحه کنارش «همین را استفاده کن» را بزنید.',
+	'This decides who may be measured, not who wins: whichever node answers fastest is the one used, wherever it came from. A node added by hand joins the list rather than replacing it. To insist on one node, press “Use” beside it below.':
+		'این تعیین می‌کند چه کسی اندازه‌گیری شود، نه چه کسی برنده شود: هر نودی که سریع‌تر جواب بدهد همان استفاده می‌شود، از هر جا که آمده باشد. نودی که دستی اضافه می‌کنید به لیست اضافه می‌شود و جای آن را نمی‌گیرد. اگر روی یک نود خاص اصرار دارید، پایین همین صفحه کنارش «استفاده» را بزنید.',
 	'Mine and the subscriptions': 'مالِ من و اشتراک‌ها',
 	'Only the ones I added by hand': 'فقط آن‌هایی که دستی اضافه کرده‌ام',
 	'Only the subscriptions': 'فقط اشتراک‌ها',
@@ -90,9 +90,18 @@ var FA = {
 	'Must start with http:// or https://': 'باید با ‎http://‎ یا ‎https://‎ شروع شود',
 	'On': 'فعال',
 	'Nodes added manually': 'نودهای دستی',
-	'One share link per entry — vless, vmess, trojan, shadowsocks, socks, hysteria2, tuic or wireguard. A whole WireGuard .conf file can be pasted in as it stands. These are tried before the subscription list.':
-		'برای هر ردیف یک لینک — vless، vmess، trojan، shadowsocks، socks، hysteria2، tuic یا wireguard. یک فایل ‎.conf وایرگارد را هم می‌توانید همان‌طور که هست اینجا بچسبانید. این‌ها پیش از لیست اشتراک‌ها امتحان می‌شوند.',
+	'One share link per entry — vless, vmess, trojan, shadowsocks, socks, hysteria2, tuic or wireguard. A whole WireGuard .conf file can be pasted in as it stands. These are tried before the subscription list. The three test columns each measure something different; press one to run it.':
+		'برای هر ردیف یک لینک — vless، vmess، trojan، shadowsocks، socks، hysteria2، tuic یا wireguard. یک فایل ‎.conf وایرگارد را هم می‌توانید همان‌طور که هست اینجا بچسبانید. این‌ها پیش از لیست اشتراک‌ها امتحان می‌شوند. سه ستون تست هر کدام چیز متفاوتی را می‌سنجند؛ روی هرکدام بزنید تا اجرا شود.',
 	'Share link': 'لینک اشتراک‌گذاری',
+	'A share link, several of them one per line, or a whole WireGuard .conf file. Choose a file and its contents are put in the box for you.':
+		'یک لینک، یا چند لینک هر کدام در یک خط، یا کل یک فایل ‎.conf وایرگارد. فایل را انتخاب کنید تا محتوایش خودش داخل کادر بیاید.',
+	'Browse…': 'انتخاب فایل…',
+	'a .conf file, or a list of links': 'یک فایل ‎.conf، یا لیستی از لینک‌ها',
+	'a .json or .conf file': 'یک فایل ‎.json یا ‎.conf',
+	'Or a file': 'یا یک فایل',
+	'Instead of an address: a configuration file — Xray, sing-box, Clash, a WireGuard .conf, or a plain list of links. Leave the address empty when you use this.':
+		'به‌جای آدرس: یک فایل کانفیگ — Xray، sing-box، Clash، یک فایل ‎.conf وایرگارد، یا فقط لیستی از لینک‌ها. وقتی از این استفاده می‌کنید آدرس را خالی بگذارید.',
+	'That file could not be read.': 'آن فایل خوانده نشد.',
 	'That does not look like a share link': 'این شبیه یک لینک اشتراک‌گذاری نیست',
 	'Last time the sources were read': 'آخرین باری که منابع خوانده شدند',
 	'Reading the subscriptions. This page will fill in shortly.':

@@ -1,6 +1,6 @@
 # Passwall+ — a router-wide tunnel for OpenWrt
 
-**Version 1.0.1** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
+**Version 1.0.2** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
 🇮🇷 **[راهنمای فارسی: README.md](README.md)**
 
 Install it on the router, press **Connect**, and from that moment every device
@@ -69,46 +69,19 @@ install the main file first, then the `luci-app-…` one. After the second, pres
 
 ### The other way: from a terminal
 
-```sh
-scp -O passwall-plus-*.apk luci-app-passwall-plus-*.apk root@192.168.1.1:/tmp/
-ssh root@192.168.1.1 'apk add --allow-untrusted /tmp/passwall-plus-*.apk /tmp/luci-app-passwall-plus-*.apk'
-```
-
-On 24.10 and 23.05, instead of the second command:
+First **put both files in `/tmp` on the router yourself** — with WinSCP, with
+FileZilla, or through **System → Software → Upload Package…** in LuCI. Then SSH
+in, and on 25.12 or later:
 
 ```sh
-ssh root@192.168.1.1 'opkg install /tmp/passwall-plus_*.ipk /tmp/luci-app-passwall-plus_*.ipk'
+apk add --allow-untrusted /tmp/passwall-plus-*.apk /tmp/luci-app-passwall-plus-*.apk
 ```
 
-> Write `-O` with a capital letter. Most OpenWrt routers have no sftp service
-> and plain `scp` fails on them with `sftp-server: not found`; `-O` makes it use
-> the older method instead.
+On 24.10 and 23.05:
 
-### Prerequisites: is there anything you have to install first?
-
-**No.** Everything Passwall+ needs is declared by the package, and `apk` or
-`opkg` pulls it in as it installs:
-
+```sh
+opkg install /tmp/passwall-plus_*.ipk /tmp/luci-app-passwall-plus_*.ipk
 ```
-curl  ca-bundle  ip-full  unzip  nftables  kmod-nft-tproxy  kmod-nft-socket  jshn  libubox
-```
-
-If you know PassWall and are expecting its five preparatory commands — `apk del
-dnsmasq`, `apk add dnsmasq-full`, adding the sourceforge signing key — **none of
-them applies here**, and the reasons are worth stating:
-
-- **`dnsmasq-full` is not needed.** PassWall needs it because it uses dnsmasq's
-  `nftset` support to build address sets out of DNS answers, and plain dnsmasq
-  cannot do that. Passwall+ does not do it at all: the Iran split happens inside
-  the core, against `geoip.dat`, and the only thing it asks of dnsmasq is a
-  two-line drop-in (`no-resolv` and `server=`) that plain dnsmasq understands.
-  So **do not remove the router's dnsmasq**; leave it exactly as it is.
-- **No signing key is needed.** That command adds PassWall's repository.
-  Passwall+ has no repository — you install a package file directly, which is
-  why the install command carries `--allow-untrusted`.
-- **`apk update` is worth running.** The install does not run it for you, so if
-  the package manager says it cannot find a dependency, run `apk update` (or
-  `opkg update`) once and install again.
 
 ### The router needs working internet while you install
 
@@ -196,6 +169,12 @@ You do not need to know what format it is in: a plain list of configs, one
 base64 block, or a whole JSON file — an Xray config, a sing-box config, a Clash
 list — or a WireGuard `.conf`.
 
+If you have the **file** rather than an address, the edit dialog for a
+subscription has an **Or a file** box with a **Browse…** button. Choose the
+file, leave the address empty, and that file is read every time instead. It
+goes down exactly the same path as a fetched subscription, so a JSON config
+here yields the same nodes it would have if it had been published at a URL.
+
 **Nodes added manually.** Put your own config here — `vless`, `vmess`,
 `trojan`, `ss`, `socks`, `hysteria2`, `tuic` or `wireguard`. If you leave the
 Name box empty, the name written after the `#` in the config itself is used,
@@ -203,21 +182,23 @@ even if it is in Persian.
 
 **WireGuard.** A `wireguard://` link is read, and since 1.0.1 so is a WireGuard
 `.conf` file — the one your provider sends you, with `[Interface]` and `[Peer]`
-in it. Paste the whole file into the link box as it stands. `PrivateKey`,
+in it. You do not have to open it and copy the text out: the edit dialog for
+each node has a **Browse…** button, and the file's contents go into the box for
+you. Nothing is uploaded anywhere; your own browser reads it. `PrivateKey`,
 `Address`, `MTU`, `Reserved`, `PublicKey`, `PresharedKey`, `Endpoint` and
 `PersistentKeepalive` are read. `AllowedIPs` and `DNS` are deliberately ignored:
 routing and name lookups are Passwall+'s own settings, and a peer's opinion
 about them would be a second answer to a question already answered.
 
-**Three tests beside each node.** In the same table, every node you added by
-hand has three words next to it. Click one and its number appears beside it a
-few seconds later:
+**Three test columns.** In the same table, every node you added by hand has
+three columns beside it: **Ping**, **TCPing** and **URL Test**. Each cell says
+*Test* until you press it; the number takes its place a few seconds later:
 
-| Test | What it asks | What it does not tell you |
+| Column | What it asks | What it does not tell you |
 |---|---|---|
 | **Ping** | An ICMP round trip to the address | Anything about the server. One behind a CDN is answered at the edge, and plenty of working servers ignore ping entirely |
-| **TCP** | A handshake to the port the tunnel will use | Whether the credentials and protocol are right |
-| **URL** | A whole web request carried **through** the node | Nothing — this is the one test that proves the node works, and the slowest |
+| **TCPing** | A handshake to the port the tunnel will use | Whether the credentials and protocol are right |
+| **URL Test** | A whole web request carried **through** the node | Nothing — this is the one test that proves the node works, and the slowest |
 
 `✕` means no answer; `—` means the test cannot be run on that node (a URL test
 on a hysteria2 node, say, which Xray cannot speak and which is not worth
@@ -233,6 +214,11 @@ measured for it:
 
 The **Check every node** button fills in the first column for all of them,
 without disturbing a tunnel that is already carrying traffic.
+
+**Deleting a node.** The node the tunnel is using right now will not be
+deleted, and the page says why — press Disconnect or Choose again first. A node
+you do delete leaves the list below immediately, rather than lingering until
+the next quarter-hourly refresh.
 
 ### Settings
 

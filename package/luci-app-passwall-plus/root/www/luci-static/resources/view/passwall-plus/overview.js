@@ -414,9 +414,26 @@ return view.extend({
 			return callTraffic().then(renderTraffic).catch(function() {});
 		}, 15);
 
+		/* The artwork, with the name behind it. The image is a file in the
+		   package rather than data embedded here, so the browser caches it
+		   once and the page stays the size it was - and a build that has no
+		   artwork in it shows the name instead of the broken-image icon,
+		   which is what the error handler is for rather than an apology. */
+		var wordmark = E('span', { 'style': 'display:none' }, 'Passwall+');
+		var logo = E('img', {
+			'src': L.resource('passwall-plus/logo.png'),
+			'alt': 'Passwall+',
+			'style': 'height:46px;width:auto;display:block',
+			'error': function() {
+				logo.style.display = 'none';
+				wordmark.style.display = '';
+			}
+		});
+
 		var page = i18n.page([
-			E('h2', { 'style': 'display:flex;align-items:baseline;gap:10px' }, [
-				E('span', {}, 'Passwall+'),
+			E('h2', { 'style': 'display:flex;align-items:center;gap:12px' }, [
+				logo,
+				wordmark,
 				E('span', { 'id': 'pwp-version',
 				            'style': 'font-size:13px;font-weight:normal;opacity:.55' }, '')
 			]),

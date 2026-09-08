@@ -7,7 +7,7 @@
 # packages.inc.sh - what goes into a package, shared by the .apk and .ipk
 # builders so the two formats can never drift apart.
 
-VERSION=1.0.1
+VERSION=1.0.2
 RELEASE=1
 PKGVER="$VERSION-r$RELEASE"
 LICENSE="GPL-3.0-only"
@@ -83,6 +83,11 @@ stage_pwplus() {
 
 	cat > "$work/passwall-plus.postinst" <<EOF
 mkdir -p /etc/passwall-plus /etc/passwall-plus/geo /var/run/passwall-plus
+# A message left by the version being replaced. /var/run survives an
+# upgrade, so a notice written by older code - "hysteria installed." -
+# went on sitting on the front page after the release that stopped
+# saying it. Nothing here is worth carrying across an install.
+rm -f /var/run/passwall-plus/message
 # one set of crontab entries, however often this package is reinstalled
 touch /etc/crontabs/root
 sed -i '\|/usr/libexec/pwplus-|d' /etc/crontabs/root
@@ -123,6 +128,13 @@ stage_luci() {
 	# three blank pages - it ships beside them, not as an extra.
 	install -m 0644 "$l/www/luci-static/resources/passwall-plus/i18n.js" \
 		"$i/www/luci-static/resources/passwall-plus/i18n.js"
+	# The artwork on the status page. Optional on purpose - it is the one file
+	# in this package that is not code, the page falls back to the name
+	# without it, and a build should not fail for want of a picture.
+	if [ -f "$l/www/luci-static/resources/passwall-plus/logo.png" ]; then
+		install -m 0644 "$l/www/luci-static/resources/passwall-plus/logo.png" \
+			"$i/www/luci-static/resources/passwall-plus/logo.png"
+	fi
 	install -m 0644 "$l/usr/share/luci/menu.d/luci-app-passwall-plus.json" \
 		"$i/usr/share/luci/menu.d/luci-app-passwall-plus.json"
 	install -m 0644 "$l/usr/share/rpcd/acl.d/luci-app-passwall-plus.json" \

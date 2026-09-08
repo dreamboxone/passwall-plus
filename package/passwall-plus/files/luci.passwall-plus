@@ -177,6 +177,13 @@ method_tests() {
 	"$TEST" json 2>/dev/null || echo '{"tests":{}}'
 }
 
+# Which hand-added section is the node the tunnel is on, so that the web
+# interface can refuse to delete it. Asked only when somebody presses Delete -
+# it walks the sections and parses each link, which is not polling work.
+method_inuse() {
+	"$NODES" inuse 2>/dev/null || echo '{"section":"","host":"","port":"","active":false}'
+}
+
 method_subs() {
 	awk -F'\t' 'BEGIN { printf "{\"subs\":["; n = 0 }
 		{
@@ -289,6 +296,13 @@ method_action() {
 		refresh_nodes)
 			run_job "Reading the subscriptions" "$NODES update"
 			;;
+		rebuild_nodes)
+			# The list rebuilt from what has already been fetched. No
+			# subscription is re-read, so this costs no network and is
+			# over before the page has finished saving - which is what
+			# makes it usable as "the file changed, catch up".
+			detach "$NODES" build
+			;;
 		measure_all)
 			# The first pass on its own: one handshake to every server on the
 			# list, and nothing else. It fills in the Reachable column for a
@@ -369,6 +383,7 @@ case "$1" in
 		json_add_object "nodes";   json_close_object
 		json_add_object "subs";    json_close_object
 		json_add_object "tests";   json_close_object
+		json_add_object "inuse";   json_close_object
 		json_add_object "system";  json_close_object
 		json_add_object "action"
 			json_add_string "name" ""
@@ -383,6 +398,7 @@ case "$1" in
 			nodes)   method_nodes ;;
 			subs)    method_subs ;;
 			tests)   method_tests ;;
+			inuse)   method_inuse ;;
 			system)  method_system ;;
 			action)  method_action ;;
 		esac

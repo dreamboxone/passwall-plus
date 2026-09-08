@@ -5,7 +5,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=passwall-plus
-PKG_VERSION:=1.0.1
+PKG_VERSION:=1.0.2
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=routekernel <https://t.me/routekernel1>
@@ -67,6 +67,11 @@ define Package/passwall-plus/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
 mkdir -p /etc/passwall-plus /etc/passwall-plus/geo /var/run/passwall-plus
+# A message left by the version being replaced. /var/run survives an
+# upgrade, so a notice written by older code - "hysteria installed." -
+# went on sitting on the front page after the release that stopped
+# saying it. Nothing here is worth carrying across an install.
+rm -f /var/run/passwall-plus/message
 touch /etc/crontabs/root
 sed -i '\|/usr/libexec/pwplus-|d' /etc/crontabs/root
 echo '*/15 * * * * /usr/libexec/pwplus-refresh >/dev/null 2>&1' >> /etc/crontabs/root

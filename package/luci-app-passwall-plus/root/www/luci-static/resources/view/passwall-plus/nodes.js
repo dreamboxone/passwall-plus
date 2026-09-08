@@ -25,6 +25,7 @@ var _ = i18n.tr;
 var callNodes  = rpc.declare({ object: 'luci.passwall-plus', method: 'nodes', expect: { '': {} } });
 var callSubs   = rpc.declare({ object: 'luci.passwall-plus', method: 'subs',  expect: { '': {} } });
 var callTests  = rpc.declare({ object: 'luci.passwall-plus', method: 'tests', expect: { '': {} } });
+var callInuse  = rpc.declare({ object: 'luci.passwall-plus', method: 'inuse', expect: { '': {} } });
 var callAction = rpc.declare({ object: 'luci.passwall-plus', method: 'action',
                                params: [ 'name', 'arg' ], expect: { '': {} } });
 
@@ -106,28 +107,29 @@ function nameFromLink(text) {
 
 /* ------------------------------------------------------------- three tests
 
-   The same three PassWall puts beside each node, and they are three because
-   they answer three different questions.
+   Three columns, the way PassWall has them, and they are three because they
+   answer three different questions.
 
    Ping is ICMP and nothing more: it says how far away the address is, and
    nothing at all about the server. One behind a CDN answers at the edge
    whatever state the server is in, and plenty of working servers drop ICMP
    entirely, which shows here as no answer.
 
-   TCP is a handshake to the port the tunnel will actually use. It proves
+   TCPing is a handshake to the port the tunnel will actually use. It proves
    something is listening and how long the round trip takes.
 
-   URL is a whole HTTP request carried by the node. It is the only one of the
-   three that proves the node works, and the slowest, which is why it is not
-   what the first pass uses on a hundred nodes.
+   URL Test is a whole HTTP request carried by the node. It is the only one of
+   the three that proves the node works, and the slowest, which is why it is
+   not what the first pass uses on a hundred nodes.
 
-   The measurement itself happens on the router and takes seconds, so pressing
-   one of these only asks for it. The answer arrives with the next poll. */
+   Each cell says "Test" until it is pressed. The measurement happens on the
+   router and takes seconds, so pressing one only asks for it; the answer
+   arrives with the next poll. */
 var TESTS = [ 'ping', 'tcp', 'url' ];
 var results = {};
 
-function testLabel(kind) {
-	return kind == 'ping' ? _('Ping') : kind == 'tcp' ? _('TCP') : _('URL');
+function testTitle(kind) {
+	return kind == 'ping' ? _('Ping') : kind == 'tcp' ? _('TCPing') : _('URL Test');
 }
 
 function testHint(kind) {
@@ -136,38 +138,91 @@ function testHint(kind) {
 	     :                  _('One whole request carried by this node. The only one that proves it works.');
 }
 
-/* -1 asked for and still running, -2 cannot be asked of this node, 0 no
-   answer, anything else milliseconds. */
+/* undefined never asked, -1 asked for and still running, -2 cannot be asked
+   of this node, 0 no answer, anything else milliseconds. */
 function testText(v) {
-	if (v === undefined) return '';
+	if (v === undefined) return _('Test');
 	if (v == -1) return '…';
 	if (v == -2) return '—';
 	if (v == 0)  return '✕';
 	return v + ' ms';
 }
 
-function testCell(sid) {
-	return E('div', { 'style': 'display:flex;gap:6px;flex-wrap:wrap' },
-		TESTS.map(function(kind) {
-			var out = E('span', {
-				'class': 'pwp-test-value',
-				'data-key': sid + '.' + kind,
-				'style': 'font-weight:600;margin-inline-start:4px'
-			}, testText(results[sid + '.' + kind]));
+function testColour(v) {
+	if (v === undefined || v == -1) return '';
+	if (v == -2) return 'opacity:.5';
+	if (v == 0)  return 'color:#ef4444';
+	return 'color:#10b981;font-weight:600';
+}
 
-			return E('span', {
-				'title': testHint(kind),
-				'style': 'cursor:pointer;user-select:none;white-space:nowrap;' +
-				         'border:1px solid rgba(127,127,127,.35);border-radius:8px;' +
-				         'padding:1px 8px;font-size:12px',
-				'click': function(ev) {
-					ev.preventDefault();
-					ev.stopPropagation();
-					out.textContent = '…';
-					callAction('node_test', kind + ':' + sid).catch(function() {});
-				}
-			}, [ E('span', {}, testLabel(kind)), out ]);
-		}));
+function testCell(sid, kind) {
+	var key = sid + '.' + kind;
+	var out = E('span', {
+		'class': 'pwp-test-value',
+		'data-key': key,
+		'title': testHint(kind),
+		'style': 'cursor:pointer;user-select:none;white-space:nowrap;' + testColour(results[key]),
+		'click': function(ev) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			out.textContent = '…';
+			out.setAttribute('style', 'cursor:pointer;user-select:none;white-space:nowrap');
+			callAction('node_test', kind + ':' + sid).catch(function() {});
+		}
+	}, testText(results[key]));
+	return out;
+}
+
+/* ------------------------------------------------------------ give a file
+
+   A WireGuard .conf and an Xray or sing-box configuration both arrive as
+   files, not as a line of text, and asking somebody to open one in an editor
+   and copy it out is asking them to do by hand what the browser will do for
+   nothing.
+
+   The file is read in the browser and its text goes into the box. It is never
+   uploaded anywhere, and what gets saved is the same text as if it had been
+   typed - so everything downstream, the parser included, sees exactly what it
+   saw before and none of it had to learn about files. */
+function withBrowse(o, hint) {
+	o.renderWidget = function(section_id, option_index, cfgvalue) {
+		var self = this;
+		var box = form.TextValue.prototype.renderWidget.apply(this,
+			[ section_id, option_index, cfgvalue ]);
+
+		var picker = E('input', {
+			'type': 'file',
+			'accept': '.conf,.txt,.json,.yaml,.yml,text/plain',
+			'style': 'display:none',
+			'change': function(ev) {
+				var f = ev.target.files && ev.target.files[0];
+				if (!f) return;
+				var reader = new FileReader();
+				reader.onload = function() {
+					var el = self.getUIElement(section_id);
+					if (el) el.setValue(String(reader.result || '').trim());
+				};
+				reader.onerror = function() {
+					ui.addNotification(null, E('p', {},
+						_('That file could not be read.')), 'warning');
+				};
+				reader.readAsText(f);
+				/* So that choosing the same file twice in a row still fires
+				   a change. */
+				ev.target.value = '';
+			}
+		});
+
+		return E([ box, E('div', { 'style': 'margin-top:6px' }, [
+			E('button', {
+				'class': 'btn cbi-button',
+				'click': function(ev) { ev.preventDefault(); picker.click(); }
+			}, _('Browse…')),
+			E('span', { 'style': 'margin-inline-start:8px;font-size:12px;opacity:.65' }, hint),
+			picker
+		]) ]);
+	};
+	return o;
 }
 
 function renderTests(d) {
@@ -179,6 +234,8 @@ function renderTests(d) {
 		   about yet is a request in flight, not a stale value: leave it. */
 		if (!(k in results) && cells[i].textContent == '…') continue;
 		cells[i].textContent = testText(results[k]);
+		cells[i].setAttribute('style',
+			'cursor:pointer;user-select:none;white-space:nowrap;' + testColour(results[k]));
 	}
 }
 
@@ -238,7 +295,7 @@ function renderNodes(d) {
 								'info');
 						});
 					})
-				}, _('Use this one'))
+				}, _('Use'))
 			])
 		]));
 	});
@@ -277,6 +334,18 @@ return view.extend({
 		]);
 	},
 
+	/* A node deleted here vanishes from the file the moment Save is pressed,
+	   and used to sit in the list underneath until the quarter-hourly refresh
+	   came round - so the reader deleted something and watched it stay, for up
+	   to fifteen minutes, with nothing to say why. This rebuilds the list from
+	   what has already been fetched: no subscription is re-read, so it costs
+	   no network and finishes at once. */
+	handleSave: function(ev) {
+		return view.prototype.handleSave.apply(this, [ ev ]).then(function() {
+			return callAction('rebuild_nodes', '').catch(function() {});
+		});
+	},
+
 	render: function(data) {
 		i18n.setLang(uci.get('passwall-plus', 'config', 'lang'));
 
@@ -296,7 +365,7 @@ return view.extend({
 		s.anonymous = true;
 
 		o = s.option(form.ListValue, 'sources', _('Nodes to use'),
-			_('This decides who may be measured, not who wins: whichever node answers fastest is the one used, wherever it came from. A node added by hand joins the list rather than replacing it. To insist on one node, press “Use this one” beside it below.'));
+			_('This decides who may be measured, not who wins: whichever node answers fastest is the one used, wherever it came from. A node added by hand joins the list rather than replacing it. To insist on one node, press “Use” beside it below.'));
 		o.value('both', _('Mine and the subscriptions'));
 		o.value('own', _('Only the ones I added by hand'));
 		o.value('subs', _('Only the subscriptions'));
@@ -322,12 +391,25 @@ return view.extend({
 			return true;
 		};
 
+		/* A source that is a file rather than an address. It goes through
+		   exactly the same path as a fetched subscription - which already
+		   understands an Xray, sing-box or Clash configuration whole - so a
+		   JSON file dropped in here yields the same nodes it would have if it
+		   had been published at a URL. Nothing is re-fetched for it, because
+		   there is nowhere to re-fetch it from: it is read again from here
+		   every time the list is rebuilt. */
+		o = s.option(form.TextValue, 'content', _('Or a file'),
+			_('Instead of an address: a configuration file — Xray, sing-box, Clash, a WireGuard .conf, or a plain list of links. Leave the address empty when you use this.'));
+		o.modalonly = true;
+		o.rows = 6;
+		withBrowse(o, _('a .json or .conf file'));
+
 		o = s.option(form.Flag, 'enabled', _('On'));
 		o.default = '1';
 		o.rmempty = false;
 
 		s = m.section(form.GridSection, 'node', _('Nodes added manually'),
-			_('One share link per entry — vless, vmess, trojan, shadowsocks, socks, hysteria2, tuic or wireguard. A whole WireGuard .conf file can be pasted in as it stands. These are tried before the subscription list.'));
+			_('One share link per entry — vless, vmess, trojan, shadowsocks, socks, hysteria2, tuic or wireguard. A whole WireGuard .conf file can be pasted in as it stands. These are tried before the subscription list. The three test columns each measure something different; press one to run it.'));
 		s.addremove = true;
 		s.anonymous = true;
 		s.sortable = true;
@@ -340,10 +422,11 @@ return view.extend({
 		   characters of base64 that tells the reader nothing they did not
 		   already know — whereas what they actually want to know about a node
 		   they have just typed in is whether it works. */
-		o = s.option(form.TextValue, 'link', _('Share link'));
+		o = s.option(form.TextValue, 'link', _('Share link'),
+			_('A share link, several of them one per line, or a whole WireGuard .conf file. Choose a file and its contents are put in the box for you.'));
 		o.modalonly = true;
-		o.rows = 3;
-		o.rmempty = false;
+		o.rows = 6;
+		withBrowse(o, _('a .conf file, or a list of links'));		o.rmempty = false;
 		o.placeholder = 'vless://…';
 		o.validate = function(section, value) {
 			if (!value) return true;
@@ -364,14 +447,46 @@ return view.extend({
 			return rv;
 		};
 
-		o = s.option(form.DummyValue, '_test', _('Test'),
-			_('Three questions, and they disagree often enough to be worth asking separately. Ping is the network and nothing else. TCP is a handshake to the port the tunnel will use. URL is a whole request carried by the node, and the only one of the three that proves it works.'));
-		o.modalonly = false;
-		o.renderWidget = function(section_id) { return testCell(section_id); };
+		/* One column each, and every one of them has to be marked editable.
+		   A grid section renders its cells as read-only text by default and
+		   never calls renderWidget at all - which is why a column of three
+		   buttons came out as the word "none" in italics. The hidden field is
+		   what DummyValue itself puts there: the form looks the widget up by
+		   id when it saves, and finds nothing without it. */
+		TESTS.forEach(function(kind) {
+			var t = s.option(form.DummyValue, '_test_' + kind, testTitle(kind));
+			t.modalonly = false;
+			t.editable = true;
+			t.renderWidget = function(section_id) {
+				return E([
+					testCell(section_id, kind),
+					new ui.Hiddenfield('', { id: this.cbid(section_id) }).render()
+				]);
+			};
+		});
 
 		o = s.option(form.Flag, 'enabled', _('On'));
 		o.default = '1';
 		o.rmempty = false;
+
+		/* The node carrying traffic right now is not one to delete by
+		   accident: the tunnel would keep running on a node that no longer
+		   exists in the file, and the next refresh would drop the connection
+		   with no explanation whatever. Asked afresh at the moment of the
+		   press rather than remembered, because between opening this page and
+		   pressing Delete the router may well have moved to another node. */
+		s.handleRemove = function(section_id, ev) {
+			var section = this;
+			return callInuse().catch(function() { return {}; }).then(function(d) {
+				if (d && d.active && d.section && d.section == section_id) {
+					ui.addNotification(null, E('p', {},
+						_('This is the node the tunnel is using at the moment. Press Disconnect, or Choose again, before deleting it.')),
+						'warning');
+					return Promise.resolve();
+				}
+				return form.GridSection.prototype.handleRemove.apply(section, [ section_id, ev ]);
+			});
+		};
 
 		var self = this;
 
