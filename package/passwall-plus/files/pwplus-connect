@@ -88,6 +88,24 @@ else
 	"$NODES" update >/dev/null 2>&1 || true
 	if ! "$PROBE" select >/dev/null 2>&1; then
 		say_status failed
+		# Nothing on the list completed a request. If the network is being
+		# redirected into the tunnel at this moment, it is being redirected
+		# into something that has just failed to carry anything - and
+		# leaving it that way is not a tunnel that is down, it is a network
+		# that is down. Which of the two it is gets measured rather than
+		# assumed: the node actually in use is asked to carry one request,
+		# and only if it cannot is the network put back.
+		#
+		# Better disconnected than unreachable - the same rule the failed
+		# start below already followed, which this path simply never did.
+		if tunnel_running && [ "$(cfg_bool enabled 0)" = "1" ]; then
+			if ! "${PWPLUS_LIB:-/usr/libexec}/pwplus-test" current >/dev/null 2>&1; then
+				log "no node can carry a request and the one in use cannot either - taking the network back"
+				say_message "No node on the list can carry traffic, and neither can the one in use. The tunnel has been taken out of the way so that the network works without it. Add a node that works on the Nodes page, or check the subscription."
+				"$RULES" down >/dev/null 2>&1 || true
+				"${PWPLUS_LIB:-/usr/libexec}/pwplus-dns" down >/dev/null 2>&1 || true
+			fi
+		fi
 		exit 0
 	fi
 fi

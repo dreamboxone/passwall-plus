@@ -9,6 +9,7 @@
 #   pwplus-test ping <id>    ICMP round trip to the node's address
 #   pwplus-test tcp  <id>    TCP handshake to the node's real port
 #   pwplus-test url  <id>    a whole HTTP request carried by the node
+#   pwplus-test current      can the node the tunnel is on carry a request?
 #   pwplus-test json         every answer collected so far
 #   pwplus-test clear        forget them
 #
@@ -127,23 +128,17 @@ do_tcp() {
 
 # -------------------------------------------------------------------- url
 
-do_url() {
-	_out="$DIR/$1.url"
-	_proto="$2"; _payload="$3"
-	echo -1 > "$_out"
+# One whole request through one outbound, in milliseconds. 0 means it did not
+# complete, which is the only answer that matters.
+#
+# One at a time. Two of these at once would both try to listen on the same
+# loopback port, the second core would refuse to start, and the answer - an
+# honest-looking "no answer" - would be about this program and not about the
+# node. Waiting a few seconds for the other one to finish is the only answer
+# that is true.
+url_ms() {
+	_payload="$1"
 
-	# Xray does not speak these, and standing up the bridge for one button
-	# would be a second core, a second port and a second thing to leave
-	# running. Say so rather than reporting a working node as broken.
-	case "$_proto" in
-		hysteria2|hysteria|tuic) echo -2 > "$_out"; return 0 ;;
-	esac
-
-	# One at a time. Two of these at once would both try to listen on the same
-	# loopback port, the second core would refuse to start, and the answer -
-	# an honest-looking "no answer" - would be about this program and not
-	# about the node. Waiting a few seconds for the other one to finish is the
-	# only answer that is true.
 	_waited=0
 	while ! mkdir "$DIR/.url-lock" 2>/dev/null; do
 		_waited=$((_waited + 1))
@@ -163,8 +158,8 @@ do_url() {
 	if ! _x="$(find_xray "$_cfg")"; then
 		rm -f "$_cfg"
 		rmdir "$DIR/.url-lock" 2>/dev/null || true
-		echo -2 > "$_out"
-		return 0
+		echo -2
+		return 1
 	fi
 
 	_geo="$(geo_dir)" || _geo=""
@@ -174,7 +169,7 @@ do_url() {
 		"$_x" run -config "$_cfg" >/dev/null 2>&1 &
 	fi
 	_pid=$!
-	# Otherwise the core's own start-up is charged to the server.
+	# Otherwise the core's own start-up is charged to the node.
 	sleep 1
 
 	_ms=0
@@ -189,8 +184,48 @@ do_url() {
 	wait "$_pid" 2>/dev/null || true
 	rm -f "$_cfg"
 	rmdir "$DIR/.url-lock" 2>/dev/null || true
-	echo "${_ms:-0}" > "$_out"
+
+	echo "${_ms:-0}"
+	[ "${_ms:-0}" -gt 0 ] 2>/dev/null || return 1
 	return 0
+}
+
+do_url() {
+	_out="$DIR/$1.url"
+	_proto="$2"; _payload2="$3"
+	echo -1 > "$_out"
+
+	# Xray does not speak these, and standing up the bridge for one button
+	# would be a second core, a second port and a second thing to leave
+	# running. Say so rather than reporting a working node as broken.
+	case "$_proto" in
+		hysteria2|hysteria|tuic) echo -2 > "$_out"; return 0 ;;
+	esac
+
+	url_ms "$_payload2" > "$_out" 2>/dev/null || true
+	return 0
+}
+
+# ---------------------------------------------------------------- the tunnel
+
+# Can the node the tunnel is actually on carry a request?
+#
+# Asked of the outbound the running service uses, not of a row in the
+# candidate list - so for a protocol Xray cannot speak this exercises the
+# bridge too, which is the part that would be broken.
+#
+# This is the question nothing used to ask. "The process is alive and the
+# rules are in place" was taken for health, and a node that completes a TCP
+# handshake and then carries nothing satisfies both for ever: the network is
+# redirected into it, nothing gets through, and every quarter of an hour the
+# healer looked at it and said all was well.
+cmd_current() {
+	if [ ! -s "$PWPLUS_BEST" ]; then
+		echo 0
+		return 1
+	fi
+	url_ms "$(cat "$PWPLUS_BEST")"
+	return $?
 }
 
 # ------------------------------------------------------------------ report
@@ -242,7 +277,8 @@ case "${1:-json}" in
 		[ -n "${2:-}" ] || { echo "usage: $0 $1 <id>" >&2; exit 1; }
 		cmd_run "$1" "$2"
 		;;
+	current) cmd_current ;;
 	json)  cmd_json ;;
 	clear) rm -f "$DIR"/* 2>/dev/null || true ;;
-	*) echo "usage: $0 ping|tcp|url <id>|json|clear" >&2; exit 1 ;;
+	*) echo "usage: $0 ping|tcp|url <id>|current|json|clear" >&2; exit 1 ;;
 esac

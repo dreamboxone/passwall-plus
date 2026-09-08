@@ -47,7 +47,34 @@ if tunnel_running; then
 		"${PWPLUS_LIB:-/usr/libexec}/pwplus-rules" up >/dev/null 2>&1 || true
 		"${PWPLUS_LIB:-/usr/libexec}/pwplus-dns" up >/dev/null 2>&1 || true
 	fi
-	exit 0
+	# And a tunnel that is running with its rules in place can still be
+	# carrying nothing at all. A node that completes a TCP handshake and
+	# then passes no traffic satisfies both of the checks above for ever,
+	# and what that looks like from the sofa is a router with no internet
+	# on it and a page that says everything is fine. So ask the only
+	# question that settles it: does a request actually get through?
+	#
+	# Twice before acting. One failed request is a blip, and reconnecting
+	# on a blip drops every connection in progress to fix nothing.
+	if "${PWPLUS_LIB:-/usr/libexec}/pwplus-test" current >/dev/null 2>&1; then
+		rm -f "$PWPLUS_RUN/health.fail"
+		exit 0
+	fi
+
+	_fails="$(cat "$PWPLUS_RUN/health.fail" 2>/dev/null || echo 0)"
+	case "$_fails" in
+		''|*[!0-9]*) _fails=0 ;;
+	esac
+	_fails=$((_fails + 1))
+	echo "$_fails" > "$PWPLUS_RUN/health.fail"
+	if [ "$_fails" -lt 2 ]; then
+		log "the tunnel carried nothing this time - looking again in a quarter of an hour"
+		exit 0
+	fi
+
+	log "the tunnel is up but has carried nothing twice running - choosing again"
+	rm -f "$PWPLUS_RUN/health.fail"
+	exec "$CONNECT" force
 fi
 
 log "the tunnel should be up and is not - repairing"

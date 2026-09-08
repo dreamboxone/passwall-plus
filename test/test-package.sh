@@ -320,4 +320,26 @@ else
 	echo "  skip - no logo.png in the tree"
 fi
 
+# The question nothing used to ask.
+#
+# "The core is running and the rules are in place" was taken for a working
+# tunnel, and a node that completes a TCP handshake and then carries nothing
+# satisfies both of those for ever - so the network stayed pointed into a dead
+# tunnel, the whole house lost the internet, and the page said everything was
+# fine. The healer asks pwplus-test whether a request actually gets through
+# now, and the first thing that has to be true of that question is that it
+# answers safely when there is nothing chosen at all.
+echo "== asking whether the tunnel carries traffic is safe with nothing chosen"
+mkdir -p "$RIG/hc/etc" "$RIG/hc/run"
+OUT="$(PWPLUS_ETC="$RIG/hc/etc" PWPLUS_RUN="$RIG/hc/run" \
+       PWPLUS_LIB="$ROOT/package/passwall-plus/files" \
+       sh "$ROOT/package/passwall-plus/files/pwplus-test" current 2>/dev/null)"
+RC=$?
+if [ "$RC" != "0" ]; then
+	ok "it fails rather than claiming a tunnel that does not exist works"
+else
+	bad "it reported success with no node chosen"
+fi
+check "$OUT" "0" "and says nothing got through"
+
 rig_report
