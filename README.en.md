@@ -1,6 +1,6 @@
 # Passwall+ — a router-wide tunnel for OpenWrt
 
-**Version 1.0.8** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
+**Version 1.0.9** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
 🇮🇷 **[راهنمای فارسی: README.md](README.md)**
 
 Install it on the router, press **Connect**, and from that moment every device
@@ -166,8 +166,22 @@ the list rather than replacing it. If you want one particular node used, press
 
 **Subscriptions.** You give the address and it is read every quarter of an hour.
 You do not need to know what format it is in: a plain list of configs, one
-base64 block, or a whole JSON file — an Xray config, a sing-box config, a Clash
-list — or a WireGuard `.conf`.
+base64 block, or a whole configuration file:
+
+| Format | Looks like |
+|---|---|
+| a plain list | one `vless://` or `vmess://` per line |
+| a base64 block | the same list, encoded — what most providers hand out |
+| **Xray** | JSON with `outbounds` |
+| **sing-box** | JSON with `outbounds` or `endpoints`, including the [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) fork and its `xhttp` transport |
+| **Clash** | JSON, or a **`.yaml`** with `proxies:` |
+| **Hysteria** | a hysteria2 **`.yaml`** with `server:` and `auth:` |
+| **WireGuard** | a `.conf` with `[Interface]` and `[Peer]` |
+
+> **AmneziaWG is deliberately skipped.** It is WireGuard with junk packets and
+> rewritten headers so that it does not look like WireGuard, and Xray cannot
+> speak any of it. Adding it to the list would mean a node that measures like
+> every other one and connects to nothing at all.
 
 If you have the **file** rather than an address, the edit dialog for a
 subscription has an **Or a file** box with a **Browse…** button. Choose the

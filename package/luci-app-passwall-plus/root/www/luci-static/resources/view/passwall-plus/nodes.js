@@ -372,7 +372,7 @@ return view.extend({
 		o.default = 'both';
 
 		s = m.section(form.GridSection, 'subscription', _('Subscriptions'),
-			_('Fetched every fifteen minutes. Xray, sing-box and Clash JSON configs, WireGuard .conf files, a plain list of links and a single base64 block are all accepted.'));
+			_('Fetched every fifteen minutes. Xray, sing-box, Hysteria, Clash and WireGuard files are accepted, as are a plain list of links and a single base64 block.'));
 		s.addremove = true;
 		s.anonymous = true;
 		s.sortable = true;

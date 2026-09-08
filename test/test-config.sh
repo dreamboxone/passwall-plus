@@ -401,4 +401,141 @@ else
 	bad "a .conf with no peer produces nothing"
 fi
 
+# The two shapes people are actually handed, and the two this could not read.
+#
+# A Clash file and a hysteria file are both YAML, and the parser only treated a
+# file as a configuration when it began with { or [ - so `proxies:` fell
+# through to the line reader, which found no links in it and produced nothing
+# at all, silently.
+echo "== a clash .yaml, block style and flow style together"
+
+Y="$RIG/work/clash.yaml"
+mkdir -p "$RIG/work"
+cat > "$Y" <<'YAML'
+# my provider
+port: 7890
+mode: rule
+proxies:
+  - name: "سرور خانه"
+    type: vmess
+    server: 1.2.3.4
+    port: 443
+    uuid: aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+    alterId: 0
+    cipher: auto
+    tls: true
+    servername: sni.example.com
+    network: ws
+    ws-opts:
+      path: /mypath
+      headers:
+        Host: h.example.com
+  - {name: t2, type: trojan, server: 5.6.7.8, port: 8443, password: "sec ret", sni: s.example.com}
+  - name: ss1
+    type: ss
+    server: 9.9.9.9
+    port: 8388
+    cipher: aes-128-gcm
+    password: pw     # trailing comment
+rules:
+  - MATCH,DIRECT
+YAML
+
+CY="$(LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$Y")"
+check "$(printf '%s\n' "$CY" | wc -l | tr -d ' ')" "3" "three proxies come out of it"
+check "$(printf '%s\n' "$CY" | sed -n '1p' | cut -f2)" "سرور خانه" "a Persian name survives"
+check "$(printf '%s\n' "$CY" | sed -n '1p' | cut -f3)" "vmess" "block style is read"
+check "$(printf '%s\n' "$CY" | sed -n '2p' | cut -f3)" "trojan" "and flow style on one line"
+check "$(printf '%s\n' "$CY" | sed -n '3p' | cut -f4)" "9.9.9.9" "and a trailing comment does not eat the value"
+
+for want in '"path":"/mypath"' '"Host":"h.example.com"' '"serverName":"sni.example.com"'; do
+	if printf '%s' "$CY" | grep -qF "$want"; then
+		ok "nested maps survive: $want"
+	else
+		bad "nested maps survive: $want"
+	fi
+done
+
+# Clash writes `tls: true` on vmess and leaves it off trojan, because trojan
+# has no other mode. Read literally, every trojan in every Clash file came out
+# with security "none" and could not connect to anything.
+if printf '%s\n' "$CY" | sed -n '2p' | grep -q '"security":"tls"'; then
+	ok "a clash trojan is TLS even though the file never says so"
+else
+	bad "a clash trojan is TLS even though the file never says so"
+fi
+if printf '%s\n' "$CY" | sed -n '3p' | grep -q '"password":"pw"'; then
+	ok "and the comment is not part of the password"
+else
+	bad "and the comment is not part of the password"
+fi
+
+echo "== a hysteria2 .yaml"
+cat > "$Y" <<'YAML'
+server: hy.example.com:8443
+auth: mypassword
+tls:
+  sni: hy.example.com
+  insecure: true
+obfs:
+  type: salamander
+  salamander:
+    password: obfspw
+bandwidth:
+  up: 20 mbps
+  down: 100 mbps
+YAML
+HY="$(LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$Y")"
+check "$(printf '%s' "$HY" | cut -f3)" "hysteria2" "it is read as one hysteria2 node"
+check "$(printf '%s' "$HY" | cut -f4)" "hy.example.com" "the host"
+check "$(printf '%s' "$HY" | cut -f5)" "8443" "and the port"
+for want in '"password":"mypassword"' '"sni":"hy.example.com"' '"obfs":"salamander"' \
+            '"obfs_password":"obfspw"' '"insecure":true'; do
+	if printf '%s' "$HY" | grep -qF "$want"; then
+		ok "carried through: $want"
+	else
+		bad "carried through: $want"
+	fi
+done
+
+# A bare host means 443 to hysteria, and a password of "no" is a password and
+# not the boolean false.
+printf 'server: hy.example.com\nauth: "no"\n' > "$Y"
+HY2="$(LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$Y")"
+check "$(printf '%s' "$HY2" | cut -f5)" "443" "a bare host means port 443"
+if printf '%s' "$HY2" | grep -q '"password":"no"'; then
+	ok "and a password of \"no\" stays a password"
+else
+	bad "and a password of \"no\" stays a password"
+fi
+
+echo "== a sing-box-lx configuration"
+cat > "$Y" <<'JSON'
+{ "outbounds": [
+    { "type": "vless", "tag": "lx", "server": "a.example.com", "server_port": 443,
+      "uuid": "11111111-2222-3333-4444-555555555555",
+      "transport": { "type": "xhttp", "host": "a.example.com", "path": "/xh", "mode": "packet-up" } },
+    { "type": "wireguard", "tag": "plain", "server": "8.8.8.8", "server_port": 51820,
+      "private_key": "k", "peer_public_key": "p", "address": ["10.0.0.2/32"] } ],
+  "endpoints": [
+    { "type": "wireguard", "tag": "amnezia", "server": "9.9.9.9", "server_port": 51820,
+      "private_key": "k", "peer_public_key": "p", "address": ["10.0.0.2/32"],
+      "jc": 10, "s1": 20 } ] }
+JSON
+LX="$(LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$Y")"
+check "$(printf '%s\n' "$LX" | wc -l | tr -d ' ')" "2" "the two nodes a core here can run"
+if printf '%s' "$LX" | grep -q '"mode":"packet-up"'; then
+	ok "xhttp keeps its mode, which decides whether it works at all"
+else
+	bad "xhttp keeps its mode"
+fi
+# AmneziaWG is WireGuard with the packets disguised, and Xray cannot speak it.
+# Emitting one would put a node in the list that measures like any other and
+# connects to nothing.
+if printf '%s' "$LX" | grep -q amnezia; then
+	bad "AmneziaWG is left out rather than offered as a node that cannot work"
+else
+	ok "AmneziaWG is left out rather than offered as a node that cannot work"
+fi
+
 rig_report

@@ -81,8 +81,8 @@ var FA = {
 	'Only Manually Added': 'فقط نودهای دستی',
 	'Only the subscriptions': 'فقط اشتراک‌ها',
 	'Subscriptions': 'اشتراک‌ها',
-	'Fetched every fifteen minutes. Xray, sing-box and Clash JSON configs, WireGuard .conf files, a plain list of links and a single base64 block are all accepted.':
-		'هر پانزده دقیقه یک بار خوانده می‌شود. کانفیگ JSON ایکس‌ری، sing-box و Clash، فایل ‎.conf وایرگارد، لیست ساده‌ای از لینک‌ها و یک بلوک base64 — همه پذیرفته می‌شوند.',
+	'Fetched every fifteen minutes. Xray, sing-box, Hysteria, Clash and WireGuard files are accepted, as are a plain list of links and a single base64 block.':
+		'هر پانزده دقیقه یک بار خوانده می‌شود. فایل‌های Xray، sing-box، Hysteria، Clash و وایرگارد پذیرفته می‌شوند، و همین‌طور لیست ساده‌ای از لینک‌ها یا یک بلوک base64.',
 	'Name': 'نام',
 	'Address': 'آدرس',
 	'Must start with http:// or https://': 'باید با ‎http://‎ یا ‎https://‎ شروع شود',
