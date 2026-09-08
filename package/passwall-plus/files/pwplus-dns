@@ -59,7 +59,7 @@ reload_dnsmasq() {
 	# A drop-in is only read at start-up, so this has to be a restart and not
 	# a reload. Bounded, because a procd lock held by something that died
 	# would otherwise hold the whole connect sequence open for ever.
-	timeout 30 /etc/init.d/dnsmasq restart >/dev/null 2>&1 || {
+	bounded 30 /etc/init.d/dnsmasq restart >/dev/null 2>&1 || {
 		warn "dnsmasq would not restart - name lookups may not be going through the tunnel"
 		return 1
 	}

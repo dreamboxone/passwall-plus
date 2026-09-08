@@ -142,13 +142,13 @@ cmd_install() {
 	# reporting as "install failed".
 	case "$_m" in
 		apk)
-			if ! timeout 180 apk update >/dev/null 2>&1; then
+			if ! bounded 180 apk update >/dev/null 2>&1; then
 				say_message "Could not download the package index. The router needs a working internet connection before dependencies can be installed."
 				return 1
 			fi
 			;;
 		opkg)
-			if ! timeout 180 opkg update >/dev/null 2>&1; then
+			if ! bounded 180 opkg update >/dev/null 2>&1; then
 				say_message "Could not download the package index. The router needs a working internet connection before dependencies can be installed."
 				return 1
 			fi
@@ -160,8 +160,8 @@ cmd_install() {
 	_failed=""
 	for _p in $_missing; do
 		case "$_m" in
-			apk)  timeout 180 apk add "$_p" >/dev/null 2>&1 || _failed="$_failed $_p" ;;
-			opkg) timeout 180 opkg install "$_p" >/dev/null 2>&1 || _failed="$_failed $_p" ;;
+			apk)  bounded 180 apk add "$_p" >/dev/null 2>&1 || _failed="$_failed $_p" ;;
+			opkg) bounded 180 opkg install "$_p" >/dev/null 2>&1 || _failed="$_failed $_p" ;;
 		esac
 	done
 

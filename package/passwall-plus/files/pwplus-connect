@@ -118,15 +118,15 @@ fi
 
 say_status starting
 
-if timeout 90 /etc/init.d/passwall-plus restart >/dev/null 2>&1; then
+if bounded 90 /etc/init.d/passwall-plus restart >/dev/null 2>&1; then
 	# autostart was a setting nothing read: the boot symlink was never made,
 	# so the tunnel could not come back after a power cut whatever it said.
 	# Done here rather than inside the init script, which would be asking the
 	# init script to run itself and wait on a lock it is already holding.
 	if [ "$(cfg autostart 0)" = "1" ]; then
-		timeout 15 /etc/init.d/passwall-plus enable >/dev/null 2>&1 || true
+		bounded 15 /etc/init.d/passwall-plus enable >/dev/null 2>&1 || true
 	else
-		timeout 15 /etc/init.d/passwall-plus disable >/dev/null 2>&1 || true
+		bounded 15 /etc/init.d/passwall-plus disable >/dev/null 2>&1 || true
 	fi
 	# service_started sets this to `ready` when the rules actually went in.
 	# Anything else means the process is alive and the network is untouched,

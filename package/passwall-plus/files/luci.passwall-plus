@@ -279,7 +279,9 @@ method_action() {
 		disconnect)
 			uci -q set passwall-plus.config.enabled='0' && uci -q commit passwall-plus
 			say_status idle
-			detach timeout 60 /etc/init.d/passwall-plus stop
+			# bounded is a function in the helper, so the detached shell has to
+			# source it before it can use one.
+			detach /bin/sh -c ". $PWPLUS_LIB/pwplus-common.sh; bounded 60 /etc/init.d/passwall-plus stop"
 			;;
 		pick)
 			# A server chosen by hand rather than by measurement.

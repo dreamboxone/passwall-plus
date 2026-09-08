@@ -362,4 +362,53 @@ else
 	bad "the postinst reloads rpcd without checking it took"
 fi
 
+# Nothing may call `timeout` directly.
+#
+# It is not on every router. A stock OpenWrt 25.12 image has no timeout at all
+# - not even as a busybox applet - and there `timeout 15 cmd || true` exits 127
+# and runs nothing, silently, because the `|| true` swallows it. Every such
+# call in this program was one that mattered: rpcd never learned the web
+# interface existed, the crontab was never reloaded, Connect ran a restart that
+# never happened, dnsmasq was never told to send lookups down the tunnel, and
+# installing the missing dependencies installed nothing. A whole program that
+# did nothing on a freshly flashed router, and said nothing about it.
+#
+# `bounded` in the helper does the same job with a watchdog when timeout is
+# missing. The packaging scripts, which cannot source the helper, carry their
+# own two-line version.
+echo "== nothing calls timeout, which a stock OpenWrt does not have"
+BARE=$(grep -rnE '(^|[[:space:]])timeout[[:space:]]+[0-9]' \
+	"$ROOT/package" "$ROOT/build" 2>/dev/null |
+	grep -v 'command -v timeout' || true)
+if [ -z "$BARE" ]; then
+	ok "none"
+else
+	bad "these do nothing at all on a router without timeout:"
+	printf '%s\n' "$BARE" | sed 's/^/       /'
+fi
+
+# And the fallback has to actually bound something, or it is a worse lie than
+# the one it replaces.
+echo "== bounded returns what the command returned, and cuts a hang short"
+cat > "$RIG/bt.sh" <<BT
+PWPLUS_RUN="$RIG/bt/run"; PWPLUS_ETC="$RIG/bt/etc"
+. "$ROOT/package/passwall-plus/files/pwplus-common.sh"
+PWPLUS_HAVE_TIMEOUT=0
+bounded 5 true; echo "true=\$?"
+bounded 5 sh -c 'exit 7'; echo "seven=\$?"
+_t0=\$(date +%s)
+bounded 2 sleep 20 >/dev/null 2>&1; echo "hang=\$?"
+echo "took=\$(( \$(date +%s) - _t0 ))"
+BT
+mkdir -p "$RIG/bt/run" "$RIG/bt/etc"
+BT_OUT="$(sh "$RIG/bt.sh" 2>/dev/null)"
+check "$(printf '%s\n' "$BT_OUT" | sed -n 's/^true=//p')" "0" "a command that works reports success"
+check "$(printf '%s\n' "$BT_OUT" | sed -n 's/^seven=//p')" "7" "and one that fails reports its own status"
+BT_TOOK="$(printf '%s\n' "$BT_OUT" | sed -n 's/^took=//p')"
+if [ -n "$BT_TOOK" ] && [ "$BT_TOOK" -le 6 ]; then
+	ok "a twenty-second hang is cut short after two ($BT_TOOK s)"
+else
+	bad "the watchdog did not cut the hang short (took ${BT_TOOK:-?} s)"
+fi
+
 rig_report

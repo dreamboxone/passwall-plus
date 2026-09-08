@@ -7,7 +7,7 @@
 # packages.inc.sh - what goes into a package, shared by the .apk and .ipk
 # builders so the two formats can never drift apart.
 
-VERSION=1.0.5
+VERSION=1.0.6
 RELEASE=1
 PKGVER="$VERSION-r$RELEASE"
 LICENSE="GPL-3.0-only"
@@ -82,6 +82,13 @@ stage_pwplus() {
 	echo "/etc/config/passwall-plus" > "$work/passwall-plus.conffiles"
 
 	cat > "$work/passwall-plus.postinst" <<EOF
+# `timeout` is not on every OpenWrt image - a stock 25.12 does not have it,
+# and `timeout N cmd || true` on a router without it is not a bounded
+# command, it is no command at all. Which is exactly how this package came
+# to install itself without ever telling rpcd that the web interface exists.
+bounded() {
+	if command -v timeout >/dev/null 2>&1; then timeout "$@"; else shift; "$@"; fi
+}
 mkdir -p /etc/passwall-plus /etc/passwall-plus/geo /var/run/passwall-plus
 # A message left by the version being replaced. /var/run survives an
 # upgrade, so a notice written by older code - "hysteria installed." -
@@ -97,7 +104,7 @@ echo '$CRON_STATS' >> /etc/crontabs/root
 # died leaves the call waiting for good - which would strand the install half
 # done and make the package impossible to remove afterwards. Bound them: none
 # of this is worth failing an installation over.
-timeout 15 /etc/init.d/cron reload >/dev/null 2>&1 || true
+bounded 15 /etc/init.d/cron reload >/dev/null 2>&1 || true
 # rpcd has to be told there is a new object, and telling it once is not
 # reliable. On a fresh install this reload has been seen to return success
 # and leave the object unregistered - and an unregistered object is a web
@@ -105,18 +112,25 @@ timeout 15 /etc/init.d/cron reload >/dev/null 2>&1 || true
 # script behind it works perfectly from the shell. It is the worst kind of
 # failure this package can have, because nothing anywhere says a word.
 # So ask afterwards, and restart if the answer is no.
-timeout 15 /etc/init.d/rpcd reload >/dev/null 2>&1 || true
+bounded 15 /etc/init.d/rpcd reload >/dev/null 2>&1 || true
 if ! ubus list 2>/dev/null | grep -q '^luci.passwall-plus\$'; then
-	timeout 20 /etc/init.d/rpcd restart >/dev/null 2>&1 || true
+	bounded 20 /etc/init.d/rpcd restart >/dev/null 2>&1 || true
 fi
 exit 0
 EOF
 
 	cat > "$work/passwall-plus.prerm" <<'EOF'
-timeout 20 /etc/init.d/passwall-plus stop >/dev/null 2>&1 || true
-timeout 15 /etc/init.d/passwall-plus disable >/dev/null 2>&1 || true
+# `timeout` is not on every OpenWrt image - a stock 25.12 does not have it,
+# and `timeout N cmd || true` on a router without it is not a bounded
+# command, it is no command at all. Which is exactly how this package came
+# to install itself without ever telling rpcd that the web interface exists.
+bounded() {
+	if command -v timeout >/dev/null 2>&1; then timeout "$@"; else shift; "$@"; fi
+}
+bounded 20 /etc/init.d/passwall-plus stop >/dev/null 2>&1 || true
+bounded 15 /etc/init.d/passwall-plus disable >/dev/null 2>&1 || true
 sed -i '\|/usr/libexec/pwplus-|d' /etc/crontabs/root 2>/dev/null
-timeout 15 /etc/init.d/cron reload >/dev/null 2>&1 || true
+bounded 15 /etc/init.d/cron reload >/dev/null 2>&1 || true
 exit 0
 EOF
 }
@@ -153,8 +167,15 @@ stage_luci() {
 	cat > "$work/luci-app-passwall-plus.postinst" <<'EOF'
 rm -f /tmp/luci-indexcache* 2>/dev/null
 rm -rf /tmp/luci-modulecache 2>/dev/null
-timeout 15 /etc/init.d/rpcd reload >/dev/null 2>&1 || true
-timeout 15 /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
+# `timeout` is not on every OpenWrt image - a stock 25.12 does not have it,
+# and `timeout N cmd || true` on a router without it is not a bounded
+# command, it is no command at all. Which is exactly how this package came
+# to install itself without ever telling rpcd that the web interface exists.
+bounded() {
+	if command -v timeout >/dev/null 2>&1; then timeout "$@"; else shift; "$@"; fi
+}
+bounded 15 /etc/init.d/rpcd reload >/dev/null 2>&1 || true
+bounded 15 /etc/init.d/uhttpd restart >/dev/null 2>&1 || true
 exit 0
 EOF
 }

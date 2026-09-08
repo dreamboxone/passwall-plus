@@ -46,10 +46,10 @@ CONNECT="${PWPLUS_LIB:-/usr/libexec}/pwplus-connect"
 # repair itself instead of needing somebody to find it.
 if command -v ubus >/dev/null 2>&1 && ! ubus list 2>/dev/null | grep -q "^luci.passwall-plus$"; then
 	log "the web interface is not registered with rpcd - reloading it"
-	timeout 15 /etc/init.d/rpcd reload >/dev/null 2>&1 || true
+	bounded 15 /etc/init.d/rpcd reload >/dev/null 2>&1 || true
 	sleep 2
 	if ! ubus list 2>/dev/null | grep -q "^luci.passwall-plus$"; then
-		timeout 20 /etc/init.d/rpcd restart >/dev/null 2>&1 || true
+		bounded 20 /etc/init.d/rpcd restart >/dev/null 2>&1 || true
 	fi
 fi
 

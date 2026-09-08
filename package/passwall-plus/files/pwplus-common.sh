@@ -66,6 +66,59 @@ say_status() {
 	return 0
 }
 
+# ------------------------------------------------------------------ timing
+
+# Run a command with a ceiling on how long it may take.
+#
+# Not `timeout`, because `timeout` is not on every router. It is a busybox
+# applet and a stock OpenWrt 25.12 image does not build it in: `timeout 5 true`
+# there exits 127, "not found". Every call in this program was written
+# `timeout N cmd || true` or tested with `if timeout N cmd`, so on such a
+# router not one of them ran and not one of them said so.
+#
+# What that cost was the entire program. rpcd was never told the web interface
+# existed, so every button on every page did nothing at all. The crontab was
+# never reloaded. Pressing Connect ran a restart that never happened and was
+# then reported as a failed start. dnsmasq was never restarted, so name
+# lookups never moved into the tunnel. Installing the missing dependencies
+# never installed anything. All of it silent, on a freshly flashed router,
+# with every script behind it working perfectly by hand.
+#
+# So: use it where it exists, and do the same job with a background watchdog
+# where it does not.
+PWPLUS_HAVE_TIMEOUT=0
+if command -v timeout >/dev/null 2>&1; then
+	PWPLUS_HAVE_TIMEOUT=1
+fi
+
+bounded() {
+	_bd_secs="$1"
+	shift
+	if [ "$PWPLUS_HAVE_TIMEOUT" = "1" ]; then
+		timeout "$_bd_secs" "$@"
+		return $?
+	fi
+
+	"$@" &
+	_bd_pid=$!
+	(
+		_bd_n=0
+		while [ "$_bd_n" -lt "$_bd_secs" ]; do
+			kill -0 "$_bd_pid" 2>/dev/null || exit 0
+			sleep 1
+			_bd_n=$((_bd_n + 1))
+		done
+		kill -TERM "$_bd_pid" 2>/dev/null || true
+	) &
+	_bd_watch=$!
+
+	_bd_rc=0
+	wait "$_bd_pid" || _bd_rc=$?
+	kill "$_bd_watch" 2>/dev/null || true
+	wait "$_bd_watch" 2>/dev/null || true
+	return "$_bd_rc"
+}
+
 # ---------------------------------------------------------------- settings
 
 # Read one option out of /etc/config/passwall-plus with a default. uci is on every
