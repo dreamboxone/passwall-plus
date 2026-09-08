@@ -77,7 +77,7 @@ jobs:
         run: |
           set -euo pipefail
           sub=$(sed -n "s/.*option url '\(https[^']*\)'.*/\1/p" \
-                package/passwall-plus/files/ovpn.config | head -1)
+                package/passwall-plus/files/passwall-plus.config | head -1)
           echo "source: $sub"
           curl -fsSL --retry 3 -o live.txt "$sub"
           echo "lines: $(grep -c . live.txt)"
