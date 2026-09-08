@@ -342,4 +342,24 @@ else
 fi
 check "$OUT" "0" "and says nothing got through"
 
+# The script that runs after the package is unpacked, which nothing ever
+# checked. It is written into the package as text by a builder, so a syntax
+# error in it would not show up until an install on somebody's router - and an
+# install whose postinst dies half way leaves rpcd never told about the web
+# interface, which is a page where every button does nothing and nothing says
+# why. That happened.
+echo "== the postinst the builder writes is valid shell"
+sed -n '/passwall-plus.postinst" <<EOF/,/^EOF$/p' "$ROOT/build/packages.inc.sh" |
+	sed '1d;$d' > "$RIG/postinst.sh"
+if [ -s "$RIG/postinst.sh" ] && sh -n "$RIG/postinst.sh" 2>/dev/null; then
+	ok "it parses"
+else
+	bad "the generated postinst does not parse"
+fi
+if grep -q 'luci.passwall-plus' "$RIG/postinst.sh"; then
+	ok "and it checks rpcd really registered the object rather than assuming"
+else
+	bad "the postinst reloads rpcd without checking it took"
+fi
+
 rig_report

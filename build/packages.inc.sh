@@ -7,7 +7,7 @@
 # packages.inc.sh - what goes into a package, shared by the .apk and .ipk
 # builders so the two formats can never drift apart.
 
-VERSION=1.0.4
+VERSION=1.0.5
 RELEASE=1
 PKGVER="$VERSION-r$RELEASE"
 LICENSE="GPL-3.0-only"
@@ -98,7 +98,17 @@ echo '$CRON_STATS' >> /etc/crontabs/root
 # done and make the package impossible to remove afterwards. Bound them: none
 # of this is worth failing an installation over.
 timeout 15 /etc/init.d/cron reload >/dev/null 2>&1 || true
+# rpcd has to be told there is a new object, and telling it once is not
+# reliable. On a fresh install this reload has been seen to return success
+# and leave the object unregistered - and an unregistered object is a web
+# interface on which every single button does nothing whatever, while every
+# script behind it works perfectly from the shell. It is the worst kind of
+# failure this package can have, because nothing anywhere says a word.
+# So ask afterwards, and restart if the answer is no.
 timeout 15 /etc/init.d/rpcd reload >/dev/null 2>&1 || true
+if ! ubus list 2>/dev/null | grep -q '^luci.passwall-plus\$'; then
+	timeout 20 /etc/init.d/rpcd restart >/dev/null 2>&1 || true
+fi
 exit 0
 EOF
 

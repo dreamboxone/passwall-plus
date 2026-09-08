@@ -5,7 +5,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=passwall-plus
-PKG_VERSION:=1.0.4
+PKG_VERSION:=1.0.5
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=routekernel <https://t.me/routekernel1>
@@ -77,7 +77,17 @@ sed -i '\|/usr/libexec/pwplus-|d' /etc/crontabs/root
 echo '*/15 * * * * /usr/libexec/pwplus-refresh >/dev/null 2>&1' >> /etc/crontabs/root
 echo '*/5 * * * * /usr/libexec/pwplus-stats sample >/dev/null 2>&1' >> /etc/crontabs/root
 /etc/init.d/cron reload >/dev/null 2>&1
+# rpcd has to be told there is a new object, and telling it once is not
+# reliable. On a fresh install this reload has been seen to return success
+# and leave the object unregistered - and an unregistered object is a web
+# interface on which every single button does nothing whatever, while every
+# script behind it works perfectly from the shell. It is the worst kind of
+# failure this package can have, because nothing anywhere says a word.
+# So ask afterwards, and restart if the answer is no.
 /etc/init.d/rpcd reload >/dev/null 2>&1
+if ! ubus list 2>/dev/null | grep -q '^luci.passwall-plus$$'; then
+	/etc/init.d/rpcd restart >/dev/null 2>&1
+fi
 exit 0
 endef
 

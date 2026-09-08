@@ -32,6 +32,27 @@ CONNECT="${PWPLUS_LIB:-/usr/libexec}/pwplus-connect"
 # disk stays, and the next quarter hour will try again.
 "$NODES" fetch >/dev/null 2>&1 || true
 
+# Is the web interface actually reachable?
+#
+# Everything the pages do goes through one rpcd object, and rpcd only
+# learns about it when it is told to reload. That happens at install
+# time - and on a fresh router it has been seen to report success and
+# leave the object unregistered. What that looks like is a page that
+# draws perfectly and does nothing at all: no server list, no Connect,
+# no settings saved, and not one word anywhere saying why, because every
+# script behind those buttons is fine and none of them was ever called.
+#
+# It costs one ubus call every quarter of an hour to make that state
+# repair itself instead of needing somebody to find it.
+if command -v ubus >/dev/null 2>&1 && ! ubus list 2>/dev/null | grep -q "^luci.passwall-plus$"; then
+	log "the web interface is not registered with rpcd - reloading it"
+	timeout 15 /etc/init.d/rpcd reload >/dev/null 2>&1 || true
+	sleep 2
+	if ! ubus list 2>/dev/null | grep -q "^luci.passwall-plus$"; then
+		timeout 20 /etc/init.d/rpcd restart >/dev/null 2>&1 || true
+	fi
+fi
+
 [ "$(cfg enabled 0)" = "1" ] || exit 0
 
 # Already carrying traffic - leave it alone. Reconnecting a working tunnel to
