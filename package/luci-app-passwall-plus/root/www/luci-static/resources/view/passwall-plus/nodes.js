@@ -267,8 +267,8 @@ function renderNodes(d) {
 	var rows = [ E('tr', { 'class': 'tr table-titles' }, [
 		E('th', { 'class': 'th' }, _('Node')),
 		E('th', { 'class': 'th' }, _('Protocol')),
-		E('th', { 'class': 'th' }, _('Measured')),
-		E('th', { 'class': 'th' }, _('Reachable in')),
+		E('th', { 'class': 'th' }, _('URL Test')),
+		E('th', { 'class': 'th' }, _('TCPing')),
 		E('th', { 'class': 'th' }, '')
 	]) ];
 
@@ -367,12 +367,12 @@ return view.extend({
 		o = s.option(form.ListValue, 'sources', _('Nodes to use'),
 			_('This decides who may be measured, not who wins: whichever node answers fastest is the one used, wherever it came from. A node added by hand joins the list rather than replacing it. To insist on one node, press “Use” beside it below.'));
 		o.value('both', _('Mine and the subscriptions'));
-		o.value('own', _('Only the ones I added by hand'));
+		o.value('own', _('Only Manually Added'));
 		o.value('subs', _('Only the subscriptions'));
 		o.default = 'both';
 
 		s = m.section(form.GridSection, 'subscription', _('Subscriptions'),
-			_('Each one is fetched every fifteen minutes. A source that hands back a single base64 block is understood as well as a plain list of links, and so is a whole configuration file — Xray, sing-box, Clash or a WireGuard .conf.'));
+			_('Fetched every fifteen minutes. Xray, sing-box and Clash JSON configs, WireGuard .conf files, a plain list of links and a single base64 block are all accepted.'));
 		s.addremove = true;
 		s.anonymous = true;
 		s.sortable = true;
@@ -510,7 +510,7 @@ return view.extend({
 					'click': ui.createHandlerFn(self, function() {
 						return callAction('measure_all', '').then(function() {
 							ui.addNotification(null,
-								E('p', {}, _('Knocking on every node once. The Reachable column will fill in as answers come back.')),
+								E('p', {}, _('Knocking on every node once. The TCPing column will fill in as answers come back.')),
 								'info');
 						});
 					})
@@ -522,7 +522,7 @@ return view.extend({
 					            'style': 'font-size:13px;font-weight:normal;opacity:.55' }, '')
 				]),
 				E('p', { 'style': 'font-size:13px;opacity:.7;margin:0 0 8px 0' },
-					_('“Reachable in” is the handshake time every node is checked with first. “Measured” is a complete request through the node, which is only done for the ones that answered and only until a fast enough one is found — so most of this column is empty by design.')),
+					_('“TCPing” is the handshake every node is checked with first, so it is filled in for all of them. “URL Test” is a complete request through the node, which is only run on the ones that answered and only until a fast enough one is found — so most of that column is empty by design. Both are the same measurements the buttons above take, done for the whole list at once.')),
 				E('div', { 'id': 'pwp-nodelist' }, [])
 			]);
 

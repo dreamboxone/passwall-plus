@@ -64,8 +64,6 @@ var FA = {
 	'Nodes': 'نودها',
 	'%d nodes': '%d نود',
 	'Protocol': 'پروتکل',
-	'Measured': 'اندازه‌گیری‌شده',
-	'Reachable in': 'زمان دسترسی',
 	'in use': 'در حال استفاده',
 	'Use': 'استفاده',
 	'This is the node the tunnel is using at the moment. Press Disconnect, or Choose again, before deleting it.':
@@ -80,11 +78,11 @@ var FA = {
 	'This decides who may be measured, not who wins: whichever node answers fastest is the one used, wherever it came from. A node added by hand joins the list rather than replacing it. To insist on one node, press “Use” beside it below.':
 		'این تعیین می‌کند چه کسی اندازه‌گیری شود، نه چه کسی برنده شود: هر نودی که سریع‌تر جواب بدهد همان استفاده می‌شود، از هر جا که آمده باشد. نودی که دستی اضافه می‌کنید به لیست اضافه می‌شود و جای آن را نمی‌گیرد. اگر روی یک نود خاص اصرار دارید، پایین همین صفحه کنارش «استفاده» را بزنید.',
 	'Mine and the subscriptions': 'مالِ من و اشتراک‌ها',
-	'Only the ones I added by hand': 'فقط آن‌هایی که دستی اضافه کرده‌ام',
+	'Only Manually Added': 'فقط نودهای دستی',
 	'Only the subscriptions': 'فقط اشتراک‌ها',
 	'Subscriptions': 'اشتراک‌ها',
-	'Each one is fetched every fifteen minutes. A source that hands back a single base64 block is understood as well as a plain list of links, and so is a whole configuration file — Xray, sing-box, Clash or a WireGuard .conf.':
-		'هر کدام هر پانزده دقیقه یک بار خوانده می‌شوند. منبعی که یک بلوک base64 برمی‌گرداند همان‌قدر خوانده می‌شود که یک لیست ساده از لینک‌ها، و یک فایل کانفیگ کامل هم همین‌طور — Xray، sing-box، Clash یا یک فایل ‎.conf وایرگارد.',
+	'Fetched every fifteen minutes. Xray, sing-box and Clash JSON configs, WireGuard .conf files, a plain list of links and a single base64 block are all accepted.':
+		'هر پانزده دقیقه یک بار خوانده می‌شود. کانفیگ JSON ایکس‌ری، sing-box و Clash، فایل ‎.conf وایرگارد، لیست ساده‌ای از لینک‌ها و یک بلوک base64 — همه پذیرفته می‌شوند.',
 	'Name': 'نام',
 	'Address': 'آدرس',
 	'Must start with http:// or https://': 'باید با ‎http://‎ یا ‎https://‎ شروع شود',
@@ -107,11 +105,11 @@ var FA = {
 	'Reading the subscriptions. This page will fill in shortly.':
 		'در حال خواندن اشتراک‌ها. این صفحه تا لحظاتی دیگر پر می‌شود.',
 	'Read the subscriptions now': 'همین حالا اشتراک‌ها را بخوان',
-	'Knocking on every node once. The Reachable column will fill in as answers come back.':
-		'یک بار به در هر نود می‌زند. ستون «زمان دسترسی» هر چه جواب برسد پر می‌شود.',
+	'Knocking on every node once. The TCPing column will fill in as answers come back.':
+		'یک بار به در هر نود می‌زند. ستون TCPing هر چه جواب برسد پر می‌شود.',
 	'Check every node': 'همهٔ نودها را بررسی کن',
-	'“Reachable in” is the handshake time every node is checked with first. “Measured” is a complete request through the node, which is only done for the ones that answered and only until a fast enough one is found — so most of this column is empty by design.':
-		'«زمان دسترسی» همان زمان هندشیکی است که همهٔ نودها اول با آن بررسی می‌شوند. «اندازه‌گیری‌شده» یک درخواست کامل از داخل نود است، که فقط برای آن‌هایی انجام می‌شود که جواب داده‌اند و فقط تا وقتی یکی به‌قدر کافی سریع پیدا شود — پس خالی بودن بیشترِ این ستون عمدی است.',
+	'“TCPing” is the handshake every node is checked with first, so it is filled in for all of them. “URL Test” is a complete request through the node, which is only run on the ones that answered and only until a fast enough one is found — so most of that column is empty by design. Both are the same measurements the buttons above take, done for the whole list at once.':
+		'«TCPing» همان هندشیکی است که همهٔ نودها اول با آن بررسی می‌شوند، پس برای همه پر می‌شود. «URL Test» یک درخواست کامل از داخل نود است، که فقط روی آن‌هایی اجرا می‌شود که جواب داده‌اند و فقط تا وقتی یکی به‌قدر کافی سریع پیدا شود — پس خالی بودن بیشترِ آن ستون عمدی است. هر دو همان اندازه‌گیری‌هایی هستند که دکمه‌های بالا انجام می‌دهند، این بار برای کل لیست.',
 
 	/* --------------------------------------------------------- the traffic */
 	'Traffic through the tunnel': 'ترافیک عبوری از تونل',
@@ -134,13 +132,14 @@ var FA = {
 	'Disconnected': 'قطع',
 	'Ready to connect': 'آمادهٔ اتصال',
 	'Connecting…': 'در حال اتصال…',
+	'Disconnecting…': 'در حال قطع…',
 	'Starting…': 'در حال شروع…',
 	'Finding a node…': 'در حال یافتن نود…',
 	'Could not connect': 'اتصال برقرار نشد',
 	'Latency': 'تأخیر',
 	'Routing': 'مسیریابی',
 	'Dismiss': 'بستن',
-	'Iranian traffic goes direct': 'ترافیک ایران مستقیم می‌رود',
+	'Iran is Direct': 'ایران مستقیم',
 	'Iran split is on, but the routing data is missing':
 		'تفکیک ایران روشن است، ولی دادهٔ مسیریابی نیست',
 	'Everything goes through the tunnel': 'همه‌چیز از تونل می‌رود',
@@ -153,6 +152,18 @@ var FA = {
 	'%d of %d nodes answered, but none completed a request':
 		'%d نود از %d جواب دادند، ولی هیچ‌کدام یک درخواست را کامل نکرد',
 	'No node on the list answered at all': 'هیچ نودی در لیست جواب نداد',
+
+	/* ------------------------------------------------------------- the log */
+	'Log': 'لاگ',
+	'The last few hundred lines this program wrote to the system log, newest at the bottom. It refreshes every five seconds. Nothing here is stored by this package — it is the router’s own log, and it is emptied when the router restarts.':
+		'چند صد خط آخری که این برنامه در لاگ سیستم نوشته، تازه‌ترین در پایین. هر پنج ثانیه تازه می‌شود. هیچ‌کدام از این‌ها را خود پکیج ذخیره نمی‌کند — لاگ خودِ روتر است و با ریستارت روتر پاک می‌شود.',
+	/* The lines themselves are never translated: they are the router's own
+	   log, written in English with paths and numbers in them, and a Persian
+	   rendering of half of them would be a worse thing to read than either. */
+	'Nothing has been logged yet.': 'هنوز چیزی در لاگ نوشته نشده.',
+	'Refresh': 'تازه‌سازی',
+	'Following': 'دنبال کردن',
+	'Not following': 'دنبال نکردن',
 
 	/* -------------------------------------------------------- the settings */
 	'Settings': 'تنظیمات',

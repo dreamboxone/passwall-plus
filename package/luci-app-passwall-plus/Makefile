@@ -5,7 +5,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-passwall-plus
-PKG_VERSION:=1.0.6
+PKG_VERSION:=1.0.8
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=routekernel <https://t.me/routekernel1>
@@ -39,6 +39,8 @@ define Package/luci-app-passwall-plus/install
 		$(1)/www/luci-static/resources/view/passwall-plus/nodes.js
 	$(INSTALL_DATA) ./root/www/luci-static/resources/view/passwall-plus/settings.js \
 		$(1)/www/luci-static/resources/view/passwall-plus/settings.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/view/passwall-plus/log.js \
+		$(1)/www/luci-static/resources/view/passwall-plus/log.js
 
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/passwall-plus
 	$(INSTALL_DATA) ./root/www/luci-static/resources/passwall-plus/i18n.js \

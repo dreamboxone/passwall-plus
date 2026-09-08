@@ -1,6 +1,6 @@
 # Passwall+ — a router-wide tunnel for OpenWrt
 
-**Version 1.0.6** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
+**Version 1.0.8** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
 🇮🇷 **[راهنمای فارسی: README.md](README.md)**
 
 Install it on the router, press **Connect**, and from that moment every device
@@ -119,7 +119,7 @@ top of the page.
 
 ---
 
-## 4. The three pages you will see
+## 4. The four pages you will see
 
 ### Status
 
@@ -207,10 +207,13 @@ starting a second core for at the press of a button).
 **The table at the bottom.** Every node the router knows about, with what was
 measured for it:
 
-- **Reachable in** — one TCP handshake to the node. Filled in for all of them.
-- **Measured** — a complete request through the node. **Most of this column is
+- **TCPing** — one TCP handshake to the node. Filled in for all of them.
+- **URL Test** — a complete request through the node. **Most of this column is
   empty on purpose**, because measuring stops as soon as a node that is fast
   enough is found.
+
+  They are the same two tests the buttons beside each hand-added node run, done
+  here for the whole list at once.
 
 The **Check every node** button fills in the first column for all of them,
 without disturbing a tunnel that is already carrying traffic.
@@ -246,6 +249,17 @@ published is shown beside what is installed, and the button says **Update to
 …**.
 
 **Language.** English or Persian. Save, then reload the page once.
+
+### Log
+
+The last few hundred lines this program wrote to the system log, newest at the
+bottom, refreshing every five seconds. The same thing `logread -e passwall-plus`
+shows, without needing an SSH session. When a tunnel will not come up, the
+answer to "why" is almost always in here: which node was chosen, what the core
+refused, whether the firewall rules went in.
+
+The lines themselves are never translated — it is the router's own log and it
+stays in English.
 
 ---
 

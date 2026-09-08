@@ -7,7 +7,7 @@
 # packages.inc.sh - what goes into a package, shared by the .apk and .ipk
 # builders so the two formats can never drift apart.
 
-VERSION=1.0.6
+VERSION=1.0.8
 RELEASE=1
 PKGVER="$VERSION-r$RELEASE"
 LICENSE="GPL-3.0-only"
@@ -144,7 +144,7 @@ stage_luci() {
 	install -d "$i/www/luci-static/resources/view/passwall-plus" \
 	           "$i/www/luci-static/resources/passwall-plus" \
 	           "$i/usr/share/luci/menu.d" "$i/usr/share/rpcd/acl.d"
-	for v in overview nodes settings; do
+	for v in overview nodes settings log; do
 		install -m 0644 "$l/www/luci-static/resources/view/passwall-plus/$v.js" \
 			"$i/www/luci-static/resources/view/passwall-plus/$v.js"
 	done

@@ -156,7 +156,14 @@ function bars(days) {
 
 function badge(st) {
 	var text, colour;
-	if (st.connected)                  { text = _('Connected');    colour = '#10b981'; }
+	/* Disconnect is not instant: the flag goes down at once and the core takes
+	   a moment to go with it. Reporting Connected through that moment - which
+	   is literally true and completely useless - is what made the page look
+	   stuck until it was reloaded by hand. The flag is the intent, and the
+	   intent is what the reader just pressed. */
+	if (!st.enabled && (st.running || st.connected))
+	                                   { text = _('Disconnecting…'); colour = '#f59e0b'; }
+	else if (st.connected)             { text = _('Connected');    colour = '#10b981'; }
 	else if (st.status == 'selecting') { text = _('Finding a node…'); colour = '#f59e0b'; }
 	else if (st.status == 'starting')  { text = _('Starting…');    colour = '#f59e0b'; }
 	else if (st.status == 'failed')    { text = _('Could not connect'); colour = '#ef4444'; }
@@ -204,7 +211,7 @@ function renderState(st) {
 	setNode('pwp-proto', st.protocol ? st.protocol + (st.host ? '  ·  ' + st.host : '') : '-');
 	setNode('pwp-latency', st.latency_ms > 0 ? st.latency_ms + ' ms' : '-');
 	setNode('pwp-route', st.route_ir
-		? (st.geo_ready ? _('Iranian traffic goes direct')
+		? (st.geo_ready ? _('Iran is Direct')
 		                : _('Iran split is on, but the routing data is missing'))
 		: _('Everything goes through the tunnel'));
 

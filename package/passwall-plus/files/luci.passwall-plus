@@ -184,6 +184,18 @@ method_inuse() {
 	"$NODES" inuse 2>/dev/null || echo '{"section":"","host":"","port":"","active":false}'
 }
 
+# What this program has told the system log.
+#
+# All of it was already there; what was missing was any way to read it without
+# an SSH session and knowing the incantation. Bounded to the last few hundred
+# lines, because the whole of a router's log is not something to hand to a
+# browser every five seconds.
+method_log() {
+	json_init
+	json_add_string "text" "$(logread -e passwall-plus 2>/dev/null | tail -300)"
+	json_dump
+}
+
 method_subs() {
 	awk -F'\t' 'BEGIN { printf "{\"subs\":["; n = 0 }
 		{
@@ -386,6 +398,7 @@ case "$1" in
 		json_add_object "subs";    json_close_object
 		json_add_object "tests";   json_close_object
 		json_add_object "inuse";   json_close_object
+		json_add_object "log";     json_close_object
 		json_add_object "system";  json_close_object
 		json_add_object "action"
 			json_add_string "name" ""
@@ -401,6 +414,7 @@ case "$1" in
 			subs)    method_subs ;;
 			tests)   method_tests ;;
 			inuse)   method_inuse ;;
+			log)     method_log ;;
 			system)  method_system ;;
 			action)  method_action ;;
 		esac

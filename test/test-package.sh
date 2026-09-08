@@ -162,6 +162,7 @@ echo "== every file the web interface needs is in both packaging paths"
 LUCI_FILES="www/luci-static/resources/view/passwall-plus/overview.js
 www/luci-static/resources/view/passwall-plus/nodes.js
 www/luci-static/resources/view/passwall-plus/settings.js
+www/luci-static/resources/view/passwall-plus/log.js
 www/luci-static/resources/passwall-plus/i18n.js
 usr/share/luci/menu.d/luci-app-passwall-plus.json
 usr/share/rpcd/acl.d/luci-app-passwall-plus.json"

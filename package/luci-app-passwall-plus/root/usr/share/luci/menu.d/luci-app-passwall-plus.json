@@ -35,5 +35,14 @@
 			"type": "view",
 			"path": "passwall-plus/settings"
 		}
+	},
+
+	"admin/services/passwall-plus/log": {
+		"title": "Log",
+		"order": 40,
+		"action": {
+			"type": "view",
+			"path": "passwall-plus/log"
+		}
 	}
 }
