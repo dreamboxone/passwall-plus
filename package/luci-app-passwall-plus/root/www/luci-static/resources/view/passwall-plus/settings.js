@@ -268,8 +268,7 @@ return view.extend({
 		s = m.section(form.NamedSection, 'config', 'passwall-plus');
 		s.anonymous = true;
 
-		o = s.option(form.ListValue, 'lang', _('Language'),
-			_('The language of these three pages. The rest of LuCI keeps whatever language it was already in. Save, then reload the page to see it.'));
+		o = s.option(form.ListValue, 'lang', _('Language'));
 		o.value('en', _('English'));
 		o.value('fa', _('Persian'));
 		o.default = 'en';
@@ -283,15 +282,15 @@ return view.extend({
 		o.rmempty = false;
 
 		o = s.option(form.Value, 'geoip_url', _('Geoip source'),
-			_('Where geoip.dat comes from — the list of Iranian addresses. Leave it as it ships unless you have a reason.'));
+			_('geoip.dat file address'));
 		o.depends('route_ir', '1');
 
 		o = s.option(form.Value, 'geosite_url', _('Geosite source'),
-			_('Where geosite.dat comes from — the list of Iranian names. Leave it as it ships unless you have a reason.'));
+			_('geosite.dat file address'));
 		o.depends('route_ir', '1');
 
-		o = s.option(form.ListValue, 'ir_dns', _('Iranian resolver'),
-			_('Used for Iranian names when the split is on. One inside Iran keeps an Iranian CDN from answering with a foreign edge, which would send “direct” the long way round. Leave it unset and the split still works — only the lookup takes the ordinary path, and no Iranian resolver sees what this router asks for.'));
+		o = s.option(form.ListValue, 'ir_dns', _('Iranian DNS'),
+			_('Used for Iranian domains in split mode to keep CDN traffic local. Leave empty to keep split routing active without exposing DNS lookups to Iranian servers.'));
 		o.depends('route_ir', '1');
 		o.value('', '');
 		for (i = 0; i < IR_RESOLVERS.length; i++)
@@ -323,8 +322,8 @@ return view.extend({
 		o.value('off', _('Leave alone'));
 		o.default = 'dnsmasq';
 
-		o = s.option(form.Flag, 'dns_hijack', _('Catch hardcoded resolvers'),
-			_('A phone set to ask 8.8.8.8 directly gets answers from outside the tunnel and then connects to whatever it was told. This forces those queries back through the router.'));
+		o = s.option(form.Flag, 'dns_hijack', _('Force DNS through the router'),
+			_('Some devices ignore the router and ask 8.8.8.8 or 1.1.1.1 themselves. Those questions leave without the tunnel, so the answer is whatever the censor wants it to be, and the device then connects to it — looking perfectly healthy while doing so. This drags such queries back to the router. Leave it on unless a device on your network genuinely has to reach a DNS server of its own.'));
 		o.default = '1';
 		o.rmempty = false;
 

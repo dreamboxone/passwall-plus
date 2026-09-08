@@ -157,8 +157,6 @@ var FA = {
 	/* -------------------------------------------------------- the settings */
 	'Settings': 'تنظیمات',
 	'Language': 'زبان',
-	'The language of these three pages. The rest of LuCI keeps whatever language it was already in. Save, then reload the page to see it.':
-		'زبان همین سه صفحه. بقیهٔ LuCI با همان زبانی که بوده می‌ماند. ذخیره کنید و بعد صفحه را دوباره بارگذاری کنید تا اعمال شود.',
 	'English': 'English',
 	'Persian': 'فارسی',
 
@@ -167,14 +165,12 @@ var FA = {
 	'Iranian sites and addresses skip the tunnel. Needs the routing data below — until that is downloaded this does nothing, because a core asked for a geo file it has not got refuses to start rather than carrying on without it.':
 		'سایت‌ها و آدرس‌های ایرانی از تونل رد نمی‌شوند. به دادهٔ مسیریابیِ پایین نیاز دارد — تا وقتی آن دانلود نشده این گزینه هیچ کاری نمی‌کند، چون هسته‌ای که از آن فایل geo خواسته شده و ندارد اصلاً بالا نمی‌آید و بی‌خیالش هم نمی‌شود.',
 	'Geoip source': 'منبع Geoip',
-	'Where geoip.dat comes from — the list of Iranian addresses. Leave it as it ships unless you have a reason.':
-		'فایل ‎geoip.dat‎ از کجا گرفته شود — یعنی لیست آدرس‌های ایرانی. تا دلیل خاصی ندارید دست نزنید.',
+	'geoip.dat file address': 'آدرس فایل ‎geoip.dat',
 	'Geosite source': 'منبع Geosite',
-	'Where geosite.dat comes from — the list of Iranian names. Leave it as it ships unless you have a reason.':
-		'فایل ‎geosite.dat‎ از کجا گرفته شود — یعنی لیست نام‌های ایرانی. تا دلیل خاصی ندارید دست نزنید.',
-	'Iranian resolver': 'ریزالور ایرانی',
-	'Used for Iranian names when the split is on. One inside Iran keeps an Iranian CDN from answering with a foreign edge, which would send “direct” the long way round. Leave it unset and the split still works — only the lookup takes the ordinary path, and no Iranian resolver sees what this router asks for.':
-		'وقتی تفکیک روشن است، برای نام‌های ایرانی از این استفاده می‌شود. یک ریزالور داخل ایران نمی‌گذارد CDN ایرانی با یک نقطهٔ خارجی جواب بدهد، چون در آن صورت مسیر «مستقیم» راه دور را می‌رفت. اگر خالی بگذارید تفکیک باز هم کار می‌کند — فقط خودِ درخواستِ نام مسیر عادی را می‌رود، و هیچ ریزالور ایرانی نمی‌بیند این روتر چه چیزهایی را جست‌وجو می‌کند.',
+	'geosite.dat file address': 'آدرس فایل ‎geosite.dat',
+	'Iranian DNS': 'DNS ایرانی',
+	'Used for Iranian domains in split mode to keep CDN traffic local. Leave empty to keep split routing active without exposing DNS lookups to Iranian servers.':
+		'در حالت تفکیک برای دامنه‌های ایرانی استفاده می‌شود تا ترافیک CDN داخل کشور بماند. خالی بگذارید تا تفکیک کار کند بدون اینکه سرورهای ایرانی ببینند چه دامنه‌هایی جست‌وجو می‌شود.',
 	'Block advertising': 'مسدود کردن تبلیغات',
 	'Also needs the routing data.': 'این هم به دادهٔ مسیریابی نیاز دارد.',
 	'Block BitTorrent': 'مسدود کردن بیت‌تورنت',
@@ -188,9 +184,9 @@ var FA = {
 	'Through dnsmasq (recommended)': 'از راه dnsmasq (پیشنهادی)',
 	'Straight into the tunnel': 'مستقیم داخل تونل',
 	'Leave alone': 'دست نزن',
-	'Catch hardcoded resolvers': 'گرفتن ریزالورهای ثابت',
-	'A phone set to ask 8.8.8.8 directly gets answers from outside the tunnel and then connects to whatever it was told. This forces those queries back through the router.':
-		'گوشی‌ای که تنظیم شده مستقیم از ‎8.8.8.8‎ بپرسد، جواب را از بیرون تونل می‌گیرد و بعد به هر جایی که به او گفته‌اند وصل می‌شود. این گزینه آن درخواست‌ها را به زور از روتر رد می‌کند.',
+	'Force DNS through the router': 'اجبار DNS از راه روتر',
+	'Some devices ignore the router and ask 8.8.8.8 or 1.1.1.1 themselves. Those questions leave without the tunnel, so the answer is whatever the censor wants it to be, and the device then connects to it — looking perfectly healthy while doing so. This drags such queries back to the router. Leave it on unless a device on your network genuinely has to reach a DNS server of its own.':
+		'بعضی دستگاه‌ها روتر را نادیده می‌گیرند و خودشان مستقیم از ‎8.8.8.8‎ یا ‎1.1.1.1‎ می‌پرسند. آن پرسش‌ها بدون تونل بیرون می‌روند، پس جوابش هر چیزی است که فیلترچی بخواهد، و دستگاه بعد به همان وصل می‌شود — بدون اینکه ظاهراً چیزی خراب باشد. این گزینه آن پرسش‌ها را به زور به روتر برمی‌گرداند. روشن بگذارید، مگر دستگاهی در شبکه‌تان واقعاً لازم داشته باشد به DNS خودش برسد.',
 	'IPv6': 'IPv6',
 	'Almost no node on a free list carries IPv6, and a client that prefers it leaves without the tunnel while looking perfectly fine. Refusing it makes the client fall back to IPv4, which is tunnelled.':
 		'تقریباً هیچ نودی در لیست‌های رایگان IPv6 ندارد، و دستگاهی که IPv6 را ترجیح می‌دهد بدون تونل بیرون می‌رود و ظاهرش هم کاملاً سالم است. رد کردن IPv6 باعث می‌شود دستگاه به IPv4 برگردد، که تونل می‌شود.',

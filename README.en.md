@@ -1,6 +1,6 @@
 # Passwall+ — a router-wide tunnel for OpenWrt
 
-**Version 1.0.2** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
+**Version 1.0.3** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
 🇮🇷 **[راهنمای فارسی: README.md](README.md)**
 
 Install it on the router, press **Connect**, and from that moment every device
@@ -286,7 +286,7 @@ option in that file.
 | Send Iranian traffic direct `route_ir` | off | Iranian traffic skips the tunnel. Until the routing data is downloaded it deliberately does nothing |
 | Geoip source `geoip_url` | Chocolate4U | Where the Iranian address list comes from. Editable, for when you want the `-lite` file |
 | Geosite source `geosite_url` | Chocolate4U | The same, for names |
-| Iranian resolver `ir_dns` | *none* | Which resolver answers Iranian names while the split is on. Leaving it empty is a real answer: the split works without one, and no Iranian resolver gets to see what you ask for. Pick one if an Iranian CDN is answering you with a foreign node |
+| Iranian DNS `ir_dns` | *none* | Used for Iranian domains in split mode, to keep CDN traffic local. Leaving it empty is a real answer: split routing still works, and no Iranian server gets to see what you look up |
 | Block advertising `block_ads` | off | Blocks advertising and tracking domains, for every device on the network. No separate list is downloaded: the names come from the `category-ads-all` category inside the same `geosite.dat` |
 | Block BitTorrent `block_torrent` | on | BitTorrent through a free node is how a free node stops existing |
 
@@ -295,7 +295,7 @@ option in that file.
 | Setting | Default | What it does |
 |---|---|---|
 | Name lookups `dns_mode` | Through dnsmasq | `dnsmasq` means the router's own resolver keeps answering and only its upstream moves into the tunnel, so the names of your own devices and your printer keep working. `direct` sends every query straight into the tunnel and you lose the local names |
-| Catch hardcoded resolvers `dns_hijack` | on | A phone that asks 8.8.8.8 directly gets its answer from outside the tunnel and then connects to whatever it was told. This brings those queries back to the router |
+| Force DNS through the router `dns_hijack` | on | Some devices ignore the router and ask 8.8.8.8 or 1.1.1.1 themselves. That question leaves without the tunnel, so the answer is whatever the censor wants it to be and the device connects to it — looking perfectly healthy while doing so. This drags those queries back to the router |
 | IPv6 `ipv6` | refuse | Almost no free node carries IPv6, and a client that prefers it leaves without the tunnel — while looking perfectly healthy doing so. Refusing it sends the client back to IPv4 |
 | Refuse QUIC `block_quic` | off | Drops UDP 443 before the tunnel so the browser falls back to TCP. Turn it on only when your node carries UDP badly |
 | Firewall `firewall_backend` | automatic | nftables or iptables. Automatic is right unless the router has both |

@@ -295,4 +295,29 @@ else
 	bad "placeholders differ in:$BADFMT"
 fi
 
+# The one file in this package that is not code, and the one that arrived at
+# two megabytes. A router's flash is the scarce thing here and the page draws
+# this 46 pixels tall, so a picture bigger than the whole web interface is a
+# mistake worth catching before it is released rather than after.
+echo "== the artwork is a size a router can afford"
+LOGO="$ROOT/package/luci-app-passwall-plus/root/www/luci-static/resources/passwall-plus/logo.png"
+if [ -f "$LOGO" ]; then
+	BYTES=$(wc -c < "$LOGO" | tr -d ' ')
+	if [ "$BYTES" -le 65536 ]; then
+		ok "logo.png is $BYTES bytes"
+	else
+		bad "logo.png is $BYTES bytes - it goes into the flash of every router this is installed on"
+	fi
+	MISS=""
+	grep -q 'logo.png' "$ROOT/package/luci-app-passwall-plus/Makefile" || MISS="$MISS Makefile"
+	grep -q 'logo.png' "$ROOT/build/packages.inc.sh" || MISS="$MISS packages.inc.sh"
+	if [ -z "$MISS" ]; then
+		ok "and both packaging paths install it"
+	else
+		bad "logo.png is in the tree but not installed by:$MISS"
+	fi
+else
+	echo "  skip - no logo.png in the tree"
+fi
+
 rig_report
