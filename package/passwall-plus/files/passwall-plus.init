@@ -161,7 +161,7 @@ service_started() {
 		if ! wait_for_port "$bridge_port" 15; then
 			log "the bridge never started listening on $bridge_port"
 			say_status failed
-			say_message "The helper for this server's protocol would not start."
+			say_message "The helper for this node's protocol would not start."
 			return 1
 		fi
 	fi

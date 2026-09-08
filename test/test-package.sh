@@ -257,4 +257,42 @@ else
 	echo "  skip - curl here will not fetch a file:// URL"
 fi
 
+# Every string the web interface shows has a Persian translation.
+#
+# The dictionary is keyed on the English source string, so a string added to a
+# view and not to the dictionary is not an error at runtime - it simply comes
+# back in English, on a page the reader has set to Persian, next to Persian.
+# Which is the same thing as an untranslated interface and nothing says so.
+echo "== every string in the views is in the Persian dictionary"
+I18N="$ROOT/package/luci-app-passwall-plus/root/www/luci-static/resources/passwall-plus/i18n.js"
+sed -n "s/^	'\(.*\)':.*/\1/p" "$I18N" | sort -u > "$RIG/keys.txt"
+grep -ho "_('[^']*')" "$ROOT"/package/luci-app-passwall-plus/root/www/luci-static/resources/view/passwall-plus/*.js |
+	sed "s/^_('//; s/')$//" | sort -u > "$RIG/used.txt"
+UNTRANSLATED="$(comm -23 "$RIG/used.txt" "$RIG/keys.txt")"
+if [ -z "$UNTRANSLATED" ]; then
+	ok "all $(wc -l < "$RIG/used.txt" | tr -d ' ') of them"
+else
+	bad "not translated:"
+	printf '%s\n' "$UNTRANSLATED" | sed 's/^/       /'
+fi
+
+# A translation that loses a %d or a %s does not read oddly - .format() puts
+# the number nowhere and the sentence is missing the only part of it that was
+# not already known.
+echo "== the translations keep their placeholders"
+BADFMT=""
+while IFS= read -r k; do
+	[ -n "$k" ] || continue
+	v="$(sed -n "s/^	'$(printf '%s' "$k" | sed 's/[]\/$*.^[]/\\&/g')': *'\(.*\)',*$/\1/p" "$I18N" | head -1)"
+	[ -n "$v" ] || continue
+	kn="$(printf '%s' "$k" | grep -o '%[ds]' | sort | tr -d '\n')"
+	vn="$(printf '%s' "$v" | grep -o '%[ds]' | sort | tr -d '\n')"
+	[ "$kn" = "$vn" ] || BADFMT="$BADFMT $k"
+done < "$RIG/used.txt"
+if [ -z "$BADFMT" ]; then
+	ok "none lost or invented"
+else
+	bad "placeholders differ in:$BADFMT"
+fi
+
 rig_report

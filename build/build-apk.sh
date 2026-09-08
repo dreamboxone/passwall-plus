@@ -32,7 +32,7 @@ APK="${2:-$APK_BIN}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 . "$ROOT/build/packages.inc.sh"
 
-WORK="${PWPLUS_WORK:-${TMPDIR:-/tmp}/ovpn-apk-build}"
+WORK="${PWPLUS_WORK:-${TMPDIR:-/tmp}/passwall-plus-apk-build}"
 DIST="$ROOT/dist"
 
 if [ -z "$APK" ]; then

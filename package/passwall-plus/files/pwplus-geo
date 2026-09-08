@@ -145,10 +145,40 @@ cmd_update() {
 		*) echo "usage: $0 update [geoip|geosite|all]" >&2; exit 1 ;;
 	esac
 
+	# Nothing is said here when it worked. The settings page shows its own
+	# notice when the button is pressed, and a message written to the file
+	# the Status page reads would sit on the front page afterwards saying
+	# something that was true a week ago.
 	if [ "$_rc" = "0" ]; then
-		say_message "Routing data updated. Reconnect for it to take effect."
+		log "routing data updated - reconnect for it to take effect"
 	fi
 	return "$_rc"
+}
+
+# When the file was last replaced. The stamp beside it is written every time
+# this program downloads one, and it is the answer wherever there is one. A
+# file that arrived some other way - copied in by hand, left behind by an
+# earlier version that did not write stamps, or found in another front-end's
+# directory - has no stamp, and the page then showed nothing beside it, which
+# reads as "never updated" rather than "not known". The filesystem knows when
+# it was last written, so ask it.
+stamped() {
+	_st="$DIR/$1.stamp"
+	if [ -s "$_st" ]; then
+		_v="$(cat "$_st" 2>/dev/null)"
+		case "$_v" in
+			''|*[!0-9]*) : ;;
+			*) echo "$_v"; return 0 ;;
+		esac
+	fi
+	# busybox date takes -r. A build without it falls back to nothing rather
+	# than to a wrong date.
+	_v="$(date -r "$DIR/$1.dat" +%s 2>/dev/null)" || _v=""
+	case "$_v" in
+		''|*[!0-9]*) echo 0 ;;
+		*) echo "$_v" ;;
+	esac
+	return 0
 }
 
 one_status() {
@@ -157,7 +187,7 @@ one_status() {
 	if [ -s "$_f" ]; then
 		printf '"%s":{"present":true,"bytes":%s,"updated":%s,"url":"%s"}' \
 			"$_what" "$(wc -c < "$_f" | tr -d ' ')" \
-			"$(cat "$DIR/$_what.stamp" 2>/dev/null || echo 0)" \
+			"$(stamped "$_what")" \
 			"$(json_escape "$(url_for "$_what")")"
 	else
 		printf '"%s":{"present":false,"bytes":0,"updated":0,"url":"%s"}' \

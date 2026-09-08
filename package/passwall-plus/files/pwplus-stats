@@ -30,10 +30,20 @@
 #
 # The counters live in memory and reset whenever the core restarts, so what is
 # stored is the running sum of the differences. The sum lives in /var - which
-# is RAM - and only reaches flash once an hour and when the tunnel stops. A
-# sample every five minutes written straight to /etc would be a hundred
-# thousand flash writes a year to record something nobody reads more than
-# once a day, and on the sort of flash a router has, that is how routers die.
+# is RAM - and reaches flash every few minutes and when the tunnel stops. A
+# sample written straight to /etc every time would be a hundred thousand flash
+# writes a year to record something nobody reads more than once a day, and on
+# the sort of flash a router has, that is how routers die - so the sum is kept
+# in RAM and only the periodic write touches storage.
+#
+# The running sum being in RAM is also the one thing that has to survive a
+# power cut, and for a long time it did not. On the next boot the state file
+# was gone, today's total therefore started again at zero, and the first write
+# to disk replaced today's stored row with that zero - so a router switched
+# off and on lost everything it had recorded that day, and the page showed a
+# day that had apparently begun at the moment of the reboot. Today's row is
+# read back out of the file now before anything is added to it, which is what
+# makes the figure survive the router being unplugged.
 
 set -e
 
@@ -41,7 +51,18 @@ set -e
 
 STATE="$PWPLUS_RUN/stats.state"
 DB="$PWPLUS_ETC/usage.db"
-FLUSH_EVERY="$(cfg stats_flush_seconds 3600)"
+# Written down in minutes, because that is the unit anyone setting it thinks
+# in, and because the old field said seconds and defaulted to an hour - which
+# meant an hour of traffic could be lost to a power cut. Five minutes is the
+# default now: it matches how often the counters are read, so at most one
+# sample is ever at risk, and twelve small writes an hour is not what wears a
+# router's flash out.
+FLUSH_MINUTES="$(cfg stats_flush_minutes 5)"
+case "$FLUSH_MINUTES" in
+	''|*[!0-9]*) FLUSH_MINUTES=5 ;;
+esac
+[ "$FLUSH_MINUTES" -ge 1 ] 2>/dev/null || FLUSH_MINUTES=1
+FLUSH_EVERY=$((FLUSH_MINUTES * 60))
 
 api_port="$(cfg api_port 10853)"
 
@@ -138,6 +159,18 @@ cmd_flush() {
 	return 0
 }
 
+# Today's four totals as they were last written down, or nothing.
+#
+# Always succeeds. A file that is not there yet is a perfectly ordinary
+# answer - it is the first day, or the history has just been cleared - and
+# this runs under set -e, where a command substitution that comes back
+# non-zero ends the script rather than the sentence.
+stored_today() {
+	awk -F'	' -v d="$1" '$1 == d { print $2, $3, $4, $5; exit }' \
+		"$DB" 2>/dev/null || true
+	return 0
+}
+
 # ---------------------------------------------------------------- sampling
 
 cmd_sample() {
@@ -174,6 +207,24 @@ cmd_sample() {
 	_apd="$(num "$(get_state day_proxy_down)")"
 	_adu="$(num "$(get_state day_direct_up)")"
 	_add="$(num "$(get_state day_direct_down)")"
+
+	# No state at all means this is the first sample since the router booted,
+	# and the running total for today has to be picked up from where the last
+	# write to disk left it. Without this the first flush after a reboot
+	# overwrites today's stored row with the handful of bytes that have gone
+	# through since the machine came back, and the traffic recorded before the
+	# power cut is gone for good.
+	if [ -z "$_day" ]; then
+		_day="$_today"
+		_stored="$(stored_today "$_today")"
+		if [ -n "$_stored" ]; then
+			_apu="$(num "$(echo "$_stored" | cut -d" " -f1)")"
+			_apd="$(num "$(echo "$_stored" | cut -d" " -f2)")"
+			_adu="$(num "$(echo "$_stored" | cut -d" " -f3)")"
+			_add="$(num "$(echo "$_stored" | cut -d" " -f4)")"
+			log "carrying today's recorded traffic forward across the restart"
+		fi
+	fi
 
 	if [ -n "$_day" ] && [ "$_day" != "$_today" ]; then
 		# Midnight. Put yesterday to bed before starting today, or a day's

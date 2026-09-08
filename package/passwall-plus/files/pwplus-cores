@@ -248,7 +248,6 @@ install_binary() {
 		rm -f "$_dst.old"
 		rm -rf "$PWPLUS_RUN/xtract"
 		log "$_name $(core_version "$_dst") installed in $_dst"
-		say_message "$_name $(core_version "$_dst") installed."
 		return 0
 	fi
 	# put back what was there
@@ -376,7 +375,6 @@ cmd_remove() {
 			if [ -e "$DIR/$1" ]; then
 				rm -f "$DIR/$1"
 				log "$1 removed"
-				say_message "$1 removed."
 			fi
 			;;
 		xray)

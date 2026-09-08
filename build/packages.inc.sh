@@ -7,7 +7,7 @@
 # packages.inc.sh - what goes into a package, shared by the .apk and .ipk
 # builders so the two formats can never drift apart.
 
-VERSION=1.0.0
+VERSION=1.0.1
 RELEASE=1
 PKGVER="$VERSION-r$RELEASE"
 LICENSE="GPL-3.0-only"
@@ -46,7 +46,7 @@ LUCI_DESC="Web interface for Passwall+: connect, servers and subscriptions, traf
 CRON_LIST='*/15 * * * * /usr/libexec/pwplus-refresh >/dev/null 2>&1'
 CRON_STATS='*/5 * * * * /usr/libexec/pwplus-stats sample >/dev/null 2>&1'
 
-PWPLUS_SCRIPTS="pwplus-nodes pwplus-probe pwplus-connect pwplus-refresh pwplus-parse pwplus-mkconfig pwplus-rules pwplus-dns pwplus-stats pwplus-geo pwplus-cores pwplus-deps pwplus-bridge"
+PWPLUS_SCRIPTS="pwplus-nodes pwplus-probe pwplus-connect pwplus-refresh pwplus-parse pwplus-mkconfig pwplus-rules pwplus-dns pwplus-stats pwplus-test pwplus-geo pwplus-cores pwplus-deps pwplus-bridge"
 
 # stage_pwplus <staging-root> <source-root> <xray-binary>
 stage_pwplus() {

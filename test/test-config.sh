@@ -333,4 +333,72 @@ else
 	echo "  skip - no core to check against (set RIG_XRAY)"
 fi
 
+# A WireGuard .conf, exactly as a provider hands it out. This is the shape of
+# WireGuard the program could not read: wireguard:// links and WireGuard
+# inside somebody else's JSON both worked, and the file people are actually
+# given did not.
+echo "== a wireguard .conf, as it comes"
+
+WG="$RIG/work/wg.conf"
+mkdir -p "$RIG/work"
+cat > "$WG" <<'CONF'
+# home wireguard
+[Interface]
+PrivateKey = aGVsbG93b3JsZGhlbGxvd29ybGRoZWxsb3dvcmxkMTI=
+Address = 10.66.0.2/32, fd00::2/128
+DNS = 1.1.1.1
+MTU = 1420
+Reserved = 78,251,145
+
+[Peer]
+PublicKey = cHVia2V5cHVia2V5cHVia2V5cHVia2V5cHVia2V5MQ=
+PresharedKey = cHNrcHNrcHNrcHNrcHNrcHNrcHNrcHNrcHNrcHNrMTI=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = 188.114.97.3:2408
+PersistentKeepalive = 25
+CONF
+
+WGOUT="$(LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$WG")"
+
+check "$(printf '%s\n' "$WGOUT" | wc -l | tr -d ' ')" "1" \
+	"one node comes out of it"
+check "$(printf '%s' "$WGOUT" | cut -f3)" "wireguard" \
+	"and it is a wireguard node"
+check "$(printf '%s' "$WGOUT" | cut -f4)" "188.114.97.3" \
+	"the endpoint becomes the address"
+check "$(printf '%s' "$WGOUT" | cut -f5)" "2408" \
+	"and the port"
+check "$(printf '%s' "$WGOUT" | cut -f2)" "home wireguard" \
+	"the leading comment is the name"
+
+for want in '"secretKey":"aGVsbG93b3JsZGhlbGxvd29ybGRoZWxsb3dvcmxkMTI="' \
+            '"address":["10.66.0.2/32","fd00::2/128"]' \
+            '"mtu":1420' \
+            '"reserved":[78,251,145]' \
+            '"preSharedKey":"cHNrcHNrcHNrcHNrcHNrcHNrcHNrcHNrcHNrcHNrMTI="' \
+            '"keepAlive":25'; do
+	if printf '%s' "$WGOUT" | grep -qF "$want"; then
+		ok "carried through: $want"
+	else
+		bad "carried through: $want"
+	fi
+done
+
+# AllowedIPs and DNS are the peer's opinion about routing and name lookups,
+# and both of those are this program's own settings. Passing them on would be
+# a second answer to a question already answered.
+if printf '%s' "$WGOUT" | grep -q 'allowedIPs\|"dns"'; then
+	bad "AllowedIPs and DNS are left out"
+else
+	ok "AllowedIPs and DNS are left out"
+fi
+
+# Half a file is not half a node.
+printf '[Interface]\nPrivateKey = abc\n' > "$WG"
+if [ -z "$(LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$WG")" ]; then
+	ok "a .conf with no peer produces nothing"
+else
+	bad "a .conf with no peer produces nothing"
+fi
+
 rig_report

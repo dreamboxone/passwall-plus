@@ -24,6 +24,7 @@ GEO="$PWPLUS_LIB/pwplus-geo"
 CORES="$PWPLUS_LIB/pwplus-cores"
 DEPS="$PWPLUS_LIB/pwplus-deps"
 STATS="$PWPLUS_LIB/pwplus-stats"
+TEST="$PWPLUS_LIB/pwplus-test"
 RULES="$PWPLUS_LIB/pwplus-rules"
 
 JOB="$PWPLUS_RUN/job"
@@ -169,6 +170,13 @@ method_nodes() {
 	' "$PWPLUS_CANDIDATES" 2>/dev/null || echo '{"nodes":[],"count":0}'
 }
 
+# What the three per-node buttons have measured so far. Keys are
+# "<id>.<kind>"; the numbers are milliseconds, with -1 for still running and
+# -2 for a test that cannot be run on that node at all.
+method_tests() {
+	"$TEST" json 2>/dev/null || echo '{"tests":{}}'
+}
+
 method_subs() {
 	awk -F'\t' 'BEGIN { printf "{\"subs\":["; n = 0 }
 		{
@@ -238,7 +246,7 @@ method_action() {
 
 	case "$name" in
 		connect)
-			uci -q set passwall-plus.config.enabled='1' && uci -q commit ovpn
+			uci -q set passwall-plus.config.enabled='1' && uci -q commit passwall-plus
 			# Said here and not in the detached script: between forking and
 			# that script's first write there is a gap, and through the whole
 			# gap the page would still show whatever the last attempt ended
@@ -262,7 +270,7 @@ method_action() {
 			detach "$CONNECT" force
 			;;
 		disconnect)
-			uci -q set passwall-plus.config.enabled='0' && uci -q commit ovpn
+			uci -q set passwall-plus.config.enabled='0' && uci -q commit passwall-plus
 			say_status idle
 			detach timeout 60 /etc/init.d/passwall-plus stop
 			;;
@@ -270,7 +278,7 @@ method_action() {
 			# A server chosen by hand rather than by measurement.
 			[ -n "$arg" ] || { fail "no server given"; return; }
 			if "$PROBE" pick "$arg" >/dev/null 2>&1; then
-				uci -q set passwall-plus.config.enabled='1' && uci -q commit ovpn
+				uci -q set passwall-plus.config.enabled='1' && uci -q commit passwall-plus
 				say_status starting
 				detach "$CONNECT" next
 			else
@@ -316,6 +324,25 @@ method_action() {
 		stats_reset)
 			"$STATS" reset >/dev/null 2>&1
 			;;
+		node_test)
+			# "<kind>:<id>". Detached, because a real request through a
+			# node takes seconds and rpcd holds the browser open for as
+			# long as anything it started is still writing. The page reads
+			# the answer back through the tests method.
+			_kind="${arg%%:*}"; _id="${arg#*:}"
+			case "$_kind" in
+				ping|tcp|url) : ;;
+				*) fail "unknown test"; return ;;
+			esac
+			[ -n "$_id" ] && [ "$_id" != "$arg" ] || { fail "no node given"; return; }
+			detach "$TEST" "$_kind" "$_id"
+			;;
+		clear_message)
+			# The reader has read it. A message that cannot be put away
+			# sits on the front page for the rest of the boot saying a
+			# thing that stopped being true when it was acted on.
+			clear_message
+			;;
 		*)
 			fail "unknown action"
 			return
@@ -341,6 +368,7 @@ case "$1" in
 		json_add_object "traffic"; json_close_object
 		json_add_object "nodes";   json_close_object
 		json_add_object "subs";    json_close_object
+		json_add_object "tests";   json_close_object
 		json_add_object "system";  json_close_object
 		json_add_object "action"
 			json_add_string "name" ""
@@ -354,6 +382,7 @@ case "$1" in
 			traffic) method_traffic ;;
 			nodes)   method_nodes ;;
 			subs)    method_subs ;;
+			tests)   method_tests ;;
 			system)  method_system ;;
 			action)  method_action ;;
 		esac

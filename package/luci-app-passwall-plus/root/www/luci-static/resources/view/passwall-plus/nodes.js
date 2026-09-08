@@ -3,7 +3,7 @@
  * Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
  * Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
  *
- * Subscriptions, servers added by hand, and what the last measurement made of
+ * Subscriptions, nodes added by hand, and what the last measurement made of
  * all of them.
  */
 
@@ -24,6 +24,7 @@ var _ = i18n.tr;
 
 var callNodes  = rpc.declare({ object: 'luci.passwall-plus', method: 'nodes', expect: { '': {} } });
 var callSubs   = rpc.declare({ object: 'luci.passwall-plus', method: 'subs',  expect: { '': {} } });
+var callTests  = rpc.declare({ object: 'luci.passwall-plus', method: 'tests', expect: { '': {} } });
 var callAction = rpc.declare({ object: 'luci.passwall-plus', method: 'action',
                                params: [ 'name', 'arg' ], expect: { '': {} } });
 
@@ -46,7 +47,7 @@ function pill(text, colour) {
 /* --------------------------------------------------- the name in the link
 
    Practically every share link ends in #something, and that something is the
-   name whoever published it gave the server. A reader who pastes a link and
+   name whoever published it gave the node. A reader who pastes a link and
    leaves the name box empty meant that name, so there is no reason to make
    them type it a second time.
 
@@ -103,6 +104,84 @@ function nameFromLink(text) {
 	return '';
 }
 
+/* ------------------------------------------------------------- three tests
+
+   The same three PassWall puts beside each node, and they are three because
+   they answer three different questions.
+
+   Ping is ICMP and nothing more: it says how far away the address is, and
+   nothing at all about the server. One behind a CDN answers at the edge
+   whatever state the server is in, and plenty of working servers drop ICMP
+   entirely, which shows here as no answer.
+
+   TCP is a handshake to the port the tunnel will actually use. It proves
+   something is listening and how long the round trip takes.
+
+   URL is a whole HTTP request carried by the node. It is the only one of the
+   three that proves the node works, and the slowest, which is why it is not
+   what the first pass uses on a hundred nodes.
+
+   The measurement itself happens on the router and takes seconds, so pressing
+   one of these only asks for it. The answer arrives with the next poll. */
+var TESTS = [ 'ping', 'tcp', 'url' ];
+var results = {};
+
+function testLabel(kind) {
+	return kind == 'ping' ? _('Ping') : kind == 'tcp' ? _('TCP') : _('URL');
+}
+
+function testHint(kind) {
+	return kind == 'ping' ? _('ICMP round trip to the address. Says nothing about the server behind it, which may not answer pings at all.')
+	     : kind == 'tcp'  ? _('A handshake to the port the tunnel will use.')
+	     :                  _('One whole request carried by this node. The only one that proves it works.');
+}
+
+/* -1 asked for and still running, -2 cannot be asked of this node, 0 no
+   answer, anything else milliseconds. */
+function testText(v) {
+	if (v === undefined) return '';
+	if (v == -1) return '…';
+	if (v == -2) return '—';
+	if (v == 0)  return '✕';
+	return v + ' ms';
+}
+
+function testCell(sid) {
+	return E('div', { 'style': 'display:flex;gap:6px;flex-wrap:wrap' },
+		TESTS.map(function(kind) {
+			var out = E('span', {
+				'class': 'pwp-test-value',
+				'data-key': sid + '.' + kind,
+				'style': 'font-weight:600;margin-inline-start:4px'
+			}, testText(results[sid + '.' + kind]));
+
+			return E('span', {
+				'title': testHint(kind),
+				'style': 'cursor:pointer;user-select:none;white-space:nowrap;' +
+				         'border:1px solid rgba(127,127,127,.35);border-radius:8px;' +
+				         'padding:1px 8px;font-size:12px',
+				'click': function(ev) {
+					ev.preventDefault();
+					ev.stopPropagation();
+					out.textContent = '…';
+					callAction('node_test', kind + ':' + sid).catch(function() {});
+				}
+			}, [ E('span', {}, testLabel(kind)), out ]);
+		}));
+}
+
+function renderTests(d) {
+	results = (d && d.tests) || {};
+	var cells = document.querySelectorAll('.pwp-test-value');
+	for (var i = 0; i < cells.length; i++) {
+		var k = cells[i].getAttribute('data-key');
+		/* A cell showing "…" for a test the router has not written anything
+		   about yet is a request in flight, not a stale value: leave it. */
+		if (!(k in results) && cells[i].textContent == '…') continue;
+		cells[i].textContent = testText(results[k]);
+	}
+}
+
 function renderNodes(d) {
 	var box = document.getElementById('pwp-nodelist');
 	if (!box) return;
@@ -129,7 +208,7 @@ function renderNodes(d) {
 	});
 
 	var rows = [ E('tr', { 'class': 'tr table-titles' }, [
-		E('th', { 'class': 'th' }, _('Server')),
+		E('th', { 'class': 'th' }, _('Node')),
 		E('th', { 'class': 'th' }, _('Protocol')),
 		E('th', { 'class': 'th' }, _('Measured')),
 		E('th', { 'class': 'th' }, _('Reachable in')),
@@ -166,7 +245,7 @@ function renderNodes(d) {
 
 	box.appendChild(E('table', { 'class': 'table cbi-section-table' }, rows));
 	var m = document.getElementById('pwp-nodecount');
-	if (m) m.textContent = _('%d servers').format(nodes.length);
+	if (m) m.textContent = _('%d nodes').format(nodes.length);
 }
 
 function renderSubs(d) {
@@ -182,7 +261,7 @@ function renderSubs(d) {
 			'style': 'display:flex;gap:10px;align-items:center;padding:3px 0;font-size:12px'
 		}, [
 			E('span', { 'style': 'font-weight:600;min-width:120px' }, s.name),
-			s.error ? pill(s.error, '#ef4444') : pill(_('%d servers').format(s.count), '#10b981'),
+			s.error ? pill(s.error, '#ef4444') : pill(_('%d nodes').format(s.count), '#10b981'),
 			E('span', { 'style': 'opacity:.55' }, s.error ? '' : ago(s.when))
 		]));
 	});
@@ -193,6 +272,7 @@ return view.extend({
 		return Promise.all([
 			callNodes().catch(function() { return {}; }),
 			callSubs().catch(function() { return {}; }),
+			callTests().catch(function() { return {}; }),
 			uci.load('passwall-plus').catch(function() { return null; })
 		]);
 	},
@@ -200,23 +280,30 @@ return view.extend({
 	render: function(data) {
 		i18n.setLang(uci.get('passwall-plus', 'config', 'lang'));
 
+		/* Before the form is built, not after. The cells are drawn by
+		   m.render() below, and a cell can only show a number it already has
+		   - anything set afterwards would find no cells in the document yet
+		   and the table would sit empty until the first poll five seconds
+		   later, for measurements the router had already finished. */
+		results = (data[2] && data[2].tests) || {};
+
 		var m, s, o;
 
-		m = new form.Map('passwall-plus', _('Servers'),
-			_('Where servers come from, and which ones to add by hand. Changes take effect the next time the list is read.'));
+		m = new form.Map('passwall-plus', _('Nodes'),
+			_('Where nodes come from, and which ones to add by hand. Changes take effect the next time the list is read.'));
 
-		s = m.section(form.NamedSection, 'config', 'passwall-plus', _('Which servers to use'));
+		s = m.section(form.NamedSection, 'config', 'passwall-plus', _('Which nodes to use'));
 		s.anonymous = true;
 
-		o = s.option(form.ListValue, 'sources', _('Servers to use'),
-			_('This decides who may be measured, not who wins: whichever server answers fastest is the one used, wherever it came from. A server added by hand joins the list rather than replacing it. To insist on one particular server, press “Use this one” beside it below.'));
+		o = s.option(form.ListValue, 'sources', _('Nodes to use'),
+			_('This decides who may be measured, not who wins: whichever node answers fastest is the one used, wherever it came from. A node added by hand joins the list rather than replacing it. To insist on one node, press “Use this one” beside it below.'));
 		o.value('both', _('Mine and the subscriptions'));
 		o.value('own', _('Only the ones I added by hand'));
 		o.value('subs', _('Only the subscriptions'));
 		o.default = 'both';
 
 		s = m.section(form.GridSection, 'subscription', _('Subscriptions'),
-			_('Each one is fetched every fifteen minutes. A source that hands back a single base64 block is understood as well as a plain list of links.'));
+			_('Each one is fetched every fifteen minutes. A source that hands back a single base64 block is understood as well as a plain list of links, and so is a whole configuration file — Xray, sing-box, Clash or a WireGuard .conf.'));
 		s.addremove = true;
 		s.anonymous = true;
 		s.sortable = true;
@@ -239,8 +326,8 @@ return view.extend({
 		o.default = '1';
 		o.rmempty = false;
 
-		s = m.section(form.GridSection, 'node', _('Servers added by hand'),
-			_('One share link per entry — vless, vmess, trojan, shadowsocks, socks, hysteria2 or tuic. These are tried before the subscription list.'));
+		s = m.section(form.GridSection, 'node', _('Nodes added manually'),
+			_('One share link per entry — vless, vmess, trojan, shadowsocks, socks, hysteria2, tuic or wireguard. A whole WireGuard .conf file can be pasted in as it stands. These are tried before the subscription list.'));
 		s.addremove = true;
 		s.anonymous = true;
 		s.sortable = true;
@@ -248,7 +335,13 @@ return view.extend({
 		o = s.option(form.Value, 'name', _('Name'));
 		o.placeholder = 'my server';
 
+		/* In the edit dialog rather than in the table. The table has room for
+		   one useful column beside the name, and a share link is sixty
+		   characters of base64 that tells the reader nothing they did not
+		   already know — whereas what they actually want to know about a node
+		   they have just typed in is whether it works. */
 		o = s.option(form.TextValue, 'link', _('Share link'));
+		o.modalonly = true;
 		o.rows = 3;
 		o.rmempty = false;
 		o.placeholder = 'vless://…';
@@ -270,6 +363,11 @@ return view.extend({
 			}
 			return rv;
 		};
+
+		o = s.option(form.DummyValue, '_test', _('Test'),
+			_('Three questions, and they disagree often enough to be worth asking separately. Ping is the network and nothing else. TCP is a handshake to the port the tunnel will use. URL is a whole request carried by the node, and the only one of the three that proves it works.'));
+		o.modalonly = false;
+		o.renderWidget = function(section_id) { return testCell(section_id); };
 
 		o = s.option(form.Flag, 'enabled', _('On'));
 		o.default = '1';
@@ -297,33 +395,34 @@ return view.extend({
 					'click': ui.createHandlerFn(self, function() {
 						return callAction('measure_all', '').then(function() {
 							ui.addNotification(null,
-								E('p', {}, _('Knocking on every server once. The Reachable column will fill in as answers come back.')),
+								E('p', {}, _('Knocking on every node once. The Reachable column will fill in as answers come back.')),
 								'info');
 						});
 					})
-				}, _('Check every server')),
+				}, _('Check every node')),
 
 				E('h3', { 'style': 'margin-top:24px;display:flex;gap:10px;align-items:baseline' }, [
-					E('span', {}, _('Servers')),
+					E('span', {}, _('Nodes')),
 					E('span', { 'id': 'pwp-nodecount',
 					            'style': 'font-size:13px;font-weight:normal;opacity:.55' }, '')
 				]),
 				E('p', { 'style': 'font-size:13px;opacity:.7;margin:0 0 8px 0' },
-					_('“Reachable in” is the handshake time every server is checked with first. “Measured” is a complete request through the server, which is only done for the ones that answered and only until a fast enough one is found — so most of this column is empty by design.')),
+					_('“Reachable in” is the handshake time every node is checked with first. “Measured” is a complete request through the node, which is only done for the ones that answered and only until a fast enough one is found — so most of this column is empty by design.')),
 				E('div', { 'id': 'pwp-nodelist' }, [])
 			]);
 
 			poll.add(function() {
 				return Promise.all([
 					callNodes().then(renderNodes).catch(function() {}),
-					callSubs().then(renderSubs).catch(function() {})
+					callSubs().then(renderSubs).catch(function() {}),
+					callTests().then(renderTests).catch(function() {})
 				]);
 			}, 5);
 
 			renderNodes(data[0]);
 			renderSubs(data[1]);
 
-			return E([], [ mapEl, extra ]);
+			return i18n.page([ mapEl, extra ]);
 		});
 	}
 });

@@ -142,11 +142,18 @@ function renderSystem(d) {
 		[ [ 'geoip', _('Addresses (geoip.dat)') ], [ 'geosite', _('Names (geosite.dat)') ] ]
 			.forEach(function(p) {
 				var f = geo[p[0]] || {};
+				/* When it was last replaced, said in words rather than left as
+				   a bare date with nothing to say what it is a date of. A file
+				   that arrived some other way has no stamp beside it and the
+				   router falls back to when the file itself was written, so
+				   there is an answer here for every file that is present. */
 				gbox.appendChild(row(p[1],
 					f.present
 						? [ pill(bytes(f.bytes), '#10b981'),
 						    E('span', { 'style': 'opacity:.6;font-size:12px' },
-						      f.updated ? new Date(f.updated * 1000).toLocaleString() : '') ]
+						      f.updated
+						        ? _('updated %s').format(new Date(f.updated * 1000).toLocaleString())
+						        : _('date unknown')) ]
 						: [ pill(_('not downloaded'), '#94a3b8') ],
 					[ btn(f.present ? _('Update') : _('Download'), 'cbi-button-apply', function() {
 							return act('geo_update', p[0],
@@ -218,7 +225,7 @@ function renderSystem(d) {
 				}) ]));
 		cbox.appendChild(E('div', {
 			'style': 'font-size:12px;opacity:.7;margin-top:8px;line-height:1.6'
-		}, _('Xray carries the traffic. sing-box and hysteria are only needed for servers that speak hysteria2 or tuic, which Xray does not — one of them is then run as a local helper for that one server, and everything else works exactly as before.')));
+		}, _('Xray carries the traffic. sing-box and hysteria are only needed for nodes that speak hysteria2 or tuic, which Xray does not — one of them is then run as a local helper for that one node, and everything else works exactly as before.')));
 	}
 }
 
@@ -275,12 +282,12 @@ return view.extend({
 			_('Iranian sites and addresses skip the tunnel. Needs the routing data below — until that is downloaded this does nothing, because a core asked for a geo file it has not got refuses to start rather than carrying on without it.'));
 		o.rmempty = false;
 
-		o = s.option(form.Value, 'geoip_url', _('Address data'),
-			_('Where geoip.dat comes from.'));
+		o = s.option(form.Value, 'geoip_url', _('Geoip source'),
+			_('Where geoip.dat comes from — the list of Iranian addresses. Leave it as it ships unless you have a reason.'));
 		o.depends('route_ir', '1');
 
-		o = s.option(form.Value, 'geosite_url', _('Name data'),
-			_('Where geosite.dat comes from.'));
+		o = s.option(form.Value, 'geosite_url', _('Geosite source'),
+			_('Where geosite.dat comes from — the list of Iranian names. Leave it as it ships unless you have a reason.'));
 		o.depends('route_ir', '1');
 
 		o = s.option(form.ListValue, 'ir_dns', _('Iranian resolver'),
@@ -301,7 +308,7 @@ return view.extend({
 		o.rmempty = false;
 
 		o = s.option(form.Flag, 'block_torrent', _('Block BitTorrent'),
-			_('BitTorrent through a free server is how a free server stops existing.'));
+			_('BitTorrent through a free node is how a free node stops existing.'));
 		o.default = '1';
 		o.rmempty = false;
 
@@ -322,18 +329,18 @@ return view.extend({
 		o.rmempty = false;
 
 		o = s.option(form.ListValue, 'ipv6', _('IPv6'),
-			_('Almost no server on a free list carries IPv6, and a client that prefers it leaves without the tunnel while looking perfectly fine. Refusing it makes the client fall back to IPv4, which is tunnelled.'));
+			_('Almost no node on a free list carries IPv6, and a client that prefers it leaves without the tunnel while looking perfectly fine. Refusing it makes the client fall back to IPv4, which is tunnelled.'));
 		o.value('block', _('Refuse it while connected (recommended)'));
 		o.value('off', _('Leave it alone'));
 		o.default = 'block';
 
 		o = s.option(form.Flag, 'block_quic', _('Refuse QUIC'),
-			_('Makes browsers fall back to TCP. Worth turning on when the chosen server carries UDP badly; off by default, because where UDP works QUIC is faster.'));
+			_('Makes browsers fall back to TCP. Worth turning on when the chosen node carries UDP badly; off by default, because where UDP works QUIC is faster.'));
 		o.rmempty = false;
 
 		o = s.option(form.ListValue, 'firewall_backend', _('Firewall'),
 			_('Automatic is right unless this router has both and the wrong one is being picked.'));
-		o.value('auto', _('Choose automatically'));
+		o.value('auto', _('Auto'));
 		o.value('nftables', 'nftables');
 		o.value('iptables', 'iptables');
 		o.default = 'auto';
@@ -351,23 +358,24 @@ return view.extend({
 		o.rmempty = false;
 
 		/* ------------------------------------------------------ choosing */
-		s = m.section(form.NamedSection, 'config', 'passwall-plus', _('Choosing a server'),
-			_('Every server is checked cheaply first, and only the ones that answered are measured properly, ten at a time, best first — stopping at the first one fast enough. That is why connecting takes seconds rather than the best part of a minute.'));
+		s = m.section(form.NamedSection, 'config', 'passwall-plus', _('Choosing a node'),
+			_('Two passes. A quick handshake to every node, then a real request through the ones that answered — ten at a time, best first, stopping at the first node fast enough. Connecting therefore takes seconds, not a minute.'));
 		s.anonymous = true;
 
 		o = s.option(form.ListValue, 'prefilter', _('First pass'),
-			_('A TCP handshake to the server’s real port is the right test. A ping is cheaper and wrong often enough to matter: a server behind a CDN answers pings at the edge whatever state the server is in, and plenty of working servers drop ICMP entirely.'));
+			_('A TCP handshake to the node’s real port is the right test. A ping is quicker and wrong often enough to matter: a node behind a CDN answers pings at the edge whatever state it is in, and plenty of working nodes drop ICMP entirely.'));
 		o.value('tcp', _('TCP handshake (recommended)'));
 		o.value('icmp', _('Ping'));
 		o.value('both', _('Ping, then handshake'));
 		o.default = 'tcp';
 
 		o = s.option(form.Value, 'good_ms', _('Good enough (ms)'),
-			_('The first server measured faster than this is the one used. Lower means a better server and a longer wait.'));
+			_('The first node measured faster than this is the one used. Lower means a better node and a longer wait.'));
 		o.datatype = 'uinteger';
 		o.default = '1000';
 
-		o = s.option(form.Value, 'batch_size', _('Measured at a time'));
+		o = s.option(form.Value, 'batch_size', _('Measured at a time'),
+			_('How many nodes are measured properly in one go.'));
 		o.datatype = 'range(1,50)';
 		o.default = '10';
 
@@ -382,13 +390,19 @@ return view.extend({
 		o.default = '30';
 
 		/* -------------------------------------------------------- traffic */
-		s = m.section(form.NamedSection, 'config', 'passwall-plus', _('Traffic counting'));
+		s = m.section(form.NamedSection, 'config', 'passwall-plus', _('Traffic'));
 		s.anonymous = true;
 
-		o = s.option(form.Value, 'stats_flush_seconds', _('Save to flash every (s)'),
-			_('Totals are added up in memory every five minutes; this is how often that sum is written to storage. Lower loses less to a power cut and wears the flash faster. An hour is a sensible compromise.'));
-		o.datatype = 'uinteger';
-		o.default = '3600';
+		o = s.option(form.Value, 'stats_flush_minutes', _('Every (Min)'),
+			_('How often the running total is written to storage, in minutes. Anything not yet written is lost if the router loses power. Five is the default and matches how often the counters are read, so at most one reading is ever at risk.'));
+		o.datatype = 'range(1,1440)';
+		o.default = '5';
+		o.placeholder = '5';
+		/* Written out on save rather than left absent. A router upgraded from
+		   1.0.0 has no value for this at all - the old field was in seconds
+		   and is gone - and an empty box beside a number that is quietly
+		   being used is a worse answer than the number. */
+		o.rmempty = false;
 
 		var self = this;
 
@@ -435,7 +449,7 @@ return view.extend({
 			}, 5);
 
 			renderSystem(sys);
-			return E([], [ mapEl, extra ]);
+			return i18n.page([ mapEl, extra ]);
 		});
 	}
 });

@@ -27,7 +27,7 @@ ARCH="${1:-arm_cortex-a7_neon-vfpv4}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 . "$ROOT/build/packages.inc.sh"
 
-WORK="${PWPLUS_WORK:-${TMPDIR:-/tmp}/ovpn-ipk-build}"
+WORK="${PWPLUS_WORK:-${TMPDIR:-/tmp}/passwall-plus-ipk-build}"
 DIST="$ROOT/dist"
 
 CORE="$ROOT/prebuilt/$ARCH/xray"

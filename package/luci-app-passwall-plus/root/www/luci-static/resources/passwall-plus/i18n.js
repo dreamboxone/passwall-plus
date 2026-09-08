@@ -14,6 +14,25 @@
  *
  * Keys are the English source strings, so adding a string to a view without
  * translating it is not an error - it is simply not translated yet.
+ *
+ * Two things this file has to get right beyond the words.
+ *
+ * The direction. A Persian sentence in a left-to-right box is not merely
+ * right-aligned wrongly: the parts of it move. "این قسمت برای تنظیمات QUIC
+ * می‌باشد" came out as "می‌باشد QUIC این قسمت برای تنظیمات", because the
+ * browser lays out a right-to-left run inside a left-to-right paragraph by
+ * putting the whole run where the paragraph wants it and only then reversing
+ * the letters inside. The Latin word in the middle splits the sentence into
+ * two runs, and the two runs then appear in the wrong order. Nothing about
+ * the text is wrong; the box it is in is. page() below is that box, and it
+ * has to wrap everything a view returns, not only the parts that look
+ * obviously textual.
+ *
+ * And the technical words. handshake, ping, node, tunnel, QUIC: these are not
+ * translated, they are written in Persian letters - هندشیک, پینگ, نود, تونل.
+ * A reader looking for the thing they read about in a Telegram channel needs
+ * to recognise the word, and a Persian coinage for it is a word they have
+ * never seen and will not search for.
  */
 
 'use strict';
@@ -22,31 +41,70 @@
 var LANG = 'en';
 
 var FA = {
-	/* ---------------------------------------------------------- status */
-	'Connect': 'اتصال',
-	'Disconnect': 'قطع',
-	'Choose again': 'انتخاب دوباره',
-	'Connected': 'متصل',
-	'Disconnected': 'قطع',
-	'Ready to connect': 'آمادهٔ اتصال',
-	'Connecting…': 'در حال اتصال…',
-	'Starting…': 'در حال شروع…',
-	'Finding a server…': 'در حال یافتن سرور…',
-	'Could not connect': 'اتصال برقرار نشد',
-	'Server': 'سرور',
-	'Protocol': 'پروتکل',
-	'Response time': 'زمان پاسخ',
-	'Routing': 'مسیریابی',
-	'Iranian traffic goes direct': 'ترافیک ایران مستقیم می‌رود',
-	'Iran split is on, but the routing data is missing': 'تفکیک ایران روشن است، ولی دادهٔ مسیریابی نیست',
-	'Everything goes through the tunnel': 'همه‌چیز از تونل می‌رود',
-	'PassWall2 is also redirecting traffic — turn one of them off.': 'PassWall2 هم دارد ترافیک را منحرف می‌کند — یکی از این دو را خاموش کنید.',
-	'Checking which of %d servers answer at all — %d so far': 'بررسی اینکه از %d سرور کدام‌ها اصلاً جواب می‌دهند — تا اینجا %d',
-	'Measuring the %d that answered, best first — %d done': 'اندازه‌گیری %d سروری که جواب دادند، بهترین اول — %d انجام شد',
-	'%d of %d servers answered, but none completed a request': '%d سرور از %d جواب دادند، ولی هیچ‌کدام یک درخواست را کامل نکرد',
-	'No server on the list answered at all': 'هیچ سروری در لیست جواب نداد',
+	/* -------------------------------------------------------- how long ago */
+	'just now': 'همین الان',
+	'%d min ago': '%d دقیقه پیش',
+	'%d h ago': '%d ساعت پیش',
+	'%d days ago': '%d روز پیش',
 
-	/* --------------------------------------------------------- traffic */
+	/* ----------------------------------------------------- the three tests */
+	'Ping': 'پینگ',
+	'TCP': 'TCP',
+	'URL': 'URL',
+	'Test': 'تست',
+	'ICMP round trip to the address. Says nothing about the server behind it, which may not answer pings at all.':
+		'رفت‌وبرگشت ICMP تا آن آدرس. دربارهٔ سروری که پشتش است چیزی نمی‌گوید، و آن سرور ممکن است اصلاً به پینگ جواب ندهد.',
+	'A handshake to the port the tunnel will use.':
+		'یک هندشیک به همان پورتی که تونل استفاده می‌کند.',
+	'One whole request carried by this node. The only one that proves it works.':
+		'یک درخواست کامل که از همین نود عبور می‌کند. تنها تستی که ثابت می‌کند نود کار می‌کند.',
+	'Three questions, and they disagree often enough to be worth asking separately. Ping is the network and nothing else. TCP is a handshake to the port the tunnel will use. URL is a whole request carried by the node, and the only one of the three that proves it works.':
+		'سه سؤال جدا، و آن‌قدر با هم اختلاف دارند که ارزش پرسیدن جداگانه را داشته باشند. پینگ فقط شبکه را می‌سنجد. TCP یک هندشیک به پورتی است که تونل استفاده می‌کند. URL یک درخواست کامل از داخل نود است و تنها تستی است که کارکردن نود را ثابت می‌کند.',
+
+	/* ----------------------------------------------------------- the nodes */
+	'Node': 'نود',
+	'Nodes': 'نودها',
+	'%d nodes': '%d نود',
+	'Protocol': 'پروتکل',
+	'Measured': 'اندازه‌گیری‌شده',
+	'Reachable in': 'زمان دسترسی',
+	'in use': 'در حال استفاده',
+	'Use this one': 'همین را استفاده کن',
+	'Connecting through %s…': 'در حال اتصال از راه %s…',
+	'Nothing read yet. Press Read the subscriptions, or Connect on the main page.':
+		'هنوز چیزی خوانده نشده. «همین حالا اشتراک‌ها را بخوان» را بزنید، یا در صفحهٔ اصلی «اتصال».',
+	'Where nodes come from, and which ones to add by hand. Changes take effect the next time the list is read.':
+		'نودها از کجا می‌آیند، و کدام‌ها را دستی اضافه می‌کنید. تغییرات از دفعهٔ بعدی که لیست خوانده شود اعمال می‌شوند.',
+	'Which nodes to use': 'از کدام نودها استفاده شود',
+	'Nodes to use': 'نودهای مورد استفاده',
+	'This decides who may be measured, not who wins: whichever node answers fastest is the one used, wherever it came from. A node added by hand joins the list rather than replacing it. To insist on one node, press “Use this one” beside it below.':
+		'این تعیین می‌کند چه کسی اندازه‌گیری شود، نه چه کسی برنده شود: هر نودی که سریع‌تر جواب بدهد همان استفاده می‌شود، از هر جا که آمده باشد. نودی که دستی اضافه می‌کنید به لیست اضافه می‌شود و جای آن را نمی‌گیرد. اگر روی یک نود خاص اصرار دارید، پایین همین صفحه کنارش «همین را استفاده کن» را بزنید.',
+	'Mine and the subscriptions': 'مالِ من و اشتراک‌ها',
+	'Only the ones I added by hand': 'فقط آن‌هایی که دستی اضافه کرده‌ام',
+	'Only the subscriptions': 'فقط اشتراک‌ها',
+	'Subscriptions': 'اشتراک‌ها',
+	'Each one is fetched every fifteen minutes. A source that hands back a single base64 block is understood as well as a plain list of links, and so is a whole configuration file — Xray, sing-box, Clash or a WireGuard .conf.':
+		'هر کدام هر پانزده دقیقه یک بار خوانده می‌شوند. منبعی که یک بلوک base64 برمی‌گرداند همان‌قدر خوانده می‌شود که یک لیست ساده از لینک‌ها، و یک فایل کانفیگ کامل هم همین‌طور — Xray، sing-box، Clash یا یک فایل ‎.conf وایرگارد.',
+	'Name': 'نام',
+	'Address': 'آدرس',
+	'Must start with http:// or https://': 'باید با ‎http://‎ یا ‎https://‎ شروع شود',
+	'On': 'فعال',
+	'Nodes added manually': 'نودهای دستی',
+	'One share link per entry — vless, vmess, trojan, shadowsocks, socks, hysteria2, tuic or wireguard. A whole WireGuard .conf file can be pasted in as it stands. These are tried before the subscription list.':
+		'برای هر ردیف یک لینک — vless، vmess، trojan، shadowsocks، socks، hysteria2، tuic یا wireguard. یک فایل ‎.conf وایرگارد را هم می‌توانید همان‌طور که هست اینجا بچسبانید. این‌ها پیش از لیست اشتراک‌ها امتحان می‌شوند.',
+	'Share link': 'لینک اشتراک‌گذاری',
+	'That does not look like a share link': 'این شبیه یک لینک اشتراک‌گذاری نیست',
+	'Last time the sources were read': 'آخرین باری که منابع خوانده شدند',
+	'Reading the subscriptions. This page will fill in shortly.':
+		'در حال خواندن اشتراک‌ها. این صفحه تا لحظاتی دیگر پر می‌شود.',
+	'Read the subscriptions now': 'همین حالا اشتراک‌ها را بخوان',
+	'Knocking on every node once. The Reachable column will fill in as answers come back.':
+		'یک بار به در هر نود می‌زند. ستون «زمان دسترسی» هر چه جواب برسد پر می‌شود.',
+	'Check every node': 'همهٔ نودها را بررسی کن',
+	'“Reachable in” is the handshake time every node is checked with first. “Measured” is a complete request through the node, which is only done for the ones that answered and only until a fast enough one is found — so most of this column is empty by design.':
+		'«زمان دسترسی» همان زمان هندشیکی است که همهٔ نودها اول با آن بررسی می‌شوند. «اندازه‌گیری‌شده» یک درخواست کامل از داخل نود است، که فقط برای آن‌هایی انجام می‌شود که جواب داده‌اند و فقط تا وقتی یکی به‌قدر کافی سریع پیدا شود — پس خالی بودن بیشترِ این ستون عمدی است.',
+
+	/* --------------------------------------------------------- the traffic */
 	'Traffic through the tunnel': 'ترافیک عبوری از تونل',
 	'Today': 'امروز',
 	'Last 7 days': 'هفت روز اخیر',
@@ -56,109 +114,178 @@ var FA = {
 	'down': 'دانلود',
 	'up': 'آپلود',
 	'Nothing recorded yet.': 'هنوز چیزی ثبت نشده.',
-	'Sent straight out this month (not tunnelled): ': 'مستقیم فرستاده‌شده در این ماه (بدون تونل): ',
+	'Sent straight out this month (not tunnelled): ':
+		'مستقیم فرستاده‌شده در این ماه (بدون تونل): ',
 
-	/* --------------------------------------------------------- servers */
-	'Servers': 'سرورها',
-	'Which servers to use': 'از کدام سرورها استفاده شود',
-	'Servers to use': 'سرورهای مورد استفاده',
-	'Mine and the subscriptions': 'مالِ من و اشتراک‌ها',
-	'Only the ones I added by hand': 'فقط آن‌هایی که دستی اضافه کرده‌ام',
-	'Only the subscriptions': 'فقط اشتراک‌ها',
-	'Subscriptions': 'اشتراک‌ها',
-	'Servers added by hand': 'سرورهای دستی',
-	'Name': 'نام',
-	'Address': 'آدرس',
-	'Share link': 'لینک اشتراک‌گذاری',
-	'On': 'فعال',
-	'Read the subscriptions now': 'همین حالا اشتراک‌ها را بخوان',
-	'Check every server': 'همهٔ سرورها را بررسی کن',
-	'Last time the sources were read': 'آخرین باری که منابع خوانده شدند',
-	'Measured': 'اندازه‌گیری‌شده',
-	'Reachable in': 'زمان دسترسی',
-	'Use this one': 'همین را استفاده کن',
-	'in use': 'در حال استفاده',
-	'%d servers': '%d سرور',
-	'just now': 'همین الان',
-	'%d min ago': '%d دقیقه پیش',
-	'%d h ago': '%d ساعت پیش',
-	'%d days ago': '%d روز پیش',
-	'Nothing read yet. Press Read the subscriptions, or Connect on the main page.': 'هنوز چیزی خوانده نشده. «همین حالا اشتراک‌ها را بخوان» را بزنید، یا در صفحهٔ اصلی Connect.',
-	'That does not look like a share link': 'این شبیه یک لینک اشتراک‌گذاری نیست',
-	'Must start with http:// or https://': 'باید با http:// یا https:// شروع شود',
+	/* ---------------------------------------------------------- the status */
+	'Connect': 'اتصال',
+	'Disconnect': 'قطع',
+	'Choose again': 'انتخاب دوباره',
+	'Connected': 'متصل',
+	'Disconnected': 'قطع',
+	'Ready to connect': 'آمادهٔ اتصال',
+	'Connecting…': 'در حال اتصال…',
+	'Starting…': 'در حال شروع…',
+	'Finding a node…': 'در حال یافتن نود…',
+	'Could not connect': 'اتصال برقرار نشد',
+	'Latency': 'تأخیر',
+	'Routing': 'مسیریابی',
+	'Dismiss': 'بستن',
+	'Iranian traffic goes direct': 'ترافیک ایران مستقیم می‌رود',
+	'Iran split is on, but the routing data is missing':
+		'تفکیک ایران روشن است، ولی دادهٔ مسیریابی نیست',
+	'Everything goes through the tunnel': 'همه‌چیز از تونل می‌رود',
+	'PassWall2 is also redirecting traffic — turn one of them off.':
+		'PassWall2 هم دارد ترافیک را منحرف می‌کند — یکی از این دو را خاموش کنید.',
+	'Checking which of %d nodes answer at all — %d so far':
+		'بررسی اینکه از %d نود کدام‌ها اصلاً جواب می‌دهند — تا اینجا %d',
+	'Measuring the %d that answered, best first — %d done':
+		'اندازه‌گیری %d نودی که جواب دادند، بهترین اول — %d انجام شد',
+	'%d of %d nodes answered, but none completed a request':
+		'%d نود از %d جواب دادند، ولی هیچ‌کدام یک درخواست را کامل نکرد',
+	'No node on the list answered at all': 'هیچ نودی در لیست جواب نداد',
 
-	/* -------------------------------------------------------- settings */
+	/* -------------------------------------------------------- the settings */
 	'Settings': 'تنظیمات',
 	'Language': 'زبان',
+	'The language of these three pages. The rest of LuCI keeps whatever language it was already in. Save, then reload the page to see it.':
+		'زبان همین سه صفحه. بقیهٔ LuCI با همان زبانی که بوده می‌ماند. ذخیره کنید و بعد صفحه را دوباره بارگذاری کنید تا اعمال شود.',
 	'English': 'English',
 	'Persian': 'فارسی',
+
+	'Routing data': 'دادهٔ مسیریابی',
 	'Send Iranian traffic direct': 'ترافیک ایران مستقیم برود',
-	'Address data': 'دادهٔ آدرس‌ها',
-	'Name data': 'دادهٔ نام‌ها',
-	'Iranian resolver': 'resolver ایرانی',
+	'Iranian sites and addresses skip the tunnel. Needs the routing data below — until that is downloaded this does nothing, because a core asked for a geo file it has not got refuses to start rather than carrying on without it.':
+		'سایت‌ها و آدرس‌های ایرانی از تونل رد نمی‌شوند. به دادهٔ مسیریابیِ پایین نیاز دارد — تا وقتی آن دانلود نشده این گزینه هیچ کاری نمی‌کند، چون هسته‌ای که از آن فایل geo خواسته شده و ندارد اصلاً بالا نمی‌آید و بی‌خیالش هم نمی‌شود.',
+	'Geoip source': 'منبع Geoip',
+	'Where geoip.dat comes from — the list of Iranian addresses. Leave it as it ships unless you have a reason.':
+		'فایل ‎geoip.dat‎ از کجا گرفته شود — یعنی لیست آدرس‌های ایرانی. تا دلیل خاصی ندارید دست نزنید.',
+	'Geosite source': 'منبع Geosite',
+	'Where geosite.dat comes from — the list of Iranian names. Leave it as it ships unless you have a reason.':
+		'فایل ‎geosite.dat‎ از کجا گرفته شود — یعنی لیست نام‌های ایرانی. تا دلیل خاصی ندارید دست نزنید.',
+	'Iranian resolver': 'ریزالور ایرانی',
+	'Used for Iranian names when the split is on. One inside Iran keeps an Iranian CDN from answering with a foreign edge, which would send “direct” the long way round. Leave it unset and the split still works — only the lookup takes the ordinary path, and no Iranian resolver sees what this router asks for.':
+		'وقتی تفکیک روشن است، برای نام‌های ایرانی از این استفاده می‌شود. یک ریزالور داخل ایران نمی‌گذارد CDN ایرانی با یک نقطهٔ خارجی جواب بدهد، چون در آن صورت مسیر «مستقیم» راه دور را می‌رفت. اگر خالی بگذارید تفکیک باز هم کار می‌کند — فقط خودِ درخواستِ نام مسیر عادی را می‌رود، و هیچ ریزالور ایرانی نمی‌بیند این روتر چه چیزهایی را جست‌وجو می‌کند.',
 	'Block advertising': 'مسدود کردن تبلیغات',
+	'Also needs the routing data.': 'این هم به دادهٔ مسیریابی نیاز دارد.',
 	'Block BitTorrent': 'مسدود کردن بیت‌تورنت',
+	'BitTorrent through a free node is how a free node stops existing.':
+		'بیت‌تورنت روی یک نود رایگان همان کاری است که نود رایگان را از بین می‌برد.',
+
 	'Network': 'شبکه',
 	'Name lookups': 'حل نام‌ها',
+	'“Through dnsmasq” keeps local machine names and DHCP names working and moves only the outside lookups into the tunnel. “Straight into the tunnel” resolves outside names and loses the ones on your own network.':
+		'«از راه dnsmasq» نام دستگاه‌های داخل شبکه و نام‌های DHCP را سرِ جایش نگه می‌دارد و فقط جست‌وجوی نام‌های بیرونی را به تونل می‌برد. «مستقیم داخل تونل» نام‌های بیرونی را حل می‌کند ولی نام‌های شبکهٔ خودتان را از دست می‌دهید.',
 	'Through dnsmasq (recommended)': 'از راه dnsmasq (پیشنهادی)',
 	'Straight into the tunnel': 'مستقیم داخل تونل',
 	'Leave alone': 'دست نزن',
-	'Catch hardcoded resolvers': 'گرفتن resolverهای ثابت',
+	'Catch hardcoded resolvers': 'گرفتن ریزالورهای ثابت',
+	'A phone set to ask 8.8.8.8 directly gets answers from outside the tunnel and then connects to whatever it was told. This forces those queries back through the router.':
+		'گوشی‌ای که تنظیم شده مستقیم از ‎8.8.8.8‎ بپرسد، جواب را از بیرون تونل می‌گیرد و بعد به هر جایی که به او گفته‌اند وصل می‌شود. این گزینه آن درخواست‌ها را به زور از روتر رد می‌کند.',
 	'IPv6': 'IPv6',
+	'Almost no node on a free list carries IPv6, and a client that prefers it leaves without the tunnel while looking perfectly fine. Refusing it makes the client fall back to IPv4, which is tunnelled.':
+		'تقریباً هیچ نودی در لیست‌های رایگان IPv6 ندارد، و دستگاهی که IPv6 را ترجیح می‌دهد بدون تونل بیرون می‌رود و ظاهرش هم کاملاً سالم است. رد کردن IPv6 باعث می‌شود دستگاه به IPv4 برگردد، که تونل می‌شود.',
 	'Refuse it while connected (recommended)': 'تا وقتی وصل است رد شود (پیشنهادی)',
 	'Leave it alone': 'دست نزن',
 	'Refuse QUIC': 'رد کردن QUIC',
+	'Makes browsers fall back to TCP. Worth turning on when the chosen node carries UDP badly; off by default, because where UDP works QUIC is faster.':
+		'مرورگرها را وادار می‌کند به TCP برگردند. وقتی نود انتخاب‌شده UDP را بد جابه‌جا می‌کند روشن کردنش می‌ارزد؛ به‌طور پیش‌فرض خاموش است، چون هر جا UDP کار کند QUIC سریع‌تر است.',
 	'Firewall': 'فایروال',
-	'Choose automatically': 'انتخاب خودکار',
+	'Automatic is right unless this router has both and the wrong one is being picked.':
+		'خودکار درست است، مگر اینکه این روتر هر دو را داشته باشد و اشتباهی انتخاب شود.',
+	'Auto': 'خودکار',
 	'Interfaces to tunnel': 'اینترفیس‌هایی که تونل شوند',
+	'Read from this router. Left unset — which is how it ships — every LAN interface is tunnelled, which is what almost everyone wants. Choose one to pick traffic up from that interface only.':
+		'از خود همین روتر خوانده شده. اگر خالی بماند — که حالت پیش‌فرض است — همهٔ اینترفیس‌های LAN تونل می‌شوند، و تقریباً همه همین را می‌خواهند. اگر یکی را انتخاب کنید فقط ترافیک همان اینترفیس برداشته می‌شود.',
 	'Reconnect after a reboot': 'اتصال دوباره بعد از ریستارت',
-	'Choosing a server': 'انتخاب سرور',
-	'First pass': 'پاس اول',
-	'TCP handshake (recommended)': 'دست‌دادن TCP (پیشنهادی)',
-	'Ping': 'پینگ',
-	'Ping, then handshake': 'پینگ، بعد دست‌دادن',
+
+	'Choosing a node': 'انتخاب نود',
+	'Two passes. A quick handshake to every node, then a real request through the ones that answered — ten at a time, best first, stopping at the first node fast enough. Connecting therefore takes seconds, not a minute.':
+		'دو مرحله. اول یک هندشیک سریع به همهٔ نودها، بعد یک درخواست واقعی از داخل آن‌هایی که جواب داده‌اند — ده‌تا ده‌تا، بهترین اول، و همان‌جا که اولین نودِ به‌قدر کافی سریع پیدا شد متوقف می‌شود. برای همین اتصال چند ثانیه طول می‌کشد، نه یک دقیقه.',
+	'First pass': 'مرحلهٔ اول',
+	'A TCP handshake to the node’s real port is the right test. A ping is quicker and wrong often enough to matter: a node behind a CDN answers pings at the edge whatever state it is in, and plenty of working nodes drop ICMP entirely.':
+		'یک هندشیک TCP به پورت واقعی نود، تست درست است. پینگ سریع‌تر است ولی آن‌قدر اشتباه می‌کند که مهم باشد: نودی که پشت CDN است در هر حالی از لبه به پینگ جواب می‌دهد، و خیلی از نودهای سالم اصلاً ICMP را می‌اندازند دور.',
+	'TCP handshake (recommended)': 'هندشیک TCP (پیشنهادی)',
+	'Ping, then handshake': 'پینگ، بعد هندشیک',
 	'Good enough (ms)': 'به‌قدر کافی خوب (میلی‌ثانیه)',
+	'The first node measured faster than this is the one used. Lower means a better node and a longer wait.':
+		'اولین نودی که اندازه‌اش از این کمتر دربیاید همان استفاده می‌شود. عدد کمتر یعنی نود بهتر و انتظار بیشتر.',
 	'Measured at a time': 'هم‌زمان اندازه‌گیری‌شونده',
+	'How many nodes are measured properly in one go.':
+		'در هر نوبت چند نود به‌طور کامل اندازه‌گیری شوند.',
 	'Batches at most': 'حداکثر تعداد دسته',
+	'How far down the list to keep going when nothing is fast enough.':
+		'وقتی هیچ‌کدام به‌قدر کافی سریع نیستند، تا کجای لیست ادامه داده شود.',
 	'Checked at once': 'هم‌زمان بررسی‌شونده',
-	'Traffic counting': 'شمارش ترافیک',
-	'Save to flash every (s)': 'ذخیره روی فلش هر (ثانیه)',
+	'How many handshakes run in parallel in the first pass. Lower this on a router that struggles.':
+		'در مرحلهٔ اول چند هندشیک هم‌زمان اجرا شود. روی روتری که کم می‌آورد این را کم کنید.',
+
+	'Traffic': 'ترافیک',
+	'Every (Min)': 'هر (دقیقه)',
+	'How often the running total is written to storage, in minutes. Anything not yet written is lost if the router loses power. Five is the default and matches how often the counters are read, so at most one reading is ever at risk.':
+		'جمعِ در جریان هر چند دقیقه روی حافظه نوشته شود. هر چه هنوز نوشته نشده باشد با قطع برق روتر از دست می‌رود. پیش‌فرض پنج است و با فاصلهٔ خواندن شمارنده‌ها یکی است، پس حداکثر یک نوبتِ خوانده‌شده در خطر است.',
+
 	'Does this router have what it needs?': 'آیا این روتر آنچه لازم دارد را دارد؟',
+	'These are questions put to the running system, not a list of package names. A package can be installed and the thing it provides still not work.':
+		'این‌ها سؤال‌هایی است که از سیستمِ در حال اجرا پرسیده شده، نه یک لیست از اسم پکیج‌ها. یک پکیج می‌تواند نصب باشد و چیزی که فراهم می‌کند باز هم کار نکند.',
 	'Transparent proxy': 'پروکسی شفاف',
+	'the kernel can redirect traffic': 'کرنل می‌تواند ترافیک را منحرف کند',
+	'the kernel module for this is missing — nothing will be tunnelled':
+		'ماژول کرنلِ این کار نیست — هیچ چیزی تونل نمی‌شود',
 	'Policy routing': 'مسیریابی سیاستی',
+	'the full ip command is installed': 'دستور کامل ip نصب است',
+	'busybox ip cannot add the route this needs — install ip-full':
+		'ip بیزی‌باکس این مسیر را نمی‌تواند اضافه کند — ip-full را نصب کنید',
 	'HTTPS': 'HTTPS',
+	'the router can fetch over HTTPS': 'روتر می‌تواند روی HTTPS چیزی بگیرد',
+	'certificates are missing or the connection is blocked — nothing can be downloaded':
+		'گواهی‌ها نیستند یا اتصال مسدود است — هیچ چیزی دانلود نمی‌شود',
 	'Firewall in use': 'فایروال در حال استفاده',
-	'Packages': 'پکیج‌ها',
 	'none found': 'چیزی پیدا نشد',
-	'Install them': 'نصبشان کن',
+	'Packages': 'پکیج‌ها',
 	'%d missing': '%d مورد کم است',
 	'everything needed is installed': 'هرچه لازم بود نصب است',
-	'the kernel can redirect traffic': 'کرنل می‌تواند ترافیک را منحرف کند',
-	'the kernel module for this is missing — nothing will be tunnelled': 'ماژول کرنلِ این کار نیست — هیچ چیزی تونل نمی‌شود',
-	'the full ip command is installed': 'دستور کامل ip نصب است',
-	'busybox ip cannot add the route this needs — install ip-full': 'ip بیزی‌باکس این مسیر را نمی‌تواند اضافه کند — ip-full را نصب کنید',
-	'the router can fetch over HTTPS': 'روتر می‌تواند روی HTTPS چیزی بگیرد',
-	'certificates are missing or the connection is blocked — nothing can be downloaded': 'گواهی‌ها نیستند یا اتصال مسدود است — هیچ چیزی دانلود نمی‌شود',
-	'Routing data': 'دادهٔ مسیریابی',
+	'Install them': 'نصبشان کن',
+	'Installing. This needs a working connection and may take a minute.':
+		'در حال نصب. به یک اتصال سالم نیاز دارد و ممکن است یک دقیقه طول بکشد.',
+
 	'Addresses (geoip.dat)': 'آدرس‌ها (geoip.dat)',
 	'Names (geosite.dat)': 'نام‌ها (geosite.dat)',
+	'updated %s': 'به‌روزرسانی: %s',
+	'date unknown': 'تاریخ نامعلوم',
 	'not downloaded': 'دانلود نشده',
 	'Download': 'دانلود',
 	'Update': 'به‌روزرسانی',
-	'Remove both': 'حذف هر دو',
+	'Downloading. The page will show the new size when it is done.':
+		'در حال دانلود. وقتی تمام شد، حجم جدید در همین صفحه نشان داده می‌شود.',
 	'Free space': 'فضای خالی',
+	'Remove both': 'حذف هر دو',
+	'Routing data removed.': 'دادهٔ مسیریابی حذف شد.',
+	'The full files are about 17 MB and 8 MB. If they will not fit, the same project publishes geoip-lite.dat (38 KB) and geosite-lite.dat (2 MB), which carry the Iranian categories and nothing else — put those addresses in the boxes above. A download that will not fit is refused rather than half written.':
+		'فایل‌های کامل حدود ۱۷ و ۸ مگابایت هستند. اگر جا نمی‌شوند، همان پروژه ‎geoip-lite.dat‎ (۳۸ کیلوبایت) و ‎geosite-lite.dat‎ (۲ مگابایت) را هم منتشر می‌کند که فقط دسته‌های ایرانی را دارند — آدرس آن‌ها را در کادرهای بالا بگذارید. دانلودی که جا نشود رد می‌شود، نه اینکه نصفه نوشته شود.',
+
 	'Cores': 'هسته‌ها',
-	'Install': 'نصب',
-	'Remove': 'حذف',
 	'installed': 'نصب‌شده',
 	'not installed': 'نصب نشده',
 	'no build for this router': 'برای این روتر بیلدی ندارد',
 	'latest is %s': 'آخرین نسخه %s است',
 	'Update to %s': 'به‌روزرسانی به %s',
+	'Install': 'نصب',
+	'Downloading %s.': 'در حال دانلود %s.',
+	'Remove': 'حذف',
+	'%s removed.': '%s حذف شد.',
 	'Check for new versions': 'بررسی نسخه‌های جدید',
-	'(installed by another package — left alone)': '(توسط پکیج دیگری نصب شده — دست‌نخورده مانده)',
+	'Asking each project what it has published. The versions above will fill in shortly.':
+		'از هر پروژه پرسیده می‌شود چه نسخه‌ای منتشر کرده. نسخه‌های بالا تا لحظاتی دیگر پر می‌شوند.',
+	'(installed by another package — left alone)':
+		'(توسط پکیج دیگری نصب شده — دست‌نخورده مانده)',
+	'Xray carries the traffic. sing-box and hysteria are only needed for nodes that speak hysteria2 or tuic, which Xray does not — one of them is then run as a local helper for that one node, and everything else works exactly as before.':
+		'ترافیک را Xray می‌برد. sing-box و hysteria فقط برای نودهایی لازم‌اند که hysteria2 یا tuic حرف می‌زنند و Xray بلد نیست — آن وقت یکی از این دو فقط برای همان یک نود به‌عنوان کمکیِ محلی اجرا می‌شود و بقیهٔ چیزها دقیقاً مثل قبل کار می‌کنند.',
+
 	'Traffic history': 'تاریخچهٔ ترافیک',
 	'Forget all recorded traffic': 'همهٔ ترافیک ثبت‌شده را فراموش کن',
+	'Traffic history cleared.': 'تاریخچهٔ ترافیک پاک شد.',
+
 	'yes': 'بله',
 	'no': 'خیر'
 };
@@ -169,10 +296,42 @@ function tr(s) {
 	return (v === undefined) ? s : v;
 }
 
+/* The box everything a view returns has to go in.
+
+   Persian is right to left, and a Persian sentence laid out inside a
+   left-to-right box comes apart wherever a Latin word appears in it: the
+   browser puts each right-to-left run where the surrounding direction wants
+   it and only then reverses the letters within the run, so "…تنظیمات QUIC
+   می‌باشد" arrives with its two halves swapped. Setting the direction on one
+   element that contains the whole page fixes every string on it at once,
+   including the ones LuCI itself draws inside the form.
+
+   Anything that is a sequence rather than a sentence keeps dir="ltr" of its
+   own - the fortnight of daily bars, for one. Mirroring those would put
+   yesterday to the right of today without saying so. */
+function page(children) {
+	if (LANG !== 'fa') return E([], children);
+
+	return E('div', { 'dir': 'rtl', 'class': 'pwplus-rtl' }, [
+		E('style', { 'type': 'text/css' },
+			'.pwplus-rtl{text-align:right}' +
+			'.pwplus-rtl [dir="ltr"]{text-align:left}' +
+			/* The cross that puts the message away belongs in the corner the
+			   text ends at, which is the other one now. */
+			'.pwplus-rtl #pwp-msg button{float:left}' +
+			/* A number with a unit after it is one run and must not be split. */
+			'.pwplus-rtl .cbi-value-field input,.pwplus-rtl .cbi-value-field textarea{' +
+			'direction:ltr;text-align:left}'),
+		E('div', {}, children)
+	]);
+}
+
 return baseclass.extend({
 	/* Called by each view once it knows what the setting says. Anything other
 	   than "fa" is English, including a value nobody has set yet. */
 	setLang: function(l) { LANG = (l === 'fa') ? 'fa' : 'en'; },
 	get: function() { return LANG; },
+	dir: function() { return LANG === 'fa' ? 'rtl' : 'ltr'; },
+	page: page,
 	tr: tr
 });

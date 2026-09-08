@@ -130,13 +130,11 @@ cmd_install() {
 
 	_missing="$(missing | tr '\n' ' ' | sed 's/ *$//')"
 	if [ -z "$_missing" ]; then
-		say_message "Everything needed is already installed."
 		log "nothing missing"
 		return 0
 	fi
 
 	log "installing: $_missing"
-	say_message "Installing $_missing ..."
 
 	# The package index lives in RAM and is empty after every reboot, so this
 	# is not optional. It is also the step most likely to fail on a connection
@@ -175,7 +173,6 @@ cmd_install() {
 		return 1
 	fi
 
-	say_message "Dependencies installed."
 	log "dependencies installed"
 	return 0
 }

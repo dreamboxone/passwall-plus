@@ -171,4 +171,61 @@ sh "$STATS" sample >/dev/null 2>&1 || true
 check "$(sed -n 's/^day_direct_up=//p' "$RIG/run/stats.state")" "0" \
 	"an omitted counter is nothing, not the value of the next one"
 
+# The one thing the running total has to survive, and for a long time did not.
+#
+# The total for today lives in RAM. A router that is switched off at the wall
+# loses it, and on the next boot the first sample used to start today from
+# zero and then write that zero over the row already on disk - so a reboot at
+# five in the afternoon threw away the whole day, and the page then showed a
+# day that had apparently begun at the moment of the reboot.
+#
+# Driven exactly as a reboot drives it: a row on disk, no state file, and a
+# core reporting what a core reports when it has just started.
+echo "== the day's traffic survives the router losing power"
+
+cat > "$RIG_ANSWER" <<'JSON'
+{ "stat": [
+    { "name": "outbound>>>proxy>>>traffic>>>uplink", "value": 30 },
+    { "name": "outbound>>>proxy>>>traffic>>>downlink", "value": 70 }
+] }
+JSON
+
+rm -f "$RIG/run/stats.state"
+printf '%s\t1000\t2000\t0\t0\n' "$TODAY" > "$DB"
+sh "$STATS" sample >/dev/null 2>&1 || true
+
+check "$(sed -n 's/^day_proxy_up=//p' "$RIG/run/stats.state")" "1030" \
+	"what was already recorded today is picked up again after a restart"
+check "$(sed -n 's/^day_proxy_down=//p' "$RIG/run/stats.state")" "2070" \
+	"and so is the other direction"
+
+# And the write that follows must not undo it.
+sh "$STATS" flush >/dev/null 2>&1 || true
+check "$(awk -F'\t' -v d="$TODAY" '$1 == d { print $2 }' "$DB")" "1030" \
+	"and the row on disk keeps it rather than being overwritten with the new bytes"
+
+# Yesterday is a different row and is never touched by any of this.
+YESTERDAY="$(day_before "$TODAY" 1)"
+rm -f "$RIG/run/stats.state"
+printf '%s\t5000\t6000\t0\t0\n' "$YESTERDAY" >> "$DB"
+sh "$STATS" sample >/dev/null 2>&1 || true
+sh "$STATS" flush >/dev/null 2>&1 || true
+check "$(awk -F'\t' -v d="$YESTERDAY" '$1 == d { print $2 }' "$DB")" "5000" \
+	"yesterday is still there afterwards"
+
+# How often that write happens is a setting, and it is written down in
+# minutes. It used to say seconds and default to an hour, which is how an
+# hour of traffic came to be at risk in the first place.
+echo "== the flush interval is minutes"
+rm -f "$RIG/run/stats.state" "$DB"
+rig_set stats_flush_minutes 1
+sh "$STATS" sample >/dev/null 2>&1 || true
+sh "$STATS" sample >/dev/null 2>&1 || true
+if [ -s "$DB" ]; then
+	ok "one minute means the first sample already writes to disk"
+else
+	bad "one minute means the first sample already writes to disk"
+fi
+rig_set stats_flush_minutes 5
+
 rig_report

@@ -1,0 +1,248 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: GPL-3.0-only
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+#
+# pwplus-test - measure one node, on demand, three different ways.
+#
+#   pwplus-test ping <id>    ICMP round trip to the node's address
+#   pwplus-test tcp  <id>    TCP handshake to the node's real port
+#   pwplus-test url  <id>    a whole HTTP request carried by the node
+#   pwplus-test json         every answer collected so far
+#   pwplus-test clear        forget them
+#
+# The three are the same three PassWall offers beside each node, and they are
+# three because they answer three different questions and disagree often.
+#
+#   ping  is the network layer and nothing else. It says how far away the
+#         address is. It says nothing about the server: one behind Cloudflare
+#         answers at the edge whatever state the server is in, and plenty of
+#         working servers drop ICMP entirely, which reads here as no answer.
+#
+#   tcp   is a handshake to the port the tunnel will actually use. It proves
+#         something is listening and how long the round trip takes, and it is
+#         the honest measure of distance. It still says nothing about whether
+#         the credentials are right or the protocol is spoken correctly.
+#
+#   url   is a complete request through the node - the core is started, a
+#         local SOCKS port is offered, and one small page is fetched through
+#         it. This is the only one of the three that proves the node works.
+#         It is also the slowest, which is why it is not what the first pass
+#         uses when a hundred nodes have to be sifted.
+#
+# <id> is a tag from the candidate list, or the uci section of a node added by
+# hand - which is the case that matters, because a node typed in a minute ago
+# has not been through a refresh yet and is in no list.
+#
+# Answers land in files rather than on stdout: the web interface starts these
+# in the background and reads them afterwards, so that a browser is never left
+# holding a request open for the six seconds a real one takes.
+#
+#   -2  this test cannot be run on this node
+#   -1  running
+#    0  no answer
+#   >0  milliseconds
+
+set -e
+
+. "${PWPLUS_LIB:-/usr/libexec}/pwplus-common.sh"
+
+PARSE="$PWPLUS_LIB/pwplus-parse"
+DIR="$PWPLUS_RUN/tests"
+PORT=24900
+
+mkdir -p "$DIR" 2>/dev/null || true
+
+# tag<TAB>label<TAB>proto<TAB>host<TAB>port<TAB>payload for one node, wherever
+# it happens to live.
+row_for() {
+	_id="$1"
+
+	if [ -s "$PWPLUS_CANDIDATES" ]; then
+		_r="$(awk -F'\t' -v t="$_id" '$1 == t { print; exit }' "$PWPLUS_CANDIDATES")"
+		[ -n "$_r" ] && { printf '%s\n' "$_r"; return 0; }
+	fi
+
+	# A section of /etc/config/passwall-plus, parsed here and now. The link may
+	# have been typed thirty seconds ago and belong to no list yet.
+	command -v uci >/dev/null 2>&1 || return 1
+	_link="$(uci -q get "passwall-plus.$_id.link" 2>/dev/null)" || _link=""
+	[ -n "$_link" ] || return 1
+	_r="$(printf '%s\n' "$_link" | LC_ALL=C awk -f "$PARSE" 2>/dev/null | head -1)"
+	[ -n "$_r" ] || return 1
+	printf '%s\n' "$_r"
+	return 0
+}
+
+put() { echo "$2" > "$DIR/$1" 2>/dev/null || true; return 0; }
+
+# ------------------------------------------------------------------- ping
+
+do_ping() {
+	_out="$DIR/$1.ping"
+	_host="$2"
+	echo -1 > "$_out"
+	if ! _o="$(ping -c 3 -W 2 -q "$_host" 2>/dev/null)"; then
+		echo 0 > "$_out"
+		return 0
+	fi
+	# busybox prints "round-trip min/avg/max = 1.2/3.4/5.6 ms"; iputils prints
+	# "rtt min/avg/max/mdev = ...". The average is the second number either
+	# way, and taking the first would report the luckiest of three packets.
+	_v="$(printf '%s' "$_o" | awk -F'[ /]+' '
+		/min\/avg/ {
+			c = 0
+			for (i = 1; i <= NF; i++)
+				if ($i ~ /^[0-9]+\.?[0-9]*$/) {
+					c++
+					if (c == 2) { printf "%d", $i + 0.5; exit }
+				}
+		}')"
+	case "$_v" in
+		''|*[!0-9]*) _v=0 ;;
+	esac
+	[ "$_v" -gt 0 ] 2>/dev/null || _v=1
+	echo "$_v" > "$_out"
+	return 0
+}
+
+# -------------------------------------------------------------------- tcp
+
+do_tcp() {
+	_out="$DIR/$1.tcp"
+	_host="$2"; _port="$3"
+	echo -1 > "$_out"
+	case "$_host" in *:*) _host="[$_host]" ;; esac
+	_t="$(curl -s -o /dev/null --connect-timeout 5 --max-time 5 \
+		-w '%{time_connect}' "http://$_host:$_port/" 2>/dev/null)" || _t=""
+	if [ -z "$_t" ]; then
+		echo 0 > "$_out"
+		return 0
+	fi
+	awk -v t="$_t" 'BEGIN { m = int(t * 1000 + 0.5); if (t > 0 && m < 1) m = 1; printf "%d", m }' \
+		> "$_out" 2>/dev/null || echo 0 > "$_out"
+	return 0
+}
+
+# -------------------------------------------------------------------- url
+
+do_url() {
+	_out="$DIR/$1.url"
+	_proto="$2"; _payload="$3"
+	echo -1 > "$_out"
+
+	# Xray does not speak these, and standing up the bridge for one button
+	# would be a second core, a second port and a second thing to leave
+	# running. Say so rather than reporting a working node as broken.
+	case "$_proto" in
+		hysteria2|hysteria|tuic) echo -2 > "$_out"; return 0 ;;
+	esac
+
+	# One at a time. Two of these at once would both try to listen on the same
+	# loopback port, the second core would refuse to start, and the answer -
+	# an honest-looking "no answer" - would be about this program and not
+	# about the node. Waiting a few seconds for the other one to finish is the
+	# only answer that is true.
+	_waited=0
+	while ! mkdir "$DIR/.url-lock" 2>/dev/null; do
+		_waited=$((_waited + 1))
+		if [ "$_waited" -gt 15 ]; then
+			# Something died holding it. Take it rather than wedging for good.
+			rm -rf "$DIR/.url-lock" 2>/dev/null || true
+			mkdir "$DIR/.url-lock" 2>/dev/null || true
+			break
+		fi
+		sleep 1
+	done
+
+	_cfg="$PWPLUS_RUN/one-test.json"
+	printf '{"log":{"loglevel":"none"},"inbounds":[{"tag":"in","listen":"127.0.0.1","port":%d,"protocol":"socks","settings":{"udp":false}}],"outbounds":[%s],"routing":{"rules":[{"type":"field","inboundTag":["in"],"outboundTag":"out"}]}}' \
+		"$PORT" "$(printf '%s' "$_payload" | sed 's/^{/{"tag":"out",/')" > "$_cfg"
+
+	if ! _x="$(find_xray "$_cfg")"; then
+		rm -f "$_cfg"
+		rmdir "$DIR/.url-lock" 2>/dev/null || true
+		echo -2 > "$_out"
+		return 0
+	fi
+
+	_geo="$(geo_dir)" || _geo=""
+	if [ -n "$_geo" ]; then
+		XRAY_LOCATION_ASSET="$_geo" "$_x" run -config "$_cfg" >/dev/null 2>&1 &
+	else
+		"$_x" run -config "$_cfg" >/dev/null 2>&1 &
+	fi
+	_pid=$!
+	# Otherwise the core's own start-up is charged to the server.
+	sleep 1
+
+	_ms=0
+	if _t="$(curl -s -o /dev/null -x "socks5h://127.0.0.1:$PORT" \
+		--connect-timeout 8 --max-time 8 \
+		-w '%{time_total}' "$(cfg test_url 'http://www.gstatic.com/generate_204')" 2>/dev/null)"
+	then
+		_ms="$(awk -v t="$_t" 'BEGIN { m = int(t * 1000 + 0.5); if (t > 0 && m < 1) m = 1; printf "%d", m }')"
+	fi
+
+	kill "$_pid" 2>/dev/null || true
+	wait "$_pid" 2>/dev/null || true
+	rm -f "$_cfg"
+	rmdir "$DIR/.url-lock" 2>/dev/null || true
+	echo "${_ms:-0}" > "$_out"
+	return 0
+}
+
+# ------------------------------------------------------------------ report
+
+cmd_json() {
+	printf '{"tests":{'
+	_first=1
+	for _f in "$DIR"/*; do
+		[ -f "$_f" ] || continue
+		_k="$(basename "$_f")"
+		_v="$(cat "$_f" 2>/dev/null)"
+		# Anything that is not one of the two markers or a plain number is a
+		# file something else wrote, and a number invented from it would be
+		# worse than none.
+		case "$_v" in
+			-1|-2) : ;;
+			''|*[!0-9]*) _v=0 ;;
+		esac
+		[ "$_first" = "1" ] || printf ','
+		printf '"%s":%s' "$(json_escape "$_k")" "${_v:-0}"
+		_first=0
+	done
+	printf '}}\n'
+	return 0
+}
+
+cmd_run() {
+	_kind="$1"; _id="$2"
+	_row="$(row_for "$_id")" || {
+		put "$_id.$_kind" -2
+		return 0
+	}
+	_proto="$(printf '%s' "$_row" | cut -f3)"
+	_host="$(printf '%s' "$_row" | cut -f4)"
+	_port="$(printf '%s' "$_row" | cut -f5)"
+	_payload="$(printf '%s' "$_row" | cut -f6-)"
+
+	case "$_kind" in
+		ping) do_ping "$_id" "$_host" ;;
+		tcp)  do_tcp  "$_id" "$_host" "$_port" ;;
+		url)  do_url  "$_id" "$_proto" "$_payload" ;;
+		*) echo "usage: $0 ping|tcp|url <id>" >&2; return 1 ;;
+	esac
+	return 0
+}
+
+case "${1:-json}" in
+	ping|tcp|url)
+		[ -n "${2:-}" ] || { echo "usage: $0 $1 <id>" >&2; exit 1; }
+		cmd_run "$1" "$2"
+		;;
+	json)  cmd_json ;;
+	clear) rm -f "$DIR"/* 2>/dev/null || true ;;
+	*) echo "usage: $0 ping|tcp|url <id>|json|clear" >&2; exit 1 ;;
+esac

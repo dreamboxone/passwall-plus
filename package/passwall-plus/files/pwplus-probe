@@ -186,7 +186,7 @@ cmd_sift() {
 	log "reachable: $_alive of $_total servers answered a handshake"
 
 	if [ "$_alive" -eq 0 ]; then
-		say_message "No server on the list answered at all. The connection itself may be blocking them, or the list may be stale."
+		say_message "No node on the list answered at all. The connection itself may be blocking them, or the list may be stale."
 		return 1
 	fi
 	return 0
@@ -402,7 +402,7 @@ cmd_select() {
 
 	if [ ! -s "$RESULTS" ]; then
 		progress done "$_total" "$_total" "$_alive" "$_tested" 0
-		say_message "$_alive of $_total servers answered a handshake, but none of them could complete a request."
+		say_message "$_alive of $_total nodes answered a handshake, but none of them could complete a request."
 		warn "no server completed a test request"
 		return 1
 	fi

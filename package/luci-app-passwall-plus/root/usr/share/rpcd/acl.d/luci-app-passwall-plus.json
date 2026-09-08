@@ -3,7 +3,7 @@
 		"description": "Grant access to Passwall+",
 		"read": {
 			"ubus": {
-				"luci.passwall-plus": [ "state", "traffic", "nodes", "subs", "system" ]
+				"luci.passwall-plus": [ "state", "traffic", "nodes", "subs", "system", "tests" ]
 			},
 			"uci": [ "passwall-plus" ]
 		},

@@ -20,7 +20,7 @@
 	},
 
 	"admin/services/passwall-plus/nodes": {
-		"title": "Servers",
+		"title": "Nodes",
 		"order": 20,
 		"action": {
 			"type": "view",

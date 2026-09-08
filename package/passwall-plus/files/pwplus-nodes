@@ -288,14 +288,14 @@ cmd_build() {
 	if [ ! -s "$PWPLUS_CANDIDATES.new" ]; then
 		rm -f "$PWPLUS_CANDIDATES.new"
 		if [ "$_had" = "1" ]; then
-			say_message "Nothing in the list could be read as a server"
+			say_message "Nothing in the list could be read as a node"
 		else
 			# The one case that genuinely stops the user from connecting, and
 			# the only one this page says anything about. It names the way out,
 			# because on a censored connection the list address is unreachable
 			# until the tunnel is up and the tunnel needs a server first - and
 			# one link pasted in by hand breaks that circle.
-			say_message "There is no server list yet: no subscription could be read and none has been saved before. Add one server by hand on the Servers page - a single share link is enough - or check the subscription address there."
+			say_message "There is no node list yet: no subscription could be read and none has been saved before. Add one node by hand on the Nodes page - a single share link is enough - or check the subscription address there."
 		fi
 		warn "no usable servers in the list"
 		return 1

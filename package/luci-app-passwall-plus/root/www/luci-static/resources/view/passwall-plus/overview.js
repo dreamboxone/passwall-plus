@@ -25,6 +25,11 @@ var callAction  = rpc.declare({ object: 'luci.passwall-plus', method: 'action',
 
 var UP = '#f59e0b', DOWN = '#3b82f6';
 
+/* The one message the reader has already read and put away. Kept for as long
+   as the page is open, which is exactly as long as it needs to be: a reload
+   is a fresh look at the router and the message ought to be shown again. */
+var dismissed = '';
+
 function bytes(n) {
 	n = Number(n) || 0;
 	if (n >= 1099511627776) return (n / 1099511627776).toFixed(2) + ' TB';
@@ -152,7 +157,7 @@ function bars(days) {
 function badge(st) {
 	var text, colour;
 	if (st.connected)                  { text = _('Connected');    colour = '#10b981'; }
-	else if (st.status == 'selecting') { text = _('Finding a server…'); colour = '#f59e0b'; }
+	else if (st.status == 'selecting') { text = _('Finding a node…'); colour = '#f59e0b'; }
 	else if (st.status == 'starting')  { text = _('Starting…');    colour = '#f59e0b'; }
 	else if (st.status == 'failed')    { text = _('Could not connect'); colour = '#ef4444'; }
 	else if (st.status == 'idle')      { text = _('Ready to connect'); colour = '#94a3b8'; }
@@ -195,7 +200,7 @@ function renderState(st) {
 	st = st || {};
 	setNode('pwp-version', st.version ? 'v' + st.version : '');
 	setNode('pwp-state', badge(st));
-	setNode('pwp-server', st.server || '-');
+	setNode('pwp-node', st.server || '-');
 	setNode('pwp-proto', st.protocol ? st.protocol + (st.host ? '  ·  ' + st.host : '') : '-');
 	setNode('pwp-latency', st.latency_ms > 0 ? st.latency_ms + ' ms' : '-');
 	setNode('pwp-route', st.route_ir
@@ -204,7 +209,15 @@ function renderState(st) {
 		: _('Everything goes through the tunnel'));
 
 	/* Anything the user has to act on. This is the difference between a page
-	   that says "failed" and a page that says why. */
+	   that says "failed" and a page that says why.
+
+	   Only things to act on: a message saying an install worked used to land
+	   here too, and then sat on the front page for the rest of the boot with
+	   no way to put it away. Those are notices now and are shown where the
+	   button was pressed. What is left is a problem, and even a problem can
+	   be read and dismissed — the cross clears the stored message, and for
+	   the ones worked out fresh each time it remembers what was dismissed so
+	   they do not come straight back on the next poll. */
 	var msg = document.getElementById('pwp-msg');
 	if (msg) {
 		var text = st.message || '';
@@ -212,7 +225,9 @@ function renderState(st) {
 		   soon as PassWall does. */
 		if (!text && st.passwall)
 			text = _('PassWall2 is also redirecting traffic — turn one of them off.');
+		if (text && text === dismissed) text = '';
 		msg.style.display = text ? 'block' : 'none';
+		msg.setAttribute('data-text', text);
 		setNode('pwp-msg-text', text);
 	}
 
@@ -236,15 +251,15 @@ function renderState(st) {
 		label = st.job + '…';
 	} else if (st.phase == 'prefilter' && st.total > 0) {
 		pct = Math.min(100, Math.round((st.done || 0) * 100 / st.total));
-		label = _('Checking which of %d servers answer at all — %d so far').format(st.total, st.alive || 0);
+		label = _('Checking which of %d nodes answer at all — %d so far').format(st.total, st.alive || 0);
 	} else if (st.phase == 'urltest') {
 		pct = st.alive > 0 ? Math.min(100, Math.round((st.tested || 0) * 100 / st.alive)) : 0;
 		label = _('Measuring the %d that answered, best first — %d done').format(st.alive || 0, st.tested || 0);
 	} else if (bad) {
 		pct = 100;
 		label = st.alive > 0
-			? _('%d of %d servers answered, but none completed a request').format(st.alive, st.total || 0)
-			: _('No server on the list answered at all');
+			? _('%d of %d nodes answered, but none completed a request').format(st.alive, st.total || 0)
+			: _('No node on the list answered at all');
 	} else if (ok) {
 		pct = 100;
 		label = '';
@@ -293,16 +308,20 @@ return view.extend({
 	load: function() {
 		/* Start measuring as the page opens, so that by the time the reader
 		   has decided to press Connect the answer is already there. The
-		   backend ignores this when a choice already exists. */
-		return callAction('prepare', '')
-			.catch(function() {})
-			.then(function() {
-				return Promise.all([
-					callState().catch(function() { return {}; }),
-					callTraffic().catch(function() { return {}; }),
-					uci.load('passwall-plus').catch(function() { return null; })
-				]);
-			});
+		   backend ignores this when a choice already exists.
+
+		   Fired off rather than waited for. It used to be waited for, and the
+		   page then took a whole extra round trip to the router before it
+		   asked for anything it was going to draw — which is why the traffic
+		   rings appeared a few seconds after the rest of the page rather than
+		   with it. Nothing here reads its answer, so there is nothing to
+		   wait for. */
+		callAction('prepare', '').catch(function() {});
+		return Promise.all([
+			callState().catch(function() { return {}; }),
+			callTraffic().catch(function() { return {}; }),
+			uci.load('passwall-plus').catch(function() { return null; })
+		]);
 	},
 
 	render: function(data) {
@@ -319,7 +338,20 @@ return view.extend({
 				'style': 'display:none;margin:-4px 0 12px 0;padding:9px 12px;border-radius:7px;' +
 				         'background:rgba(245,158,11,.13);border:1px solid rgba(245,158,11,.35);' +
 				         'font-size:13px;line-height:1.5'
-			}, [ E('span', { 'id': 'pwp-msg-text' }, '') ]),
+			}, [
+				E('button', {
+					'title': _('Dismiss'),
+					'style': 'float:right;border:0;background:none;cursor:pointer;' +
+					         'font-size:16px;line-height:1;opacity:.6;padding:0 2px;color:inherit',
+					'click': ui.createHandlerFn(this, function() {
+						var box = document.getElementById('pwp-msg');
+						dismissed = (box && box.getAttribute('data-text')) || '';
+						if (box) box.style.display = 'none';
+						return callAction('clear_message', '').catch(function() {});
+					})
+				}, '×'),
+				E('span', { 'id': 'pwp-msg-text' }, '')
+			]),
 			E('div', { 'id': 'pwp-bar', 'style': 'display:none;margin:0 0 14px 0' }, [
 				E('div', { 'style': 'height:8px;border-radius:6px;overflow:hidden;' +
 				                    'background:rgba(127,127,127,.18)' }, [
@@ -331,9 +363,9 @@ return view.extend({
 				]),
 				E('div', { 'id': 'pwp-pct', 'style': 'margin-top:5px;font-size:12px;opacity:.7' }, '')
 			]),
-			line(_('Server'), 'pwp-server'),
+			line(_('Node'), 'pwp-node'),
 			line(_('Protocol'), 'pwp-proto'),
-			line(_('Response time'), 'pwp-latency'),
+			line(_('Latency'), 'pwp-latency'),
 			line(_('Routing'), 'pwp-route'),
 			E('div', { 'style': 'margin-top:16px;display:flex;gap:10px;flex-wrap:wrap' }, [
 				E('button', {
@@ -362,7 +394,10 @@ return view.extend({
 			}, []),
 			E('div', { 'style': 'font-size:12px;opacity:.65;margin-bottom:6px' },
 				_('Last 14 days')),
-			E('div', { 'id': 'pwp-bars' }, []),
+			/* Left to right whatever the language: these are days in order,
+			   and a Persian page that mirrored them would put yesterday on
+			   the right of today and say nothing about having done so. */
+			E('div', { 'id': 'pwp-bars', 'dir': 'ltr' }, []),
 			E('div', { 'style': 'margin-top:12px;font-size:12px;opacity:.7' }, [
 				E('span', {}, _('Sent straight out this month (not tunnelled): ')),
 				E('span', { 'id': 'pwp-direct', 'style': 'font-weight:600' }, '-')
@@ -379,7 +414,7 @@ return view.extend({
 			return callTraffic().then(renderTraffic).catch(function() {});
 		}, 15);
 
-		var page = E([], [
+		var page = i18n.page([
 			E('h2', { 'style': 'display:flex;align-items:baseline;gap:10px' }, [
 				E('span', {}, 'Passwall+'),
 				E('span', { 'id': 'pwp-version',

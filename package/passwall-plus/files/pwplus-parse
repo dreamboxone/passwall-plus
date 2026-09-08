@@ -1060,17 +1060,35 @@ DECODE { blob = blob $0; next }
 	if (!probed) {
 		probe = line
 		sub(/^[ \t]+/, "", probe)
+		# A comment before anything else decides nothing, and every
+		# WireGuard file a provider sends starts with one naming the
+		# location. Held on to rather than skipped, because if what
+		# follows turns out to be a .conf then that comment is the only
+		# name the file has. Bounded, so that a subscription with a
+		# preamble on it cannot be held in memory whole.
+		if (probe ~ /^[#;]/) {
+			if (length(head) < 400) head = head line "\n"
+			next
+		}
 		if (probe != "") {
 			probed = 1
-			if (substr(probe, 1, 1) == "{" || substr(probe, 1, 1) == "[") JSONDOC = 1
+			# A brace is a configuration file. A bracket is either a JSON
+			# array or the [Interface] header of a WireGuard .conf - the file
+			# a provider actually hands out, and the one shape of WireGuard
+			# this could not read. Everything else arrives as a wireguard://
+			# line or inside somebody else's JSON.
+			if (substr(probe, 1, 1) == "{") JSONDOC = 1
+			else if (tolower(probe) ~ /^\[(interface|peer)\]/) { WGCONF = 1; doc = head }
+			else if (substr(probe, 1, 1) == "[") JSONDOC = 1
 		}
 	}
-	if (JSONDOC) { doc = doc line "\n"; next }
+	if (JSONDOC || WGCONF) { doc = doc line "\n"; next }
 	do_line(line)
 }
 
 END {
 	if (DECODE) printf "%s", b64(blob)
+	else if (WGCONF) wg_conf(doc)
 	else if (JSONDOC) json_doc(doc)
 }
 
@@ -1093,6 +1111,71 @@ function do_line(line) {
 	else if (index(line, "tuic://")      == 1) do_tuic(substr(line, 8))
 	else if (index(line, "wireguard://") == 1) do_wireguard(substr(line, 13))
 	else if (index(line, "wg://")        == 1) do_wireguard(substr(line, 6))
+}
+
+# --------------------------------------------------------- a wireguard .conf
+#
+# The file wg-quick reads, and the file a WireGuard provider actually gives
+# you: [Interface] with a PrivateKey and an Address, [Peer] with a PublicKey
+# and an Endpoint. Nothing else in a subscription looks remotely like it, so
+# recognising it costs one comparison on the first line - and it means the
+# reader can paste the file they were sent instead of first having to turn it
+# into a wireguard:// link, which is a thing no ordinary person can do.
+#
+# Only the fields Xray's wireguard outbound has a use for are read. AllowedIPs
+# is deliberately not one of them: this program decides what goes through the
+# tunnel with its own routing rules, and a peer's AllowedIPs would be a second
+# opinion on the same question. DNS is left out for the same reason - name
+# lookups are the Network settings' business.
+#
+# The name comes from a leading comment when there is one, because that is
+# where every provider puts it, and from the endpoint otherwise.
+function wg_conf(doc,   lines, m, i, l, sect, k, v, p,
+                        name, secret, addrs, mtu, reserved,
+                        pubkey, psk, keep, endpoint) {
+	m = split(doc, lines, "\n")
+	sect = ""
+	for (i = 1; i <= m; i++) {
+		l = lines[i]
+		sub(/^[ \t]+/, "", l)
+		sub(/[ \t]+$/, "", l)
+		if (l == "") continue
+		if (substr(l, 1, 1) == "#" || substr(l, 1, 1) == ";") {
+			if (name == "") {
+				name = substr(l, 2)
+				sub(/^[ \t]+/, "", name)
+				name = clean_label(name)
+			}
+			continue
+		}
+		if (substr(l, 1, 1) == "[") { sect = tolower(l); continue }
+		p = index(l, "=")
+		if (p <= 0) continue
+		k = tolower(substr(l, 1, p - 1))
+		v = substr(l, p + 1)
+		gsub(/^[ \t]+|[ \t]+$/, "", k)
+		gsub(/^[ \t]+|[ \t]+$/, "", v)
+		# A trailing comment on the value line, which wg-quick tolerates.
+		sub(/[ \t]+#.*$/, "", v)
+		if (sect == "[interface]") {
+			if      (k == "privatekey") secret = v
+			else if (k == "address")    addrs = v
+			else if (k == "mtu")        mtu = v + 0
+			else if (k == "reserved")   reserved = v
+		} else if (sect == "[peer]") {
+			if      (k == "publickey")           pubkey = v
+			else if (k == "presharedkey")        psk = v
+			else if (k == "endpoint")            endpoint = v
+			else if (k == "persistentkeepalive") keep = v + 0
+		}
+	}
+
+	# A key without a peer to use it on, or a peer with nowhere to send to,
+	# is not half a server - it is a file that was cut short somewhere.
+	if (secret == "" || pubkey == "" || endpoint == "") return
+	if (!hostport(endpoint)) return
+	emit(name, "wireguard",
+	     mk_wg(secret, wg_addrs(addrs), pubkey, psk, keep, mtu, wg_reserved(reserved)))
 }
 
 # ------------------------------------------------------------- wireguard://
