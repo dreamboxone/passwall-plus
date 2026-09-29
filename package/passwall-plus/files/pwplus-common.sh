@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
@@ -35,15 +35,50 @@ PWPLUS_VERSION_FILE="$PWPLUS_ETC/version"
 
 mkdir -p "$PWPLUS_RUN" "$PWPLUS_ETC" 2>/dev/null || true
 
+# The runtime log the Log page shows, the way PassWall2 keeps one: a file in
+# RAM, a date on every line, and a button that empties it. Everything also
+# goes to syslog as before - the file is what the page reads, the system log
+# is what survives the page being cleared.
+PWPLUS_LOG="${PWPLUS_LOG:-/tmp/log/passwall-plus.log}"
+
+log_line() {
+	mkdir -p "$(dirname "$PWPLUS_LOG")" 2>/dev/null || true
+	echo "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null): $*" >> "$PWPLUS_LOG" 2>/dev/null || true
+	return 0
+}
+
+# A step inside a longer run, indented under the line that started it - the
+# shape PassWall2's own log has, so the two read the same way.
+log_step() {
+	log_line "  - $*"
+	logger -t passwall-plus -p daemon.info "$*" 2>/dev/null || true
+	[ -t 2 ] && echo "$*" >&2
+	return 0
+}
+
 log() {
+	log_line "$*"
 	logger -t passwall-plus -p daemon.info "$*" 2>/dev/null || true
 	[ -t 2 ] && echo "$*" >&2
 	return 0
 }
 
 warn() {
+	log_line "$*"
 	logger -t passwall-plus -p daemon.warn "$*" 2>/dev/null || true
 	[ -t 2 ] && echo "$*" >&2
+	return 0
+}
+
+# Kept to the last few hundred lines. It lives in RAM, and a router that has
+# been up for a month would otherwise be carrying a month of it.
+log_trim() {
+	[ -f "$PWPLUS_LOG" ] || return 0
+	_lt_n="$(wc -l < "$PWPLUS_LOG" 2>/dev/null || echo 0)"
+	if [ "${_lt_n:-0}" -gt 1000 ] 2>/dev/null; then
+		tail -n 500 "$PWPLUS_LOG" > "$PWPLUS_LOG.trim" 2>/dev/null &&
+			mv -f "$PWPLUS_LOG.trim" "$PWPLUS_LOG" 2>/dev/null || true
+	fi
 	return 0
 }
 
@@ -205,21 +240,95 @@ find_xray() {
 	return 1
 }
 
+# The helper cores are this program's own, kept in its own folder, and never
+# another package's. A sing-box that PassWall2 installed is PassWall2's: it is
+# upgraded, downgraded or removed on PassWall2's schedule, and a bridge built
+# on it would change underneath this one without anything here knowing. So
+# only the copy in core_dir is used - installed from the App Update page -
+# and a router that has another program's copy simply shows this one as not
+# installed yet.
+core_dir() {
+	cfg core_dir "$PWPLUS_OWN_DIR"
+	return 0
+}
+
+# PassWall2's App Path for sing-box and hysteria: the file itself when one is
+# set - to run from memory, a path under /tmp - and otherwise this program's
+# own copy in the cores folder. Either way it is the one file this program
+# installs, updates and uses, and nobody else's.
+singbox_path() {
+	_sp="$(cfg core_singbox '')"
+	echo "${_sp:-$(core_dir)/sing-box}"
+	return 0
+}
+
+hysteria_path() {
+	_hp="$(cfg core_hysteria '')"
+	echo "${_hp:-$(core_dir)/hysteria}"
+	return 0
+}
+
+# Geoview, for the Geo View page - PassWall2's tool for reading the routing
+# data: which lists hold a name or an address, and what one list holds.
+geoview_path() {
+	_gp="$(cfg core_geoview '')"
+	echo "${_gp:-$(core_dir)/geoview}"
+	return 0
+}
+
+find_geoview() {
+	_fg="$(geoview_path)"
+	[ -x "$_fg" ] && { echo "$_fg"; return 0; }
+	return 1
+}
+
 find_singbox() {
-	for _x in "$PWPLUS_OWN_DIR/sing-box" /usr/bin/sing-box /usr/local/bin/sing-box; do
-		[ -x "$_x" ] || continue
-		"$_x" version >/dev/null 2>&1 || continue
-		echo "$_x"
-		return 0
-	done
+	_fs="$(singbox_path)"
+	[ -x "$_fs" ] && "$_fs" version >/dev/null 2>&1 && { echo "$_fs"; return 0; }
 	return 1
 }
 
 find_hysteria() {
-	for _x in "$PWPLUS_OWN_DIR/hysteria" /usr/bin/hysteria /usr/local/bin/hysteria; do
-		[ -x "$_x" ] || continue
-		echo "$_x"
-		return 0
+	_fh="$(hysteria_path)"
+	[ -x "$_fh" ] && { echo "$_fh"; return 0; }
+	return 1
+}
+
+# A file's size in bytes, read from its directory entry rather than by reading
+# the file.
+file_size() {
+	ls -ln "$1" 2>/dev/null | awk '{ print $5 + 0; exit }'
+	return 0
+}
+
+# The version of a core, asked of the binary once and then remembered for as
+# long as the binary is the same file - same size, same time. Asking means
+# starting the core, which on a small router is most of a second each time,
+# and the App Update page asks every few seconds.
+core_version_cached() {
+	[ -x "$1" ] || { echo ""; return 1; }
+	# Size and time from the directory entry. Not `stat -c`, which busybox is
+	# often built without, and never `wc -c`, which reads all thirty-odd
+	# megabytes of the core to count them.
+	_cvk="$1 $(file_size "$1") $(date -r "$1" +%s 2>/dev/null)"
+	_cvf="$PWPLUS_RUN/core.versions"
+	_cvv="$(awk -v k="$_cvk" 'index($0, k "\t") == 1 { print substr($0, length(k) + 2); exit }' "$_cvf" 2>/dev/null)"
+	if [ -z "$_cvv" ]; then
+		_cvv="$(core_version "$1")"
+		{
+			grep -v "^$1 " "$_cvf" 2>/dev/null || true
+			printf '%s\t%s\n' "$_cvk" "$_cvv"
+		} > "$_cvf.new" 2>/dev/null && mv -f "$_cvf.new" "$_cvf" 2>/dev/null
+	fi
+	echo "$_cvv"
+	return 0
+}
+
+# Which Xray a page should talk about, without starting any of them to find
+# out: the one the settings insist on, or the first one there is.
+xray_installed() {
+	for _xi in $(cfg core_xray '') $(xray_paths); do
+		[ -x "$_xi" ] && { echo "$_xi"; return 0; }
 	done
 	return 1
 }
@@ -229,6 +338,7 @@ core_version() {
 	case "$1" in
 		*hysteria*) "$1" version 2>/dev/null | sed -n 's/^Version:[[:space:]]*//p' | head -1 ;;
 		*sing-box*) "$1" version 2>/dev/null | sed -n 's/^sing-box version //p' | head -1 ;;
+		*geoview*)  "$1" -version 2>/dev/null | awk 'NR == 1 && $1 == "Geoview" { print $2 }' ;;
 		*)          "$1" version 2>/dev/null | head -1 | awk '{print $2}' ;;
 	esac
 	return 0
@@ -645,5 +755,328 @@ passwall_running() {
 
 json_escape() {
 	printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e 's/	/ /g'
+	return 0
+}
+
+# -------------------------------------------------------------- direct DNS
+
+# The resolver that answers for everything that goes straight out, as
+# "proto address port". PassWall2's rule, and its option names:
+# direct_dns_protocol empty is Auto - the upstream dnsmasq was configured
+# with, and failing that whatever the ISP handed out - and udp or tcp is the
+# one in direct_dns.
+#
+# It matters more here than in PassWall2, because here dnsmasq's upstream is
+# the tunnel itself. A node whose address is a name, resolved the ordinary
+# way, asks dnsmasq, which asks the tunnel, which needs that very node to
+# answer - and a dead tunnel cannot answer at all, so the moment a node dies
+# every node with a name in its address looks dead too. So node names are
+# always resolved through this, and this never through the tunnel.
+direct_dns() {
+	_dd_p="$(cfg direct_dns_protocol '')"
+	_dd_v="$(cfg direct_dns '')"
+	# Written by versions that had only an Iranian resolver for the split.
+	if [ -z "$_dd_p" ] && [ -z "$_dd_v" ]; then
+		_dd_v="$(cfg ir_dns '')"
+		[ -n "$_dd_v" ] && _dd_p=udp
+	fi
+	case "$_dd_p" in
+		udp|tcp)
+			if [ -n "$_dd_v" ]; then
+				_dd_a="${_dd_v%%#*}"; _dd_port="53"
+				case "$_dd_v" in
+					*#*) _dd_port="${_dd_v#*#}" ;;
+					*.*.*.*:*) _dd_a="${_dd_v%:*}"; _dd_port="${_dd_v##*:}" ;;
+				esac
+				case "$_dd_port" in ''|*[!0-9]*) _dd_port=53 ;; esac
+				echo "$_dd_p $_dd_a $_dd_port"
+				return 0
+			fi
+			;;
+	esac
+	# Auto. dnsmasq's own upstream first, as PassWall2 does - but only the
+	# plain ones: an entry with a slash in it answers for one domain only.
+	for _dd_s in $(uci -q get 'dhcp.@dnsmasq[0].server' 2>/dev/null); do
+		case "$_dd_s" in */*|'') continue ;; esac
+		_dd_a="${_dd_s%%#*}"; _dd_port="${_dd_s#*#}"
+		[ "$_dd_port" = "$_dd_s" ] && _dd_port=53
+		case "$_dd_a" in *.*.*.*) : ;; *) continue ;; esac
+		case "$_dd_port" in ''|*[!0-9]*) _dd_port=53 ;; esac
+		# One of our own listeners is not a way out of the tunnel.
+		[ "$_dd_a" = "127.0.0.1" ] && [ "$_dd_port" = "$(cfg dns_port 1053)" ] && continue
+		echo "udp $_dd_a $_dd_port"
+		return 0
+	done
+	for _dd_f in /tmp/resolv.conf.d/resolv.conf.auto /tmp/resolv.conf.auto; do
+		[ -s "$_dd_f" ] || continue
+		_dd_a="$(awk '$1 == "nameserver" && $2 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ &&
+		              $2 != "127.0.0.1" && $2 != "0.0.0.0" { print $2; exit }' "$_dd_f" 2>/dev/null)"
+		if [ -n "$_dd_a" ]; then
+			echo "udp $_dd_a 53"
+			return 0
+		fi
+	done
+	# Nothing handed out at all - a static WAN with no resolver. Something has
+	# to answer for the node names, or a node with a name cannot be reached.
+	echo "udp 1.1.1.1 53"
+	return 0
+}
+
+# One name, resolved through the direct resolver rather than the router's own
+# - see above for why. Prints the first IPv4 address, or nothing.
+resolve_direct() {
+	case "$1" in
+		*:*|'') return 1 ;;
+		*[!0-9.]*) : ;;
+		*) echo "$1"; return 0 ;;
+	esac
+	set -- "$1" ${PWPLUS_DDNS:-$(direct_dns)}
+	[ -n "${3:-}" ] || return 1
+	# busybox nslookup takes the server as its second argument; the answer
+	# section is everything after the server's own "Address" line.
+	bounded 4 nslookup "$1" "$3" 2>/dev/null | awk '
+		/^Name:/ { named = 1; next }
+		named && /^Address/ {
+			for (i = 2; i <= NF; i++)
+				if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) { print $i; exit }
+		}'
+	return 0
+}
+
+# --------------------------------------------------------- the Xray tab
+
+# What every proxied outbound is given from the Xray settings: fragment and
+# noise, which Xray 26 carries as finalmask on the outbound's own stream, and
+# mux. Each prints the JSON for its piece, or nothing when it is off.
+#
+# Fragment is written twice over, length and lengths, delay and delays. The
+# core this package carries reads the first pair and ignores the second;
+# Xray 26.9 reads the second and falls back to the first. Written both ways,
+# it means the same thing to either core rather than being refused by one.
+fragment_json() {
+	[ "$(cfg_bool fragment 0)" = "1" ] || return 0
+	_fr_p="$(cfg fragment_packets tlshello)"
+	_fr_l="$(cfg fragment_lengths '3-5,6-8,10-20' | tr -d ' ')"
+	_fr_d="$(cfg fragment_delays '10-20' | tr -d ' ')"
+	_fr_m="$(cfg fragment_maxSplit '3-6' | tr -d ' ')"
+	printf '{"type":"fragment","settings":{"packets":"%s","length":"%s","lengths":[%s],"delay":"%s","delays":[%s]%s}}' \
+		"$(json_escape "$_fr_p")" \
+		"$(json_escape "${_fr_l%%,*}")" \
+		"$(printf '%s' "$_fr_l" | awk -F, '{ for (i = 1; i <= NF; i++) if ($i != "") printf "%s\"%s\"", (n++ ? "," : ""), $i }')" \
+		"$(json_escape "${_fr_d%%,*}")" \
+		"$(printf '%s' "$_fr_d" | awk -F, '{ for (i = 1; i <= NF; i++) if ($i != "") printf "%s\"%s\"", (n++ ? "," : ""), $i }')" \
+		"$([ -n "$_fr_m" ] && printf ',"maxSplit":"%s"' "$(json_escape "$_fr_m")")"
+	return 0
+}
+
+# PassWall2's noise table: `config xray_noise_packets` sections, each with a
+# type, a packet (or, for rand, a length) and a delay.
+noise_json() {
+	[ "$(cfg_bool noise 0)" = "1" ] || return 0
+	command -v uci >/dev/null 2>&1 || return 0
+	_nz="$(uci -q show passwall-plus 2>/dev/null | awk -F'[.=]' '
+		NF == 3 && $3 == "xray_noise_packets" { order[++n] = $2; next }
+		NF >= 4 {
+			v = $0; sub(/^[^=]*=/, "", v); gsub(/^'\''|'\''$/, "", v)
+			val[$2 "." $3] = v
+		}
+		END {
+			for (i = 1; i <= n; i++) {
+				s = order[i]
+				if ((s ".enabled") in val && val[s ".enabled"] != "1") continue
+				t = val[s ".type"]; p = val[s ".packet"]; d = val[s ".delay"]
+				if (p == "") continue
+				gsub(/\\/, "\\\\", p); gsub(/"/, "\\\"", p)
+				item = (t == "rand" || t == "") ? "\"rand\":\"" p "\"" \
+				     : (t == "array" && p ~ /^\[.*\]$/) ? "\"type\":\"array\",\"packet\":" p \
+				     : "\"type\":\"" t "\",\"packet\":\"" p "\""
+				if (d != "") item = item ",\"delay\":\"" d "\""
+				out = out (out != "" ? "," : "") "{" item "}"
+			}
+			if (out != "") printf "%s", out
+		}')"
+	[ -n "$_nz" ] || return 0
+	printf '{"type":"noise","settings":{"reset":0,"noise":[%s]}}' "$_nz"
+	return 0
+}
+
+mux_json() {
+	[ "$(cfg_bool mux 0)" = "1" ] || return 0
+	_mx_c="$(cfg mux_concurrency 8)"; _mx_x="$(cfg xudp_concurrency 16)"
+	case "$_mx_c" in ''|*[!0-9-]*) _mx_c=8 ;; esac
+	case "$_mx_x" in ''|*[!0-9-]*) _mx_x=16 ;; esac
+	printf '{"enabled":true,"concurrency":%s,"xudpConcurrency":%s,"xudpProxyUDP443":"%s"}' \
+		"$_mx_c" "$_mx_x" "$(cfg xudp_proxy_udp443 reject)"
+	return 0
+}
+
+# The section named as the pre-proxy for every node, when it is switched on.
+# PassWall2 calls this the pre-proxy of a shunt node; here the tunnel is that
+# shunt - Iran one way, everything else the other - so it is set once, here,
+# and every node the tunnel may choose dials out through it.
+global_preproxy() {
+	[ "$(cfg_bool preproxy_enabled 0)" = "1" ] || return 1
+	_gp="$(cfg preproxy_node '')"
+	[ -n "$_gp" ] || return 1
+	uci -q get "passwall-plus.$_gp.link" >/dev/null 2>&1 || return 1
+	echo "$_gp"
+	return 0
+}
+
+# decorate [dialer-tag] [skip-host|port]
+#
+# Reads records - or bare outbounds - on stdin and writes them back with the
+# Xray tab applied, and with the outbound dialling through the dialer tag
+# when one is given and it has none of its own. A record whose own host and
+# port are skip-host|port is left without the dialer: a node is not its own
+# pre-proxy.
+decorate() {
+	FRAG="$(fragment_json)" NOISE="$(noise_json)" MUX="$(mux_json)" \
+	DIALER="${1:-}" SKIPHP="${2:-}" DOMSTRAT="${DOMSTRAT:-}" SOMARK="$PWPLUS_OUT_MARK" \
+		LC_ALL=C awk -v DECORATE=1 -f "$PWPLUS_LIB/pwplus-parse"
+}
+
+# The mark every connection the core itself opens carries. The firewall lets
+# anything with it straight past, which is what stops the router's own
+# traffic, once Localhost Proxy sends it into the tunnel, from sending the
+# tunnel's own connections into the tunnel as well. 255 is the value the
+# rules already honour as "leave this alone".
+PWPLUS_OUT_MARK=255
+
+# The outbound of one hand-added node, tagged chain-<section>, for the
+# outbounds that name it as their dialer. Only the first link of the section
+# is used, and it is never itself given a dialer: a chain is one hop deep, so
+# two sections naming each other cannot become a loop.
+chain_outbound() {
+	_co_link="$(uci -q get "passwall-plus.$1.link" 2>/dev/null)" || _co_link=""
+	if [ -n "$_co_link" ]; then
+		_co="$(printf '%s\n' "$_co_link" | LC_ALL=C awk -v LIMIT=1 -f "$PWPLUS_LIB/pwplus-parse" 2>/dev/null | head -1)"
+	else
+		# Not a hand-added node: a subscription's own node that its landing
+		# chain goes through, kept beside the list by pwplus-nodes under the
+		# name the landing node dials.
+		_co="$(LC_ALL=C awk -F'\t' -v id="$1" '
+			$1 == id { sub(/^[^\t]*\t/, ""); printf "x\tx\tx\tx\t0\t%s\n", $0; exit }' \
+			"$PWPLUS_RUN/chains.tsv" 2>/dev/null)"
+	fi
+	[ -n "$_co" ] || return 1
+	case "$(printf '%s' "$_co" | cut -f3)" in
+		# A pre-proxy Xray cannot speak cannot be dialled through by Xray.
+		hysteria2|hysteria|tuic) return 1 ;;
+	esac
+	printf '%s\n' "$_co" | cut -f6- | DOMSTRAT="${DOMSTRAT:-}" decorate |
+		sed -e "s/^{/{\"tag\":\"chain-$1\",/"
+	return 0
+}
+
+# Every chain-<section> the given outbounds dial through, as outbounds of
+# their own, one per line, each once.
+chain_outbounds() {
+	printf '%s\n' "$1" | grep -o '"dialerProxy":"chain-[A-Za-z0-9_]*"' | sort -u |
+		sed 's/.*"chain-\([A-Za-z0-9_]*\)"/\1/' | while read -r _cs; do
+			[ -n "$_cs" ] || continue
+			chain_outbound "$_cs" || warn "the pre-proxy '$_cs' could not be read - it has been deleted, or Xray cannot speak it"
+		done
+	return 0
+}
+
+# Only the dialer, none of the Xray tab: for building a record, which is
+# decorated in full later, where it is used.
+set_dialer() {
+	FRAG="" NOISE="" MUX="" DIALER="$1" SKIPHP="" DOMSTRAT="" \
+		LC_ALL=C awk -v DECORATE=1 -f "$PWPLUS_LIB/pwplus-parse"
+}
+
+# A record that reaches the network through another node. The router can
+# only knock on the first hop, and a handshake to a server it never talks to
+# directly measures nothing.
+first_hop_is_chained() {
+	case "$1" in
+		*'"dialerProxy":"chain-'*) return 0 ;;
+	esac
+	return 1
+}
+
+# How a node's own server name is resolved: through the core's DNS - which
+# sends it to the direct resolver - rather than through the router's.
+node_domain_strategy() {
+	if [ "$(cfg ipv6 block)" = "off" ]; then echo UseIP; else echo UseIPv4; fi
+	return 0
+}
+
+# The links one hand-added section holds, one per line. A section may hold
+# several pasted at once; it is split only where a new link begins, because
+# names have spaces in them. A name typed on the page goes after the # of a
+# link that has none of its own.
+section_links() {
+	_sl_link="$(uci -q get "passwall-plus.$1.link" 2>/dev/null)" || return 1
+	[ -n "$_sl_link" ] || return 1
+	_sl_name="$(uci -q get "passwall-plus.$1.name" 2>/dev/null)" || _sl_name=""
+	printf '%s\n' "$_sl_link" | NAME="$_sl_name" LC_ALL=C awk '
+		{
+			gsub(/[ \t]+[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "\n&")
+			n = split($0, lines, "\n")
+			for (i = 1; i <= n; i++) {
+				l = lines[i]
+				gsub(/^[ \t]+|[ \t]+$/, "", l)
+				if (l == "") continue
+				if (ENVIRON["NAME"] != "" && index(l, "#") == 0)
+					l = l "#" ENVIRON["NAME"]
+				print l
+			}
+		}'
+	return 0
+}
+
+# The records a hand-added node puts into the running, with its own chain
+# applied - PassWall2's chain_proxy, option for option:
+#
+#   chain_proxy 1, preproxy_node P   this node, dialling out through P
+#   chain_proxy 2, to_node L         the landing node: traffic goes through
+#                                    this node first and on to L, which is
+#                                    where it finally leaves from
+#
+# Either way the record keeps this node's own address, because that is the
+# hop the router actually reaches. A chain naming the node itself, a node
+# that is gone, or one Xray cannot speak is ignored rather than guessed at.
+node_records() {
+	_nd_recs="$(section_links "$1" | LC_ALL=C awk -v LIMIT="${2:-300}" -f "$PWPLUS_LIB/pwplus-parse" 2>/dev/null)"
+	[ -n "$_nd_recs" ] || return 1
+	_nd_mode="$(uci -q get "passwall-plus.$1.chain_proxy" 2>/dev/null)" || _nd_mode=""
+	case "$_nd_mode" in
+		1)
+			_nd_pre="$(uci -q get "passwall-plus.$1.preproxy_node" 2>/dev/null)" || _nd_pre=""
+			if [ -n "$_nd_pre" ] && [ "$_nd_pre" != "$1" ] &&
+			   uci -q get "passwall-plus.$_nd_pre.link" >/dev/null 2>&1; then
+				printf '%s\n' "$_nd_recs" | set_dialer "chain-$_nd_pre"
+				return 0
+			fi
+			;;
+		2)
+			_nd_to="$(uci -q get "passwall-plus.$1.to_node" 2>/dev/null)" || _nd_to=""
+			if [ -n "$_nd_to" ] && [ "$_nd_to" != "$1" ]; then
+				_nd_land="$(section_links "$_nd_to" | LC_ALL=C awk -v LIMIT=1 -f "$PWPLUS_LIB/pwplus-parse" 2>/dev/null | head -1)"
+				_nd_first="$(printf '%s\n' "$_nd_recs" | head -1)"
+				case "$(printf '%s' "$_nd_first" | cut -f3)" in
+					hysteria2|hysteria|tuic) _nd_land="" ;;
+				esac
+				case "$(printf '%s' "$_nd_land" | cut -f3)" in
+					hysteria2|hysteria|tuic|'') _nd_land="" ;;
+				esac
+				if [ -n "$_nd_land" ]; then
+					printf '%s\t%s → %s\t%s\t%s\t%s\t%s\n' \
+						"$(printf '%s' "$_nd_first" | cut -f1)" \
+						"$(printf '%s' "$_nd_first" | cut -f2)" \
+						"$(printf '%s' "$_nd_land" | cut -f2)" \
+						"$(printf '%s' "$_nd_land" | cut -f3)" \
+						"$(printf '%s' "$_nd_first" | cut -f4)" \
+						"$(printf '%s' "$_nd_first" | cut -f5)" \
+						"$(printf '%s' "$_nd_land" | cut -f6- | set_dialer "chain-$1")"
+					return 0
+				fi
+			fi
+			;;
+	esac
+	printf '%s\n' "$_nd_recs"
 	return 0
 }

@@ -1,15 +1,15 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-passwall-plus
-PKG_VERSION:=1.0.9
+PKG_VERSION:=1.1.0
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=routekernel <https://t.me/routekernel1>
-PKG_LICENSE:=GPL-3.0-only
+PKG_LICENSE:=AGPL-3.0-or-later
 PKG_ARCH:=all
 
 include $(INCLUDE_DIR)/package.mk
@@ -33,18 +33,41 @@ endef
 
 define Package/luci-app-passwall-plus/install
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/passwall-plus
-	$(INSTALL_DATA) ./root/www/luci-static/resources/view/passwall-plus/overview.js \
-		$(1)/www/luci-static/resources/view/passwall-plus/overview.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/view/passwall-plus/subscribe.js \
+		$(1)/www/luci-static/resources/view/passwall-plus/subscribe.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/view/passwall-plus/geoview.js \
+		$(1)/www/luci-static/resources/view/passwall-plus/geoview.js
 	$(INSTALL_DATA) ./root/www/luci-static/resources/view/passwall-plus/nodes.js \
 		$(1)/www/luci-static/resources/view/passwall-plus/nodes.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/view/passwall-plus/traffic.js \
+		$(1)/www/luci-static/resources/view/passwall-plus/traffic.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/view/passwall-plus/acl.js \
+		$(1)/www/luci-static/resources/view/passwall-plus/acl.js
 	$(INSTALL_DATA) ./root/www/luci-static/resources/view/passwall-plus/settings.js \
 		$(1)/www/luci-static/resources/view/passwall-plus/settings.js
 	$(INSTALL_DATA) ./root/www/luci-static/resources/view/passwall-plus/log.js \
 		$(1)/www/luci-static/resources/view/passwall-plus/log.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/view/passwall-plus/update.js \
+		$(1)/www/luci-static/resources/view/passwall-plus/update.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/view/passwall-plus/other.js \
+		$(1)/www/luci-static/resources/view/passwall-plus/other.js
 
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/passwall-plus
 	$(INSTALL_DATA) ./root/www/luci-static/resources/passwall-plus/i18n.js \
 		$(1)/www/luci-static/resources/passwall-plus/i18n.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/passwall-plus/ui.js \
+		$(1)/www/luci-static/resources/passwall-plus/ui.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/passwall-plus/status.js \
+		$(1)/www/luci-static/resources/passwall-plus/status.js
+	$(INSTALL_DATA) ./root/www/luci-static/resources/passwall-plus/theme.css \
+		$(1)/www/luci-static/resources/passwall-plus/theme.css
+	$(INSTALL_DATA) ./root/www/luci-static/resources/passwall-plus/logo-light.png \
+		$(1)/www/luci-static/resources/passwall-plus/logo-light.png
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/passwall-plus/fonts
+	$(INSTALL_DATA) ./root/www/luci-static/resources/passwall-plus/fonts/Vazirmatn.woff2 \
+		$(1)/www/luci-static/resources/passwall-plus/fonts/Vazirmatn.woff2
+	$(INSTALL_DATA) ./root/www/luci-static/resources/passwall-plus/fonts/OFL.txt \
+		$(1)/www/luci-static/resources/passwall-plus/fonts/OFL.txt
 	$(if $(wildcard ./root/www/luci-static/resources/passwall-plus/logo.png),\
 		$(INSTALL_DATA) ./root/www/luci-static/resources/passwall-plus/logo.png \
 			$(1)/www/luci-static/resources/passwall-plus/logo.png)

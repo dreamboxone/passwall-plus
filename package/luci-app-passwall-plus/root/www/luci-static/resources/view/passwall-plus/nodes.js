@@ -1,10 +1,11 @@
 /*
- * SPDX-License-Identifier: GPL-3.0-only
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  * Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
  * Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
  *
- * Subscriptions, nodes added by hand, and what the last measurement made of
- * all of them.
+ * PassWall2's Node List: which nodes are used and how they are measured, the
+ * nodes added by hand, and every node the router has, with what the last
+ * measurement made of each. The subscriptions are on Node Subscribe.
  */
 
 'use strict';
@@ -15,6 +16,7 @@
 'require ui';
 'require uci';
 'require passwall-plus.i18n as i18n';
+'require passwall-plus.ui as pui';
 
 /* Our own strings, in the language the setting names. The global _()
    is shadowed for this file only: LuCI translates through .lmo
@@ -23,20 +25,10 @@ var _ = i18n.tr;
 
 
 var callNodes  = rpc.declare({ object: 'luci.passwall-plus', method: 'nodes', expect: { '': {} } });
-var callSubs   = rpc.declare({ object: 'luci.passwall-plus', method: 'subs',  expect: { '': {} } });
 var callTests  = rpc.declare({ object: 'luci.passwall-plus', method: 'tests', expect: { '': {} } });
 var callInuse  = rpc.declare({ object: 'luci.passwall-plus', method: 'inuse', expect: { '': {} } });
 var callAction = rpc.declare({ object: 'luci.passwall-plus', method: 'action',
                                params: [ 'name', 'arg' ], expect: { '': {} } });
-
-function ago(when) {
-	if (!when) return '-';
-	var s = Math.max(0, Math.floor(Date.now() / 1000) - when);
-	if (s < 60) return _('just now');
-	if (s < 3600) return _('%d min ago').format(Math.floor(s / 60));
-	if (s < 86400) return _('%d h ago').format(Math.floor(s / 3600));
-	return _('%d days ago').format(Math.floor(s / 86400));
-}
 
 function pill(text, colour) {
 	return E('span', {
@@ -145,7 +137,7 @@ function testText(v) {
 	if (v == -1) return '…';
 	if (v == -2) return '—';
 	if (v == 0)  return '✕';
-	return v + ' ms';
+	return pui.ms(v);
 }
 
 function testColour(v) {
@@ -203,8 +195,7 @@ function withBrowse(o, hint) {
 					if (el) el.setValue(String(reader.result || '').trim());
 				};
 				reader.onerror = function() {
-					ui.addNotification(null, E('p', {},
-						_('That file could not be read.')), 'warning');
+					pui.note(browse, _('That file could not be read.'), 'error');
 				};
 				reader.readAsText(f);
 				/* So that choosing the same file twice in a row still fires
@@ -213,11 +204,13 @@ function withBrowse(o, hint) {
 			}
 		});
 
+		var browse = E('button', {
+			'class': 'btn cbi-button',
+			'click': function(ev) { ev.preventDefault(); picker.click(); }
+		}, _('Browse…'));
+
 		return E([ box, E('div', { 'style': 'margin-top:6px' }, [
-			E('button', {
-				'class': 'btn cbi-button',
-				'click': function(ev) { ev.preventDefault(); picker.click(); }
-			}, _('Browse…')),
+			browse,
 			E('span', { 'style': 'margin-inline-start:8px;font-size:12px;opacity:.65' }, hint),
 			picker
 		]) ]);
@@ -239,6 +232,166 @@ function renderTests(d) {
 	}
 }
 
+/* ---------------------------------------------- PassWall2's buttons
+
+   The buttons above and beside PassWall2's list of nodes. Each is one step
+   on the router, which then has the list the page shows - so the page is
+   read again afterwards, the way PassWall2's is. */
+function nodeAct(b, name, arg, reload, ok) {
+	return callAction(name, arg).then(function(r) {
+		if (r && r.error) {
+			pui.note(b, _(r.error), 'error');
+			return;
+		}
+		if (ok) pui.note(b, ok, 'ok');
+		if (reload) window.setTimeout(function() { location.reload(); }, 500);
+	});
+}
+
+function selected() {
+	return Array.prototype.slice.call(document.querySelectorAll('.pwp-sel:checked'))
+		.map(function(c) { return c.getAttribute('data-sid'); });
+}
+
+/* What kind of node a link is, from the link itself. */
+function linkType(link) {
+	var l = String(link || '').trim();
+	var m = l.match(/^([a-z][a-z0-9+.-]*):\/\//i);
+	if (m) {
+		var t = m[1].toLowerCase();
+		return { ss: 'shadowsocks', hy2: 'hysteria2', socks5: 'socks', wg: 'wireguard' }[t] || t;
+	}
+	return /^\s*\[(interface|peer)\]/i.test(l) ? 'wireguard' : '-';
+}
+
+function groups() {
+	var g = {};
+	uci.sections('passwall-plus', 'node').forEach(function(n) {
+		if (n.group) g[n.group] = true;
+	});
+	return Object.keys(g).sort();
+}
+
+function addViaLinks() {
+	var box = E('textarea', {
+		'rows': 8, 'wrap': 'off',
+		'style': 'width:100%;direction:ltr;text-align:left;font-family:monospace',
+		'placeholder': 'vless://…\nvmess://…'
+	});
+	ui.showModal(_('Add the node via the link'), [
+		E('p', {}, _('Enter share links, one per line. Subscription links are not supported!')),
+		box,
+		E('div', { 'class': 'right' }, [
+			E('button', { 'class': 'btn cbi-button cbi-button-neutral', 'click': ui.hideModal }, _('Close')),
+			' ',
+			E('button', {
+				'class': 'btn cbi-button cbi-button-positive',
+				'click': ui.createHandlerFn(null, function(ev) {
+					var b = ev.currentTarget;
+					if (!/:\/\//.test(box.value)) {
+						pui.note(b, _('Please enter the correct link.'), 'error');
+						return;
+					}
+					return callAction('add_links', box.value).then(function(r) {
+						if (!r || !r.added) {
+							pui.note(b, _('None of those could be read as a node.'), 'error');
+							return;
+						}
+						ui.hideModal();
+						location.reload();
+					});
+				})
+			}, _('Add'))
+		])
+	]);
+}
+
+function reassign(b) {
+	var ids = selected();
+	if (!ids.length) {
+		pui.note(b, _('No node is selected.'), 'warn');
+		return;
+	}
+	var input = E('input', { 'type': 'text', 'list': 'pwp-groups', 'style': 'width:100%',
+	                         'placeholder': _('default') });
+	ui.showModal(_('Reassign Group'), [
+		E('p', {}, _('The group for the %d nodes selected. Empty is the default group.').format(ids.length)),
+		input,
+		E('datalist', { 'id': 'pwp-groups' }, groups().map(function(g) { return E('option', { 'value': g }); })),
+		E('div', { 'class': 'right' }, [
+			E('button', { 'class': 'btn cbi-button cbi-button-neutral', 'click': ui.hideModal }, _('Close')),
+			' ',
+			E('button', {
+				'class': 'btn cbi-button cbi-button-positive',
+				'click': ui.createHandlerFn(null, function(ev) {
+					var g = input.value.trim();
+					if (/[^A-Za-z0-9_ .-]/.test(g)) {
+						pui.note(ev.currentTarget, _('Letters, digits, space, dot, dash and underscore only.'), 'error');
+						return;
+					}
+					return callAction('group_nodes', g + ';' + ids.join(' ')).then(function() {
+						ui.hideModal();
+						location.reload();
+					});
+				})
+			}, _('Save'))
+		])
+	]);
+}
+
+function toolbar() {
+	var all = false;
+	return E('div', { 'class': 'mk-row', 'style': 'gap:8px;flex-wrap:wrap;margin:0 0 12px' }, [
+		pui.btn(_('Add the node via the link'), 'primary mk-small', addViaLinks, 'link'),
+		pui.btn(_('Select all'), 'soft-blue mk-small', function(ev) {
+			all = !all;
+			document.querySelectorAll('.pwp-sel').forEach(function(c) { c.checked = all; });
+			ev.currentTarget.querySelector('span:last-child').textContent = all ? _('DeSelect all') : _('Select all');
+		}, 'check'),
+		pui.btn(_('Delete select nodes'), 'danger mk-small', function(ev) {
+			var b = ev.currentTarget, ids = selected();
+			if (!ids.length) {
+				pui.note(b, _('No node is selected.'), 'warn');
+				return;
+			}
+			if (!window.confirm(_('Are you sure to delete select nodes?')))
+				return;
+			/* Not the node the tunnel is carrying traffic through - the same
+			   care as the Delete beside each row. */
+			return callInuse().catch(function() { return {}; }).then(function(d) {
+				var keep = (d && d.active && d.section) ? d.section : '';
+				var go = ids.filter(function(id) { return id != keep; });
+				if (!go.length) {
+					pui.note(b, _('This is the node the tunnel is using at the moment. Press Disconnect, or Choose again, before deleting it.'), 'warn');
+					return;
+				}
+				return nodeAct(b, 'delete_nodes', go.join(' '), true);
+			});
+		}, 'trash'),
+		pui.btn(_('Reassign Group'), 'soft-blue mk-small', function(ev) { reassign(ev.currentTarget); }, 'layers'),
+		pui.btn(_('Clear all nodes'), 'danger mk-small', function(ev) {
+			if (!window.confirm(_('Are you sure to clear all nodes?')))
+				return;
+			return nodeAct(ev.currentTarget, 'clear_nodes', '', true);
+		}, 'trash')
+	]);
+}
+
+/* A name of its own for a new section, the way PassWall2 names its nodes.
+   A section without one is known by its place in the file, and loses that
+   name - and every setting naming it - as soon as one ahead of it is added,
+   moved or deleted. */
+function sectionName(prefix) {
+	var n;
+	do {
+		n = prefix + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
+	} while (uci.get('passwall-plus', n));
+	return n;
+}
+
+/* PassWall2's "Show server address and port". */
+var showInfo = false;
+
 function renderNodes(d) {
 	var box = document.getElementById('pwp-nodelist');
 	if (!box) return;
@@ -247,7 +400,7 @@ function renderNodes(d) {
 	var nodes = (d && d.nodes) || [];
 	if (!nodes.length) {
 		box.appendChild(E('div', { 'style': 'opacity:.65;font-size:13px;padding:8px 0' },
-			_('Nothing read yet. Press Read the subscriptions, or Connect on the main page.')));
+			_('Nothing read yet. Read the subscriptions on Node Subscribe, or turn on the main switch in Basic Settings.')));
 		return;
 	}
 
@@ -279,20 +432,24 @@ function renderNodes(d) {
 					E('span', { 'style': n.current ? 'font-weight:700' : '' }, n.label || n.host),
 					n.current ? pill(_('in use'), '#10b981') : E('span')
 				]),
-				E('div', { 'style': 'font-size:11px;opacity:.55' }, n.host + ':' + n.port)
+				showInfo
+					? E('div', { 'style': 'font-size:11px;opacity:.55;direction:ltr;text-align:start' }, n.host + ':' + n.port)
+					: ''
 			]),
 			E('td', { 'class': 'td' }, n.protocol),
-			E('td', { 'class': 'td' }, n.ms > 0 ? n.ms + ' ms' : '—'),
-			E('td', { 'class': 'td' }, n.handshake > 0 ? n.handshake + ' ms' : '—'),
+			E('td', { 'class': 'td' }, n.ms > 0 ? pui.ms(n.ms) : '—'),
+			E('td', { 'class': 'td' }, n.handshake > 0 ? pui.ms(n.handshake) : '—'),
 			E('td', { 'class': 'td' }, [
 				E('button', {
 					'class': 'btn cbi-button cbi-button-apply',
 					'style': 'padding:2px 10px;font-size:12px',
-					'click': ui.createHandlerFn(null, function() {
-						return callAction('pick', n.tag).then(function() {
-							ui.addNotification(null,
-								E('p', {}, _('Connecting through %s…').format(n.label || n.host)),
-								'info');
+					'click': ui.createHandlerFn(null, function(ev) {
+						var b = ev.currentTarget;
+						return callAction('pick', n.tag).then(function(r) {
+							if (r && r.error)
+								pui.note(b, _(r.error), 'error');
+							else
+								pui.note(b, _('Connecting through %s…').format(n.label || n.host), 'ok');
 						});
 					})
 				}, _('Use'))
@@ -305,30 +462,10 @@ function renderNodes(d) {
 	if (m) m.textContent = _('%d nodes').format(nodes.length);
 }
 
-function renderSubs(d) {
-	var box = document.getElementById('pwp-substatus');
-	if (!box) return;
-	while (box.firstChild) box.removeChild(box.firstChild);
-
-	var subs = (d && d.subs) || [];
-	if (!subs.length) return;
-
-	subs.forEach(function(s) {
-		box.appendChild(E('div', {
-			'style': 'display:flex;gap:10px;align-items:center;padding:3px 0;font-size:12px'
-		}, [
-			E('span', { 'style': 'font-weight:600;min-width:120px' }, s.name),
-			s.error ? pill(s.error, '#ef4444') : pill(_('%d nodes').format(s.count), '#10b981'),
-			E('span', { 'style': 'opacity:.55' }, s.error ? '' : ago(s.when))
-		]));
-	});
-}
-
 return view.extend({
 	load: function() {
 		return Promise.all([
 			callNodes().catch(function() { return {}; }),
-			callSubs().catch(function() { return {}; }),
 			callTests().catch(function() { return {}; }),
 			uci.load('passwall-plus').catch(function() { return null; })
 		]);
@@ -354,68 +491,123 @@ return view.extend({
 		   - anything set afterwards would find no cells in the document yet
 		   and the table would sit empty until the first poll five seconds
 		   later, for measurements the router had already finished. */
-		results = (data[2] && data[2].tests) || {};
+		results = (data[1] && data[1].tests) || {};
+		showInfo = uci.get('passwall-plus', 'config', 'show_node_info') == '1';
 
 		var m, s, o;
 
-		m = new form.Map('passwall-plus', _('Nodes'),
-			_('Where nodes come from, and which ones to add by hand. Changes take effect the next time the list is read.'));
+		/* No title over the page: the tab bar already says where this is. */
+		m = new form.Map('passwall-plus');
 
-		s = m.section(form.NamedSection, 'config', 'passwall-plus', _('Which nodes to use'));
+		/* ------------------------------------------ PassWall2's three */
+		s = m.section(form.NamedSection, 'config', 'passwall-plus');
 		s.anonymous = true;
 
 		o = s.option(form.ListValue, 'sources', _('Nodes to use'),
 			_('This decides who may be measured, not who wins: whichever node answers fastest is the one used, wherever it came from. A node added by hand joins the list rather than replacing it. To insist on one node, press “Use” beside it below.'));
-		o.value('both', _('Mine and the subscriptions'));
-		o.value('own', _('Only Manually Added'));
+		o.value('own', _('Only manually added configs'));
+		o.value('both', _('All configs'));
 		o.value('subs', _('Only the subscriptions'));
-		o.default = 'both';
+		o.default = 'own';
 
-		s = m.section(form.GridSection, 'subscription', _('Subscriptions'),
-			_('Fetched every fifteen minutes. Xray, sing-box, Hysteria, Clash and WireGuard files are accepted, as are a plain list of links and a single base64 block.'));
-		s.addremove = true;
-		s.anonymous = true;
-		s.sortable = true;
+		o = s.option(form.ListValue, 'auto_detection_time', _('Automatic detection delay'),
+			_('When this page opens, each node added by hand is measured this way, and the answer put in its column.'));
+		o.value('0', _('Close'));
+		o.value('icmp', 'Ping');
+		o.value('tcping', 'TCP Ping');
+		o.default = 'tcping';
 
-		o = s.option(form.Value, 'name', _('Name'));
+		o = s.option(form.Flag, 'show_node_info', _('Show server address and port'));
+		o.default = '0';
 		o.rmempty = false;
-		o.placeholder = 'my list';
 
-		o = s.option(form.Value, 'url', _('Address'));
+		o = s.option(form.Value, 'test_url', _('URL Test Address'),
+			_('What a real request through a node asks for, when a node is measured and when the URL Test column is pressed.'));
+		o.value('http://www.gstatic.com/generate_204', 'Gstatic (HTTP)');
+		o.value('https://cp.cloudflare.com/', 'Cloudflare');
+		o.value('https://www.gstatic.com/generate_204', 'Gstatic');
+		o.value('https://www.google.com/generate_204', 'Google');
+		o.value('https://www.youtube.com/generate_204', 'YouTube');
+		o.default = 'http://www.gstatic.com/generate_204';
 		o.rmempty = false;
-		o.placeholder = 'https://…';
 		o.validate = function(section, value) {
-			if (!value) return true;
-			if (!/^https?:\/\//.test(value))
+			if (value && !/^https?:\/\/\S+$/.test(value))
 				return _('Must start with http:// or https://');
 			return true;
 		};
 
-		/* A source that is a file rather than an address. It goes through
-		   exactly the same path as a fetched subscription - which already
-		   understands an Xray, sing-box or Clash configuration whole - so a
-		   JSON file dropped in here yields the same nodes it would have if it
-		   had been published at a URL. Nothing is re-fetched for it, because
-		   there is nowhere to re-fetch it from: it is read again from here
-		   every time the list is rebuilt. */
-		o = s.option(form.TextValue, 'content', _('Or a file'),
-			_('Instead of an address: a configuration file — Xray, sing-box, Clash, a WireGuard .conf, or a plain list of links. Leave the address empty when you use this.'));
-		o.modalonly = true;
-		o.rows = 6;
-		withBrowse(o, _('a .json or .conf file'));
+		/* ------------------------------------------- automatic choice
+		   This program's own, and it has no PassWall2 equivalent: how the
+		   fastest node is found when the node in Basic Settings is Auto. */
+		s = m.section(form.NamedSection, 'config', 'passwall-plus', _('Node selection'),
+			_('Two passes. A quick handshake to every node, then a real request through the ones that answered — ten at a time, best first, stopping at the first node fast enough. Connecting therefore takes seconds, not a minute.'));
+		s.anonymous = true;
 
-		o = s.option(form.Flag, 'enabled', _('On'));
-		o.default = '1';
-		o.rmempty = false;
+		o = s.option(form.ListValue, 'prefilter', _('First pass'),
+			_('A TCP handshake to the node’s real port is the right test. A ping is quicker and wrong often enough to matter: a node behind a CDN answers pings at the edge whatever state it is in, and plenty of working nodes drop ICMP entirely.'));
+		o.value('tcp', _('TCP handshake (recommended)'));
+		o.value('icmp', _('Ping'));
+		o.value('both', _('Ping, then handshake'));
+		o.default = 'tcp';
 
+		o = s.option(form.Value, 'good_ms', _('Good enough (ms)'),
+			_('The first node measured faster than this is the one used. Lower means a better node and a longer wait.'));
+		o.datatype = 'uinteger';
+		o.default = '1000';
+
+		o = s.option(form.Value, 'batch_size', _('Measured at a time'),
+			_('How many nodes are measured properly in one go.'));
+		o.datatype = 'range(1,50)';
+		o.default = '10';
+
+		o = s.option(form.Value, 'max_batches', _('Batches at most'),
+			_('How far down the list to keep going when nothing is fast enough.'));
+		o.datatype = 'range(1,30)';
+		o.default = '5';
+
+		o = s.option(form.Value, 'sift_parallel', _('Checked at once'),
+			_('How many handshakes run in parallel in the first pass. If your router has little RAM, lower this number.'));
+		o.datatype = 'range(1,100)';
+		o.default = '30';
+
+		/* ---------------------------------------------- added by hand */
 		s = m.section(form.GridSection, 'node', _('Nodes added manually'),
 			_('One share link per entry — vless, vmess, trojan, shadowsocks, socks, hysteria2, tuic or wireguard. A whole WireGuard .conf file can be pasted in as it stands. These are tried before the subscription list. The three test columns each measure something different; press one to run it.'));
 		s.addremove = true;
 		s.anonymous = true;
 		s.sortable = true;
+		s.handleAdd = function(ev) {
+			return form.GridSection.prototype.handleAdd.apply(this, [ ev, sectionName('n') ]);
+		};
+
+		/* A tick box on every row, for the buttons above the table. */
+		o = s.option(form.DummyValue, '_select', ' ');
+		o.modalonly = false;
+		o.editable = true;
+		o.renderWidget = function(section_id) {
+			return E([
+				E('input', { 'type': 'checkbox', 'class': 'pwp-sel', 'data-sid': section_id }),
+				new ui.Hiddenfield('', { id: this.cbid(section_id) }).render()
+			]);
+		};
 
 		o = s.option(form.Value, 'name', _('Name'));
 		o.placeholder = 'my server';
+
+		/* PassWall2's Type column: what the link is. */
+		o = s.option(form.DummyValue, '_type', _('Type'));
+		o.modalonly = false;
+		o.textvalue = function(section_id) {
+			return linkType(uci.get('passwall-plus', section_id, 'link'));
+		};
+
+		o = s.option(form.Value, 'group', _('Group Name'));
+		o.rmempty = true;
+		o.placeholder = _('default');
+		groups().forEach(function(g) { o.value(g); });
+		o.textvalue = function(section_id) {
+			return this.cfgvalue(section_id) || _('default');
+		};
 
 		/* In the edit dialog rather than in the table. The table has room for
 		   one useful column beside the name, and a share link is sixty
@@ -426,7 +618,8 @@ return view.extend({
 			_('A share link, several of them one per line, or a whole WireGuard .conf file. Choose a file and its contents are put in the box for you.'));
 		o.modalonly = true;
 		o.rows = 6;
-		withBrowse(o, _('a .conf file, or a list of links'));		o.rmempty = false;
+		withBrowse(o, _('a .conf file, or a list of links'));
+		o.rmempty = false;
 		o.placeholder = 'vless://…';
 		o.validate = function(section, value) {
 			if (!value) return true;
@@ -445,6 +638,41 @@ return view.extend({
 					this.map.data.set(this.map.config, section_id, 'name', got);
 			}
 			return rv;
+		};
+
+		/* PassWall2's Chain Proxy, with its option names. A pre-proxy node is
+		   dialled first and this node through it; a landing node is where the
+		   traffic goes on to after this one, and where it finally leaves from.
+		   Only nodes added by hand can be named: a subscription is re-read
+		   every quarter of an hour and its nodes numbered afresh. */
+		var others = uci.sections('passwall-plus', 'node');
+
+		o = s.option(form.ListValue, 'chain_proxy', _('Chain Proxy'));
+		o.modalonly = true;
+		o.value('', _('Close'));
+		o.value('1', _('Preproxy Node'));
+		o.value('2', _('Landing Node'));
+
+		o = s.option(form.ListValue, 'preproxy_node', _('Preproxy Node'),
+			_('This node is reached through the one chosen here.'));
+		o.modalonly = true;
+		o.depends('chain_proxy', '1');
+		others.forEach(function(n) {
+			o.value(n['.name'], n.name || n['.name']);
+		});
+		o.validate = function(section_id, value) {
+			return value && value == section_id ? _('A node cannot be its own pre-proxy.') : true;
+		};
+
+		o = s.option(form.ListValue, 'to_node', _('Landing Node'),
+			_('Traffic goes through this node first and leaves from the one chosen here.'));
+		o.modalonly = true;
+		o.depends('chain_proxy', '2');
+		others.forEach(function(n) {
+			o.value(n['.name'], n.name || n['.name']);
+		});
+		o.validate = function(section_id, value) {
+			return value && value == section_id ? _('A node cannot be its own landing node.') : true;
 		};
 
 		/* One column each, and every one of them has to be marked editable.
@@ -477,67 +705,97 @@ return view.extend({
 		   pressing Delete the router may well have moved to another node. */
 		s.handleRemove = function(section_id, ev) {
 			var section = this;
+			var b = ev && ev.currentTarget;
 			return callInuse().catch(function() { return {}; }).then(function(d) {
 				if (d && d.active && d.section && d.section == section_id) {
-					ui.addNotification(null, E('p', {},
-						_('This is the node the tunnel is using at the moment. Press Disconnect, or Choose again, before deleting it.')),
-						'warning');
+					pui.note(b, _('This is the node the tunnel is using at the moment. Press Disconnect, or Choose again, before deleting it.'), 'warn');
 					return Promise.resolve();
 				}
 				return form.GridSection.prototype.handleRemove.apply(section, [ section_id, ev ]);
 			});
 		};
 
+		s.renderRowActions = function(section_id) {
+			var td = form.GridSection.prototype.renderRowActions.apply(this, [ section_id ]);
+			var box = td.querySelector('div') || td;
+			var extra = [
+				E('button', {
+					'class': 'btn cbi-button cbi-button-neutral',
+					'click': ui.createHandlerFn(this, function(ev) {
+						return nodeAct(ev.currentTarget, 'top_node', section_id, true);
+					})
+				}, _('To Top')),
+				E('button', {
+					'class': 'btn cbi-button cbi-button-apply',
+					'click': ui.createHandlerFn(this, function(ev) {
+						if (!window.confirm(_('Are you sure set this node?')))
+							return;
+						return nodeAct(ev.currentTarget, 'use_node', section_id, false,
+							_('This is now the node in Basic Settings.'));
+					})
+				}, _('Use')),
+				E('button', {
+					'class': 'btn cbi-button cbi-button-neutral',
+					'click': ui.createHandlerFn(this, function(ev) {
+						return nodeAct(ev.currentTarget, 'copy_node', section_id, true);
+					})
+				}, _('Copy'))
+			];
+			for (var i = extra.length - 1; i >= 0; i--)
+				box.insertBefore(extra[i], box.firstChild);
+			return td;
+		};
+
 		var self = this;
 
 		return m.render().then(function(mapEl) {
-			var extra = E('div', { 'style': 'margin-top:20px' }, [
-				E('h3', {}, _('Last time the sources were read')),
-				E('div', { 'id': 'pwp-substatus', 'style': 'margin-bottom:12px' }, []),
-				E('button', {
-					'class': 'btn cbi-button cbi-button-neutral',
-					'click': ui.createHandlerFn(self, function() {
-						return callAction('refresh_nodes', '').then(function() {
-							ui.addNotification(null,
-								E('p', {}, _('Reading the subscriptions. This page will fill in shortly.')),
-								'info');
-						});
-					})
-				}, _('Read the subscriptions now')),
-				E('button', {
-					'class': 'btn cbi-button cbi-button-neutral',
-					'style': 'margin-left:8px',
-					'click': ui.createHandlerFn(self, function() {
-						return callAction('measure_all', '').then(function() {
-							ui.addNotification(null,
-								E('p', {}, _('Knocking on every node once. The TCPing column will fill in as answers come back.')),
-								'info');
-						});
-					})
-				}, _('Check every node')),
+			/* PassWall2's buttons, above the table of nodes added by hand. */
+			var grid = mapEl.querySelector('#cbi-passwall-plus-node');
+			var table = grid && grid.querySelector('.cbi-section-table');
+			if (table) table.parentNode.insertBefore(toolbar(), table);
 
-				E('h3', { 'style': 'margin-top:24px;display:flex;gap:10px;align-items:baseline' }, [
-					E('span', {}, _('Nodes')),
-					E('span', { 'id': 'pwp-nodecount',
-					            'style': 'font-size:13px;font-weight:normal;opacity:.55' }, '')
+			var list = pui.card(_('Nodes'), 'list', '#6366f1', E('div', {}, [
+				E('div', { 'class': 'mk-row', 'style': 'margin:0 0 10px;align-items:center' }, [
+					E('span', { 'id': 'pwp-nodecount', 'style': 'font-size:13px;color:var(--muted)' }, ''),
+					E('span', { 'style': 'flex:1 1 auto' }),
+					pui.btn(_('Check every node'), 'soft-blue mk-small', function(ev) {
+						var b = ev.currentTarget;
+						return callAction('measure_all', '').then(function() {
+							pui.note(b, _('Knocking on every node once. The TCPing column will fill in as answers come back.'), 'info');
+						});
+					}, 'refresh')
 				]),
-				E('p', { 'style': 'font-size:13px;opacity:.7;margin:0 0 8px 0' },
+				E('p', { 'style': 'font-size:13px;color:var(--muted);margin:0 0 8px 0' },
 					_('“TCPing” is the handshake every node is checked with first, so it is filled in for all of them. “URL Test” is a complete request through the node, which is only run on the ones that answered and only until a fast enough one is found — so most of that column is empty by design. Both are the same measurements the buttons above take, done for the whole list at once.')),
 				E('div', { 'id': 'pwp-nodelist' }, [])
-			]);
+			]));
 
 			poll.add(function() {
 				return Promise.all([
 					callNodes().then(renderNodes).catch(function() {}),
-					callSubs().then(renderSubs).catch(function() {}),
 					callTests().then(renderTests).catch(function() {})
 				]);
 			}, 5);
 
-			renderNodes(data[0]);
-			renderSubs(data[1]);
+			/* Once LuCI has put the page in the document, where these can find
+			   the boxes they fill - and then PassWall2's automatic detection:
+			   every node added by hand measured once, the way the setting
+			   says. */
+			window.setTimeout(function() {
+				renderNodes(data[0]);
+				var auto = uci.get('passwall-plus', 'config', 'auto_detection_time');
+				if (auto == null) auto = 'tcping';
+				var kind = auto == 'icmp' ? 'ping' : auto == 'tcping' ? 'tcp' : '';
+				if (!kind) return;
+				uci.sections('passwall-plus', 'node').forEach(function(n) {
+					if (n.enabled == '0') return;
+					var cell = document.querySelector('.pwp-test-value[data-key="' + n['.name'] + '.' + kind + '"]');
+					if (cell) cell.textContent = '…';
+					callAction('node_test', kind + ':' + n['.name']).catch(function() {});
+				});
+			}, 0);
 
-			return i18n.page([ mapEl, extra ]);
+			return pui.page([ mapEl, list ]);
 		});
 	}
 });

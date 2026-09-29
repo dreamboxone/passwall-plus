@@ -1,0 +1,256 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+#
+# pwplus-router - the two things this program changes on the router itself
+# rather than on the tunnel.
+#
+#   pwplus-router rebind   bring dnsmasq's rebind exceptions in step with the
+#                          list on the Traffic Rules page
+#   pwplus-router clock    point the router's clock at Iranian time servers
+#                          and Tehran time; exits 2 when that was already so
+#
+# Neither depends on the tunnel. A bank that dnsmasq refuses to resolve is
+# refused whether or not anything is connected, and a clock that is wrong
+# breaks every TLS handshake the router makes - the tunnel's among them.
+
+set -e
+
+. "${PWPLUS_LIB:-/usr/libexec}/pwplus-common.sh"
+
+DNSMASQ='dhcp.@dnsmasq[0]'
+# What this program added, as opposed to what was there before it. Only these
+# are ever taken out again: an exception the reader made by hand is theirs.
+APPLIED="$PWPLUS_ETC/rebind.applied"
+
+NTP_SERVERS="ntp.day.ir ntp.faraborddi.com ntp.time.ir"
+TZ_VALUE='<+0330>-3:30'
+TZ_NAME='Asia/Tehran'
+
+in_list() {
+	case " $2 " in
+		*" $1 "*) return 0 ;;
+	esac
+	return 1
+}
+
+cmd_rebind() {
+	_want="$(uci -q get passwall-plus.config.rebind_domain 2>/dev/null)" || _want=""
+	_have="$(uci -q get "$DNSMASQ.rebind_domain" 2>/dev/null)" || _have=""
+	_ours="$(cat "$APPLIED" 2>/dev/null | tr '\n' ' ')"
+	_changed=0
+	_keep=""
+
+	# Taken off the list here, and put there by us: take it out of dnsmasq.
+	for _d in $_ours; do
+		if in_list "$_d" "$_want"; then
+			_keep="$_keep $_d"
+		elif in_list "$_d" "$_have"; then
+			uci -q del_list "$DNSMASQ.rebind_domain=$_d" || true
+			_changed=1
+		fi
+	done
+
+	for _d in $_want; do
+		if ! in_list "$_d" "$_have"; then
+			uci -q add_list "$DNSMASQ.rebind_domain=$_d"
+			_changed=1
+			in_list "$_d" "$_keep" || _keep="$_keep $_d"
+		fi
+	done
+
+	printf '%s\n' $_keep > "$APPLIED.new" 2>/dev/null || true
+	mv -f "$APPLIED.new" "$APPLIED" 2>/dev/null || true
+
+	if [ "$_changed" = "1" ]; then
+		uci -q commit dhcp
+		bounded 30 /etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+		log "rebind exceptions updated: $(echo $_want)"
+	fi
+	return 0
+}
+
+cmd_clock() {
+	uci -q get system.ntp >/dev/null 2>&1 || uci -q set system.ntp=timeserver
+
+	_have="$(uci -q get system.ntp.server 2>/dev/null)" || _have=""
+	_missing=""
+	for _s in $NTP_SERVERS; do
+		in_list "$_s" "$_have" || _missing="$_missing $_s"
+	done
+
+	if [ -z "$_missing" ] &&
+	   [ "$(uci -q get 'system.@system[0].timezone')" = "$TZ_VALUE" ] &&
+	   [ "$(uci -q get 'system.@system[0].zonename')" = "$TZ_NAME" ]; then
+		echo "already"
+		return 2
+	fi
+
+	for _s in $_missing; do
+		uci -q add_list "system.ntp.server=$_s"
+	done
+	uci -q set "system.@system[0].timezone=$TZ_VALUE"
+	uci -q set "system.@system[0].zonename=$TZ_NAME"
+	uci -q commit system
+	# The timezone reaches the running system through /etc/TZ, which the
+	# system service writes when it reloads.
+	bounded 20 /etc/init.d/system reload >/dev/null 2>&1 || true
+	bounded 20 /etc/init.d/sysntpd restart >/dev/null 2>&1 || true
+	log "router clock set to Tehran time with the Iranian time servers"
+	echo "done"
+	return 0
+}
+
+# PassWall2's Delay Settings: stop, start and restart on a schedule.
+#
+#   pwplus-router schedule sync      bring the crontab in step with the settings
+#   pwplus-router schedule stop      what the crontab runs
+#   pwplus-router schedule start
+#   pwplus-router schedule restart
+#
+# A scheduled stop is written down, because the quarter-hourly repair would
+# otherwise see a tunnel that is meant to be up and is not, and bring it back
+# within fifteen minutes of being stopped. A scheduled start, or the main
+# switch, clears it. As in PassWall2, the schedule only exists while the main
+# switch is on.
+SCHEDULE_STOPPED="$PWPLUS_RUN/schedule.stopped"
+CRONTAB=/etc/crontabs/root
+
+cmd_schedule_sync() {
+	[ -f "$CRONTAB" ] || touch "$CRONTAB" 2>/dev/null || return 0
+	grep -v 'pwplus-router schedule' "$CRONTAB" > "$CRONTAB.pwplus" 2>/dev/null || true
+	if [ "$(cfg_bool enabled 0)" = "1" ]; then
+		for _w in stop start restart; do
+			_week="$(cfg "${_w}_week_mode" '')"
+			[ -n "$_week" ] || continue
+			if [ "$_w" = "restart" ] && [ "$_week" = "8" ]; then
+				_h="$(cfg restart_interval_mode 2)"
+				case "$_h" in ''|*[!0-9]*) _h=2 ;; esac
+				echo "0 */$_h * * * $PWPLUS_LIB/pwplus-router schedule $_w >/dev/null 2>&1" >> "$CRONTAB.pwplus"
+				continue
+			fi
+			_t="$(cfg "${_w}_time_mode" '0:00')"
+			_hh="${_t%%:*}"; _mm="${_t#*:}"
+			case "$_hh" in ''|*[!0-9]*) _hh=0 ;; esac
+			case "$_mm" in ''|*[!0-9]*) _mm=0 ;; esac
+			_dow="$_week"
+			[ "$_week" = "7" ] && _dow='*'
+			echo "$((_mm + 0)) $((_hh + 0)) * * $_dow $PWPLUS_LIB/pwplus-router schedule $_w >/dev/null 2>&1" >> "$CRONTAB.pwplus"
+		done
+	fi
+	# Rule Manage's automatic update of the routing data, as PassWall2 has
+	# it: every day, one day of the week, or every so many hours. Whatever
+	# the main switch says - the files are there for when it is turned on.
+	_week="$(cfg geo_update_week_mode '')"
+	if [ -n "$_week" ]; then
+		if [ "$_week" = "8" ]; then
+			_h="$(cfg geo_update_interval_mode 2)"
+			case "$_h" in ''|*[!0-9]*) _h=2 ;; esac
+			echo "0 */$_h * * * $PWPLUS_LIB/pwplus-router schedule geo >/dev/null 2>&1" >> "$CRONTAB.pwplus"
+		else
+			_t="$(cfg geo_update_time_mode '0:00')"
+			_hh="${_t%%:*}"; _mm="${_t#*:}"
+			case "$_hh" in ''|*[!0-9]*) _hh=0 ;; esac
+			case "$_mm" in ''|*[!0-9]*) _mm=0 ;; esac
+			_dow="$_week"
+			[ "$_week" = "7" ] && _dow='*'
+			echo "$((_mm + 0)) $((_hh + 0)) * * $_dow $PWPLUS_LIB/pwplus-router schedule geo >/dev/null 2>&1" >> "$CRONTAB.pwplus"
+		fi
+	fi
+	# Node Subscribe's schedule for each subscription, as PassWall2 has it.
+	# The quarter-hourly read - the default list's - is pwplus-refresh's
+	# and has no line of its own here.
+	for _s in $(uci -q -X show passwall-plus 2>/dev/null |
+	            sed -n "s/^passwall-plus\.\([A-Za-z0-9_]*\)=subscription\$/\1/p"); do
+		[ "$(uci -q get "passwall-plus.$_s.enabled")" = "0" ] && continue
+		_week="$(uci -q get "passwall-plus.$_s.update_week_mode")" || _week=""
+		case "$_week" in
+			8)
+				_h="$(uci -q get "passwall-plus.$_s.update_interval_mode")" || _h=2
+				case "$_h" in ''|*[!0-9]*) _h=2 ;; esac
+				echo "0 */$_h * * * $PWPLUS_LIB/pwplus-router schedule sub $_s >/dev/null 2>&1" >> "$CRONTAB.pwplus"
+				;;
+			[0-7])
+				_t="$(uci -q get "passwall-plus.$_s.update_time_mode")" || _t="0:00"
+				_hh="${_t%%:*}"; _mm="${_t#*:}"
+				case "$_hh" in ''|*[!0-9]*) _hh=0 ;; esac
+				case "$_mm" in ''|*[!0-9]*) _mm=0 ;; esac
+				_dow="$_week"
+				[ "$_week" = "7" ] && _dow='*'
+				echo "$((_mm + 0)) $((_hh + 0)) * * $_dow $PWPLUS_LIB/pwplus-router schedule sub $_s >/dev/null 2>&1" >> "$CRONTAB.pwplus"
+				;;
+		esac
+	done
+	if cmp -s "$CRONTAB.pwplus" "$CRONTAB"; then
+		rm -f "$CRONTAB.pwplus"
+		return 0
+	fi
+	mv -f "$CRONTAB.pwplus" "$CRONTAB"
+	bounded 15 /etc/init.d/cron reload >/dev/null 2>&1 || true
+	log "schedule updated"
+	return 0
+}
+
+cmd_schedule() {
+	case "${1:-}" in
+		sync)
+			cmd_schedule_sync
+			;;
+		stop)
+			touch "$SCHEDULE_STOPPED" 2>/dev/null || true
+			log "Scheduled stop"
+			bounded 60 /etc/init.d/passwall-plus stop >/dev/null 2>&1 || true
+			;;
+		start)
+			rm -f "$SCHEDULE_STOPPED"
+			log "Scheduled start"
+			bounded 90 /etc/init.d/passwall-plus start >/dev/null 2>&1 || true
+			;;
+		restart)
+			rm -f "$SCHEDULE_STOPPED"
+			log "Scheduled restart"
+			bounded 90 /etc/init.d/passwall-plus restart >/dev/null 2>&1 || true
+			;;
+		geo)
+			# The files ticked on Rule Manage, and a restart when the tunnel
+			# is running, so that it reads them - as PassWall2 does.
+			_ip="$(cfg_bool geoip_update 1)"; _site="$(cfg_bool geosite_update 1)"
+			if [ "$_ip" = "1" ] && [ "$_site" = "1" ]; then
+				_which=all
+			elif [ "$_ip" = "1" ]; then
+				_which=geoip
+			elif [ "$_site" = "1" ]; then
+				_which=geosite
+			else
+				return 0
+			fi
+			log "Scheduled update of the routing data ($_which)"
+			if "$PWPLUS_LIB/pwplus-geo" update "$_which" >/dev/null 2>&1; then
+				if [ "$(cfg_bool enabled 0)" = "1" ] && tunnel_running; then
+					bounded 90 /etc/init.d/passwall-plus restart >/dev/null 2>&1 || true
+				fi
+			fi
+			;;
+		sub)
+			# One subscription, read on its own schedule, and the list
+			# rebuilt from it. Not while only nodes added by hand are used.
+			case "${2:-}" in ''|*[!A-Za-z0-9_]*) return 1 ;; esac
+			if [ "$(cfg sources own)" = "own" ]; then
+				return 0
+			fi
+			log "Scheduled update of subscription $2"
+			"$PWPLUS_LIB/pwplus-nodes" update "$2" >/dev/null 2>&1 || true
+			;;
+		*) echo "usage: $0 schedule sync|stop|start|restart|geo|sub <section>" >&2; return 1 ;;
+	esac
+	return 0
+}
+
+case "${1:-}" in
+	rebind)   cmd_rebind ;;
+	clock)    cmd_clock ;;
+	schedule) cmd_schedule "${2:-}" "${3:-}" ;;
+	*) echo "usage: $0 rebind|clock|schedule sync|stop|start|restart|geo|sub <section>" >&2; exit 1 ;;
+esac

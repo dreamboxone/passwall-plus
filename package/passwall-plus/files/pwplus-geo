@@ -1,14 +1,21 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
 # pwplus-geo - fetch the routing data the Iran split needs.
 #
 #   pwplus-geo update [geoip|geosite|all]
+#   pwplus-geo rollback geoip|geosite
 #   pwplus-geo status
 #   pwplus-geo remove
+#
+# PassWall2's Rollback: the file an update replaces is kept, in memory, until
+# the next reboot or the next update, and can be put back. In memory and not
+# on flash, as PassWall2 keeps it, because two copies of seventeen megabytes
+# on flash is exactly what a small router has not got - and only when there
+# is room in memory to spare, because running out of it is worse still.
 #
 # Both addresses are settings, shown in the web interface and editable there.
 # Pressing Update always downloads again, whether or not the file is already
@@ -39,6 +46,9 @@ GEOIP_DEFAULT="https://raw.githubusercontent.com/Chocolate4U/Iran-v2ray-rules/re
 GEOSITE_DEFAULT="https://raw.githubusercontent.com/Chocolate4U/Iran-v2ray-rules/release/geosite.dat"
 
 DIR="$(cfg geo_dir "$PWPLUS_ETC/geo")"
+BAK="${PWPLUS_GEO_BAK:-/tmp/passwall-plus-geo-bak}"
+# What must stay free in memory after a copy is kept.
+BAK_MARGIN=33554432
 
 url_for() {
 	case "$1" in
@@ -123,9 +133,58 @@ fetch_one() {
 		fi
 	fi
 
+	keep_old "$_what"
 	mv -f "$_new" "$DIR/$_what.dat" || return 1
 	date -u +%s > "$DIR/$_what.stamp" 2>/dev/null || true
 	log "$_what updated ($(human_size "$(wc -c < "$DIR/$_what.dat")"))"
+	return 0
+}
+
+# The file about to be replaced, and when it was last replaced, kept for
+# Rollback - when memory allows.
+keep_old() {
+	[ -s "$DIR/$1.dat" ] || return 0
+	mkdir -p "$BAK" 2>/dev/null || return 0
+	_sz="$(file_size "$DIR/$1.dat")"
+	if [ "$(free_bytes "$BAK")" -lt $((_sz + BAK_MARGIN)) ]; then
+		log "$1: not enough free memory to keep the old copy for rollback"
+		rm -f "$BAK/$1.dat" "$BAK/$1.stamp"
+		return 0
+	fi
+	if cp -f "$DIR/$1.dat" "$BAK/$1.dat" 2>/dev/null; then
+		printf '%s\n' "$(stamped "$1")" > "$BAK/$1.stamp" 2>/dev/null || true
+	else
+		rm -f "$BAK/$1.dat" "$BAK/$1.stamp"
+	fi
+	return 0
+}
+
+# Put the kept copy back. It is checked with its partner first, the same as a
+# download is, and it needs the same room on flash a download would.
+cmd_rollback() {
+	case "${1:-}" in
+		geoip|geosite) : ;;
+		*) echo "usage: $0 rollback geoip|geosite" >&2; return 1 ;;
+	esac
+	_what="$1"
+	[ -s "$BAK/$_what.dat" ] || { warn "$_what: no earlier copy to go back to"; return 1; }
+	space_for "$(file_size "$BAK/$_what.dat")" "$DIR" || return 1
+	if [ "$_what" = "geoip" ]; then
+		_a="$BAK/geoip.dat"; _b="$DIR/geosite.dat"
+	else
+		_a="$DIR/geoip.dat"; _b="$BAK/geosite.dat"
+	fi
+	if [ -s "$_a" ] && [ -s "$_b" ] && ! verify_pair "$_a" "$_b"; then
+		say_message "The earlier $_what file is not readable routing data any more - kept the current one."
+		return 1
+	fi
+	cp -f "$BAK/$_what.dat" "$DIR/$_what.dat.new" || { rm -f "$DIR/$_what.dat.new"; return 1; }
+	mv -f "$DIR/$_what.dat.new" "$DIR/$_what.dat" || return 1
+	if [ -s "$BAK/$_what.stamp" ]; then
+		cp -f "$BAK/$_what.stamp" "$DIR/$_what.stamp" 2>/dev/null || true
+	fi
+	rm -f "$BAK/$_what.dat" "$BAK/$_what.stamp"
+	log "$_what: rolled back to the earlier copy - reconnect for it to take effect"
 	return 0
 }
 
@@ -185,13 +244,15 @@ one_status() {
 	_what="$1"
 	_f="$DIR/$_what.dat"
 	if [ -s "$_f" ]; then
-		printf '"%s":{"present":true,"bytes":%s,"updated":%s,"url":"%s"}' \
-			"$_what" "$(wc -c < "$_f" | tr -d ' ')" \
+		printf '"%s":{"present":true,"bytes":%s,"updated":%s,"url":"%s","backup":%s}' \
+			"$_what" "$(file_size "$_f")" \
 			"$(stamped "$_what")" \
-			"$(json_escape "$(url_for "$_what")")"
+			"$(json_escape "$(url_for "$_what")")" \
+			"$([ -s "$BAK/$_what.dat" ] && echo true || echo false)"
 	else
-		printf '"%s":{"present":false,"bytes":0,"updated":0,"url":"%s"}' \
-			"$_what" "$(json_escape "$(url_for "$_what")")"
+		printf '"%s":{"present":false,"bytes":0,"updated":0,"url":"%s","backup":%s}' \
+			"$_what" "$(json_escape "$(url_for "$_what")")" \
+			"$([ -s "$BAK/$_what.dat" ] && echo true || echo false)"
 	fi
 	return 0
 }
@@ -205,6 +266,63 @@ cmd_status() {
 	return 0
 }
 
+# PassWall2's Geo View, with its tool.
+#
+#   view lookup <name or address>   which lists hold it - and which shunt
+#                                   rules name one of those lists, or it
+#   view extract geoip:<list>|geosite:<list>   what one list holds
+#
+# Prints the answer, then a line "--rules--" and the rules that contain it.
+# A list can be tens of thousands of lines; the page is given the first
+# five thousand.
+cmd_view() {
+	_bin="$(find_geoview)" || { echo "@nogeoview"; return 1; }
+	[ -s "$DIR/geoip.dat" ] && [ -s "$DIR/geosite.dat" ] || { echo "@nogeo"; return 1; }
+	_v="$(printf '%s' "${2:-}" | tr -d ' \t\r\n')"
+	case "$_v" in
+		''|*[!A-Za-z0-9.:/_@!-]*) echo "@bad"; return 1 ;;
+	esac
+	case "${1:-}" in
+		lookup)
+			_t=geosite
+			case "$_v" in
+				*[!0-9.]*) : ;;
+				*.*.*.*) _t=geoip ;;
+			esac
+			case "$_v" in
+				*:*) [ -z "$(printf '%s' "$_v" | tr -d '0-9A-Fa-f:.')" ] && _t=geoip ;;
+			esac
+			"$_bin" -type "$_t" -action lookup -input "$DIR/$_t.dat" -value "$_v" -lowmem=true 2>/dev/null |
+				tr 'A-Z' 'a-z' | sed "s/^/$_t:/" > "$PWPLUS_RUN/geoview.out"
+			cat "$PWPLUS_RUN/geoview.out"
+			echo "--rules--"
+			# The shunt rules that name one of those lists, or the value itself.
+			{ cat "$PWPLUS_RUN/geoview.out"; echo "$_v"; } > "$PWPLUS_RUN/geoview.want"
+			uci -q -X show passwall-plus 2>/dev/null |
+				sed -n "s/^passwall-plus\.\([A-Za-z0-9_]*\)=shunt_rules\$/\1/p" | while read -r _r; do
+					{ uci -q get "passwall-plus.$_r.domain_list"; uci -q get "passwall-plus.$_r.ip_list"; } 2>/dev/null |
+						sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' |
+						grep -qxFf "$PWPLUS_RUN/geoview.want" || continue
+					_g="$(uci -q get "passwall-plus.$_r.group")" || _g=""
+					printf '[%s]%s\n' "${_g:-default}" "$(uci -q get "passwall-plus.$_r.remarks" || echo "$_r")"
+				done
+			rm -f "$PWPLUS_RUN/geoview.out" "$PWPLUS_RUN/geoview.want"
+			;;
+		extract)
+			case "$_v" in
+				geoip:?*)   _t=geoip ;;
+				geosite:?*) _t=geosite ;;
+				*) echo "@bad"; return 1 ;;
+			esac
+			"$_bin" -type "$_t" -action extract -input "$DIR/$_t.dat" -list "${_v#*:}" -lowmem=true 2>/dev/null |
+				head -n 5000
+			echo "--rules--"
+			;;
+		*) echo "@bad"; return 1 ;;
+	esac
+	return 0
+}
+
 cmd_remove() {
 	rm -f "$DIR/geoip.dat" "$DIR/geosite.dat" "$DIR/geoip.stamp" "$DIR/geosite.stamp"
 	log "routing data removed"
@@ -212,8 +330,10 @@ cmd_remove() {
 }
 
 case "${1:-status}" in
-	update) shift; cmd_update "${1:-all}" ;;
-	status) cmd_status ;;
-	remove) cmd_remove ;;
-	*) echo "usage: $0 update [geoip|geosite|all]|status|remove" >&2; exit 1 ;;
+	update)   cmd_update "${2:-all}" ;;
+	rollback) cmd_rollback "${2:-}" ;;
+	status)   cmd_status ;;
+	view)     cmd_view "${2:-}" "${3:-}" ;;
+	remove)   cmd_remove ;;
+	*) echo "usage: $0 update [geoip|geosite|all]|rollback geoip|geosite|status|remove" >&2; exit 1 ;;
 esac

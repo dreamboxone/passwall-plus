@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
@@ -26,6 +26,7 @@ DEPS="$PWPLUS_LIB/pwplus-deps"
 STATS="$PWPLUS_LIB/pwplus-stats"
 TEST="$PWPLUS_LIB/pwplus-test"
 RULES="$PWPLUS_LIB/pwplus-rules"
+ROUTER="$PWPLUS_LIB/pwplus-router"
 
 JOB="$PWPLUS_RUN/job"
 
@@ -116,6 +117,28 @@ method_state() {
 	json_add_int "alive" "$(num "$(prog_get alive)")"
 	json_add_int "tested" "$(num "$(prog_get tested)")"
 
+	# The core, as PassWall2 shows it at the top of its page: which one, which
+	# version, and whether it is running. Read from what the service wrote
+	# when it started it rather than by asking the binary, which would mean
+	# starting a core every few seconds to learn its version number.
+	_ci="$PWPLUS_RUN/core.info"
+	_cpath="$(sed -n 's/^path=//p' "$_ci" 2>/dev/null | tail -1)"
+	if [ -z "$_cpath" ]; then
+		for _x in $(cfg core_xray '') $(xray_paths); do
+			[ -x "$_x" ] && { _cpath="$_x"; break; }
+		done
+	fi
+	json_add_string "core_path" "$_cpath"
+	# Which core it is, as the start wrote it down; Xray until one has run.
+	_cname="$(sed -n 's/^name=//p' "$_ci" 2>/dev/null | tail -1)"
+	json_add_string "core_name" "${_cname:-xray}"
+	json_add_string "core_version" "$(sed -n 's/^version=//p' "$_ci" 2>/dev/null | tail -1)"
+	json_add_boolean "core_running" "$running"
+	_bbin="$(sed -n 's/^bridge=//p' "$_ci" 2>/dev/null | tail -1)"
+	json_add_string "bridge" "$(basename "${_bbin:-}" 2>/dev/null)"
+	json_add_string "bridge_version" "$(sed -n 's/^bridge_version=//p' "$_ci" 2>/dev/null | tail -1)"
+	json_add_boolean "bridge_running" "$([ -n "$_bbin" ] && pgrep -f "$PWPLUS_BRIDGE_JSON" >/dev/null 2>&1 && echo 1 || echo 0)"
+
 	json_add_string "backend" "$backend"
 	json_add_boolean "route_ir" "$(cfg_bool route_ir 0)"
 	json_add_boolean "geo_ready" "$(geo_dir >/dev/null 2>&1 && echo 1 || echo 0)"
@@ -192,7 +215,73 @@ method_inuse() {
 # browser every five seconds.
 method_log() {
 	json_init
-	json_add_string "text" "$(logread -e passwall-plus 2>/dev/null | tail -300)"
+	# The runtime log, PassWall2's way: this program's own file, a date on
+	# every line, emptied by the button on the page. Before this release
+	# there was no file, so the system log stands in until there is one.
+	if [ -s "$PWPLUS_LOG" ]; then
+		json_add_string "text" "$(tail -n 400 "$PWPLUS_LOG" 2>/dev/null)"
+	else
+		json_add_string "text" "$(logread -e passwall-plus 2>/dev/null | tail -300)"
+	fi
+	# And what the cores themselves said. procd hands their output to the
+	# system log under the program's own name.
+	json_add_string "core" "$(logread 2>/dev/null | grep -E ' (xray|sing-box|hysteria)\[[0-9]+\]:' | tail -300)"
+	json_dump
+}
+
+# PassWall2's connection check: one request to a well-known site, timed.
+# From the router, so what it measures is the router's own way out - which
+# for a site the tunnel carries is the tunnel, once the router's own lookups
+# go through it.
+method_check() {
+	local input url code t
+	read -r input
+	[ -n "$input" ] || input='{}'
+	json_load "$input" 2>/dev/null
+	json_get_var url url
+	case "$url" in
+		https://*|http://*) : ;;
+		*) json_init; json_add_int "ms" 0; json_dump; return ;;
+	esac
+	t="$(curl -o /dev/null -I -sk --connect-timeout 3 --max-time 6 \
+		-w '%{http_code} %{time_appconnect} %{time_connect}' "$url" 2>/dev/null)" || t=""
+	code="${t%% *}"
+	json_init
+	if [ -n "$code" ] && [ "$code" != "000" ]; then
+		json_add_int "ms" "$(printf '%s' "$t" | awk '{ v = ($2 > 0) ? $2 : $3; m = int(v * 1000 + 0.5); if (m < 1) m = 1; print m }')"
+	else
+		json_add_int "ms" 0
+	fi
+	json_dump
+}
+
+# What the Access Control page needs to offer choices rather than ask for
+# names: the LAN interfaces, and the nodes added by hand, which are the only
+# ones that stay put long enough for a rule to name one.
+method_lan() {
+	printf '{"interfaces":%s}
+' "$(interfaces_json)"
+}
+
+# The Geo View page's two questions, answered by pwplus-geo with Geoview.
+method_geoview() {
+	local input action value out
+	read -r input
+	json_load "$input" 2>/dev/null || true
+	json_get_var action action
+	json_get_var value value
+	case "$action" in lookup|extract) : ;; *) action=lookup ;; esac
+	out="$("$GEO" view "$action" "$value" 2>/dev/null)"
+	json_init
+	case "$out" in
+		@nogeoview*) json_add_string "error" "nogeoview" ;;
+		@nogeo*)     json_add_string "error" "nogeo" ;;
+		@bad*)       json_add_string "error" "bad" ;;
+		*)
+			json_add_string "result" "$(printf '%s\n' "$out" | sed '/^--rules--$/,$d')"
+			json_add_string "rules" "$(printf '%s\n' "$out" | sed '1,/^--rules--$/d')"
+			;;
+	esac
 	json_dump
 }
 
@@ -201,8 +290,8 @@ method_subs() {
 		{
 			if (n++ > 0) printf ","
 			for (i = 1; i <= NF; i++) { gsub(/\\/, "\\\\", $i); gsub(/"/, "\\\"", $i) }
-			printf "{\"name\":\"%s\",\"url\":\"%s\",\"count\":%d,\"when\":%d,\"error\":\"%s\"}",
-				$1, $2, $3, $4, $5
+			printf "{\"name\":\"%s\",\"url\":\"%s\",\"count\":%d,\"when\":%d,\"error\":\"%s\",\"section\":\"%s\",\"rem\":%.0f,\"expire\":%.0f}",
+				$1, $2, $3, $4, $5, $6, ($7 == "" ? -1 : $7), ($8 == "" ? -1 : $8)
 		}
 		END { printf "],\"count\":%d}\n", n }' \
 		"$PWPLUS_RUN/subs.status" 2>/dev/null || echo '{"subs":[],"count":0}'
@@ -244,10 +333,25 @@ method_system() {
 	# on GitHub. The refresh itself does nothing when the file is fresh.
 	detach "$CORES" latest
 
+	# The dependency check loads a test ruleset into the kernel and fetches a
+	# file over HTTPS - a second and more, and a request to GitHub on every
+	# poll of a page left open. What it finds changes when something is
+	# installed, so it is kept for ten minutes and thrown away by an install.
+	_dc="$PWPLUS_RUN/deps.json"
+	_deps=""
+	if [ -s "$_dc" ]; then
+		_age=$(( $(date +%s) - $(date -r "$_dc" +%s 2>/dev/null || echo 0) ))
+		[ "$_age" -ge 0 ] && [ "$_age" -lt 600 ] && _deps="$(cat "$_dc" 2>/dev/null)"
+	fi
+	if [ -z "$_deps" ]; then
+		_deps="$("$DEPS" check 2>/dev/null)" || _deps=""
+		[ -n "$_deps" ] && printf '%s\n' "$_deps" > "$_dc" 2>/dev/null
+	fi
+
 	printf '{"geo":%s,"cores":%s,"deps":%s,"interfaces":%s,"job":"%s"}\n' \
 		"$("$GEO" status 2>/dev/null || echo '{}')" \
 		"$("$CORES" list 2>/dev/null || echo '{}')" \
-		"$("$DEPS" check 2>/dev/null || echo '{}')" \
+		"${_deps:-{\}}" \
 		"$(interfaces_json)" \
 		"$(cat "$JOB" 2>/dev/null)"
 }
@@ -266,6 +370,8 @@ method_action() {
 	case "$name" in
 		connect)
 			uci -q set passwall-plus.config.enabled='1' && uci -q commit passwall-plus
+			# The switch turned on by hand outranks a scheduled stop.
+			rm -f "$PWPLUS_RUN/schedule.stopped"
 			# Said here and not in the detached script: between forking and
 			# that script's first write there is a gap, and through the whole
 			# gap the page would still show whatever the last attempt ended
@@ -308,7 +414,65 @@ method_action() {
 			fi
 			;;
 		refresh_nodes)
-			run_job "Reading the subscriptions" "$NODES update"
+			# Every subscription, or the one named - PassWall2's "Manual
+			# subscription All" and "Manual subscription".
+			case "$arg" in
+				'') arg=all ;;
+				*[!A-Za-z0-9_]*) fail "unknown subscription"; return ;;
+			esac
+			# A subscription only just added in the page is not in the file
+			# until it is saved and applied, and there is nothing to read.
+			if [ "$arg" != "all" ] && ! uci -q get "passwall-plus.$arg" >/dev/null 2>&1; then
+				fail "Save and apply this subscription first"
+				return
+			fi
+			run_job "Reading the subscriptions" "$NODES update $arg"
+			;;
+		forget_nodes)
+			# What one subscription brought, or all of them, deleted.
+			case "$arg" in
+				*[!A-Za-z0-9_]*) fail "unknown subscription"; return ;;
+			esac
+			"$NODES" forget $arg >/dev/null 2>&1
+			;;
+		add_links)
+			# PassWall2's "Add the node via the link": one node per link.
+			_n="$(printf '%s\n' "$arg" | "$NODES" addlinks 2>/dev/null)" || _n=0
+			detach "$NODES" build
+			json_init
+			json_add_boolean "ok" 1
+			json_add_int "added" "${_n:-0}"
+			json_dump
+			return
+			;;
+		delete_nodes|clear_nodes|copy_node|top_node|group_nodes|use_node)
+			# The rest of its Node List. Node ids only, and a group name
+			# without anything a shell or uci would read as more than a name.
+			_ids="${arg#*;}"
+			_grp=""
+			[ "$name" = "group_nodes" ] && _grp="${arg%%;*}"
+			if [ -n "$(printf '%s' "$_ids" | tr -d 'A-Za-z0-9_ ')" ] ||
+			   [ -n "$(printf '%s' "$_grp" | tr -d 'A-Za-z0-9_ .-')" ]; then
+				fail "unknown node"
+				return
+			fi
+			"$NODES" fixnames >/dev/null 2>&1 || true
+			case "$name" in
+				delete_nodes) "$NODES" delete $_ids >/dev/null 2>&1 ;;
+				clear_nodes)  "$NODES" clear >/dev/null 2>&1 ;;
+				copy_node)    "$NODES" copy "$_ids" >/dev/null 2>&1 && detach "$NODES" build ;;
+				top_node)     "$NODES" top "$_ids" >/dev/null 2>&1 ;;
+				group_nodes)  "$NODES" group "$_grp" $_ids >/dev/null 2>&1 ;;
+				use_node)
+					# PassWall2's Use: the node in Basic Settings, applied.
+					[ "$(uci -q get "passwall-plus.$_ids")" = "node" ] || { fail "unknown node"; return; }
+					uci -q set passwall-plus.config.node="$_ids" && uci -q commit passwall-plus
+					if [ "$(cfg_bool enabled 0)" = "1" ]; then
+						say_status starting
+						detach /bin/sh -c ". $PWPLUS_LIB/pwplus-common.sh; bounded 90 /etc/init.d/passwall-plus restart"
+					fi
+					;;
+			esac
 			;;
 		rebuild_nodes)
 			# The list rebuilt from what has already been fetched. No
@@ -334,20 +498,29 @@ method_action() {
 		geo_remove)
 			"$GEO" remove >/dev/null 2>&1
 			;;
+		geo_rollback)
+			case "$arg" in geoip|geosite) : ;; *) fail "unknown file"; return ;; esac
+			if ! "$GEO" rollback "$arg" >/dev/null 2>&1; then
+				fail "That file could not be put back."
+				return
+			fi
+			;;
 		core_install)
 			case "$arg" in
-				xray|sing-box|hysteria) run_job "Installing $arg" "$CORES install $arg" ;;
+				xray|sing-box|hysteria|geoview) run_job "Installing $arg" "$CORES install $arg" ;;
 				*) fail "unknown core"; return ;;
 			esac
 			;;
 		core_remove)
 			case "$arg" in
-				sing-box|hysteria) "$CORES" remove "$arg" >/dev/null 2>&1 ;;
+				sing-box|hysteria|geoview) "$CORES" remove "$arg" >/dev/null 2>&1 ;;
 				*) fail "unknown core"; return ;;
 			esac
 			;;
 		deps_install)
-			run_job "Installing dependencies" "$DEPS install"
+			# What was missing is about to change; the next look asks again.
+			rm -f "$PWPLUS_RUN/deps.json"
+			run_job "Installing dependencies" "$DEPS install; rm -f '$PWPLUS_RUN/deps.json'"
 			;;
 		stats_reset)
 			"$STATS" reset >/dev/null 2>&1
@@ -364,6 +537,31 @@ method_action() {
 			esac
 			[ -n "$_id" ] && [ "$_id" != "$arg" ] || { fail "no node given"; return; }
 			detach "$TEST" "$_kind" "$_id"
+			;;
+		rebind_apply)
+			"$ROUTER" rebind >/dev/null 2>&1
+			;;
+		set_clock)
+			# Answered here rather than as "ok": pressing it a second time
+			# has to be able to say it was already done.
+			_r="$("$ROUTER" clock 2>/dev/null)"
+			json_init
+			json_add_boolean "ok" 1
+			json_add_boolean "already" "$([ "$_r" = "already" ] && echo 1 || echo 0)"
+			json_dump
+			return
+			;;
+		set_lang)
+			# The language button in the page header. A plain uci commit
+			# rather than a LuCI save, which would restart the tunnel for
+			# the sake of a word on a button.
+			case "$arg" in fa|en) : ;; *) fail "unknown language"; return ;; esac
+			uci -q set passwall-plus.config.lang="$arg" && uci -q commit passwall-plus
+			;;
+		clear_log)
+			# PassWall2's "Clear logs". Only the runtime log: the core's
+			# own lines are the system log's, not this program's to empty.
+			: > "$PWPLUS_LOG" 2>/dev/null || true
 			;;
 		clear_message)
 			# The reader has read it. A message that cannot be put away
@@ -399,7 +597,16 @@ case "$1" in
 		json_add_object "tests";   json_close_object
 		json_add_object "inuse";   json_close_object
 		json_add_object "log";     json_close_object
+		json_add_object "lan";     json_close_object
+		json_add_object "check"
+			json_add_string "url" ""
+		json_close_object
 		json_add_object "system";  json_close_object
+		json_add_object "geo";     json_close_object
+		json_add_object "geoview"
+		json_add_string "action" "lookup"
+		json_add_string "value" ""
+		json_close_object
 		json_add_object "action"
 			json_add_string "name" ""
 			json_add_string "arg" ""
@@ -415,7 +622,11 @@ case "$1" in
 			tests)   method_tests ;;
 			inuse)   method_inuse ;;
 			log)     method_log ;;
+			lan)     method_lan ;;
+			check)   method_check ;;
 			system)  method_system ;;
+			geo)     "$GEO" status 2>/dev/null || echo '{}' ;;
+			geoview) method_geoview ;;
 			action)  method_action ;;
 		esac
 		;;

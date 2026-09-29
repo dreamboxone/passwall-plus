@@ -3,7 +3,8 @@
 		"description": "Grant access to Passwall+",
 		"read": {
 			"ubus": {
-				"luci.passwall-plus": [ "state", "traffic", "nodes", "subs", "system", "tests", "inuse", "log" ]
+				"luci.passwall-plus": [ "state", "traffic", "nodes", "subs", "system", "tests", "inuse", "log", "lan", "check", "geo", "geoview" ],
+				"luci-rpc": [ "getHostHints" ]
 			},
 			"uci": [ "passwall-plus" ]
 		},

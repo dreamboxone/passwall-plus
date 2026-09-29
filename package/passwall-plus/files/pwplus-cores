@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
@@ -36,6 +36,7 @@ DIR="$(cfg core_dir "$PWPLUS_OWN_DIR")"
 XRAY_REPO=XTLS/Xray-core
 SINGBOX_REPO=SagerNet/sing-box
 HYSTERIA_REPO=apernet/hysteria
+GEOVIEW_REPO=snowie2000/geoview
 
 asset_for() {
 	_a="$(arch_assets)"
@@ -43,6 +44,8 @@ asset_for() {
 		xray)     echo "$_a" | awk '{print $1}' ;;
 		sing-box) echo "$_a" | awk '{print $2}' ;;
 		hysteria) echo "$_a" | awk '{print $3}' ;;
+		# Geoview names its builds the way sing-box does, but for "i386".
+		geoview)  echo "$_a" | awk '{ print ($2 == "386") ? "i386" : $2 }' ;;
 	esac
 	return 0
 }
@@ -57,7 +60,7 @@ latest_tag() {
 # Every archive needs room for itself and for what comes out of it, and the
 # check has to happen against the filesystem it will actually land on.
 need_room() {
-	space_for "$1" "$DIR"
+	space_for "$1" "${2:-$DIR}"
 	return $?
 }
 
@@ -117,7 +120,7 @@ install_singbox() {
 	_tgz="$PWPLUS_RUN/sing-box.tar.gz"
 
 	_size="$(remote_size "$_url")"
-	need_room $((_size * 3)) || return 1
+	need_room $((_size * 3)) "$(dirname "$(singbox_path)")" || return 1
 	download_checked "$_url" "$_tgz" "$_size" || return 1
 
 	rm -rf "$PWPLUS_RUN/xtract"
@@ -130,7 +133,7 @@ install_singbox() {
 	rm -f "$_tgz"
 	_bin="$(find "$PWPLUS_RUN/xtract" -name sing-box -type f 2>/dev/null | head -1)"
 	[ -n "$_bin" ] || { rm -rf "$PWPLUS_RUN/xtract"; say_message "No sing-box program inside the archive."; return 1; }
-	install_binary "$_bin" "$DIR/sing-box" sing-box
+	install_binary "$_bin" "$(singbox_path)" sing-box
 	return $?
 }
 
@@ -150,9 +153,28 @@ install_hysteria() {
 	_bin="$PWPLUS_RUN/hysteria.bin"
 
 	_size="$(remote_size "$_url")"
-	need_room $((_size * 2)) || return 1
+	need_room $((_size * 2)) "$(dirname "$(hysteria_path)")" || return 1
 	download_checked "$_url" "$_bin" "$_size" || return 1
-	install_binary "$_bin" "$DIR/hysteria" hysteria
+	install_binary "$_bin" "$(hysteria_path)" hysteria
+	return $?
+}
+
+# ----------------------------------------------------------------- geoview
+
+install_geoview() {
+	_asset="$(asset_for geoview)"
+	[ "$_asset" != "-" ] && [ -n "$_asset" ] || {
+		say_message "Geoview publishes no build for this router's processor."
+		return 1
+	}
+	# A plain executable, like hysteria.
+	_url="https://github.com/$GEOVIEW_REPO/releases/latest/download/geoview-linux-$_asset"
+	_bin="$PWPLUS_RUN/geoview.bin"
+
+	_size="$(remote_size "$_url")"
+	need_room $((_size * 2)) "$(dirname "$(geoview_path)")" || return 1
+	download_checked "$_url" "$_bin" "$_size" || return 1
+	install_binary "$_bin" "$(geoview_path)" geoview
 	return $?
 }
 
@@ -218,7 +240,10 @@ install_binary() {
 	mkdir -p "$(dirname "$_dst")"
 	chmod 0755 "$_src" 2>/dev/null || true
 
-	if ! "$_src" version >/dev/null 2>&1; then
+	# Geoview answers -version; the cores answer version.
+	_vflag=version
+	[ "$_name" = "geoview" ] && _vflag=-version
+	if ! "$_src" "$_vflag" >/dev/null 2>&1; then
 		# Three different things used to be reported as one, and the one was a
 		# guess: "probably built for a different processor". It is the least
 		# likely of the three, because the address the file came from is
@@ -276,6 +301,8 @@ repo_of() {
 		xray)     echo "$XRAY_REPO" ;;
 		sing-box) echo "$SINGBOX_REPO" ;;
 		hysteria) echo "$HYSTERIA_REPO" ;;
+		geoview)  echo "$GEOVIEW_REPO" ;;
+		passwall-plus) echo "dreamboxone/passwall-plus" ;;
 	esac
 	return 0
 }
@@ -301,7 +328,7 @@ cmd_latest() {
 
 	_tmp="$LATEST_CACHE.new"
 	: > "$_tmp"
-	for _c in xray sing-box hysteria; do
+	for _c in xray sing-box hysteria geoview passwall-plus; do
 		_repo="$(repo_of "$_c")"
 		[ -n "$_repo" ] || continue
 		# The tag is all that is wanted, so this is a small request and a
@@ -329,7 +356,7 @@ one() {
 	_name="$1"; _path="$2"
 	_latest="$(latest_of "$_name")"
 	if [ -n "$_path" ] && [ -x "$_path" ]; then
-		_have="$(core_version "$_path")"
+		_have="$(core_version_cached "$_path")"
 		# Different strings, not "newer": comparing version numbers written by
 		# three different projects is a way to be confidently wrong. The page
 		# shows both and the reader decides.
@@ -342,8 +369,8 @@ one() {
 			"$_name" "$(json_escape "$_path")" \
 			"$(json_escape "$_have")" \
 			"$(json_escape "$_latest")" "$_new" \
-			"$(wc -c < "$_path" | tr -d ' ')" \
-			"$(case "$_path" in "$DIR"/*) echo true ;; *) echo false ;; esac)" \
+			"$(file_size "$_path")" \
+			"$(case "$_path" in "$DIR"/*|"$(singbox_path)"|"$(hysteria_path)"|"$(geoview_path)") echo true ;; *) echo false ;; esac)" \
 			"$([ "$(asset_for "$_name")" != "-" ] && echo true || echo false)"
 	else
 		printf '{"name":"%s","installed":false,"path":"","version":"","latest":"%s","update":false,"bytes":0,"ours":false,"arch_ok":%s}' \
@@ -354,26 +381,44 @@ one() {
 }
 
 cmd_list() {
-	_x="$(find_xray '' 2>/dev/null)" || _x=""
-	_s="$(find_singbox 2>/dev/null)" || _s=""
-	_h="$(find_hysteria 2>/dev/null)" || _h=""
+	# Found without starting any of them - see xray_installed. The versions
+	# come from the cache in core_version_cached for the same reason.
+	_x="$(xray_installed 2>/dev/null)" || _x=""
+	_s="$(singbox_path)"; [ -x "$_s" ] || _s=""
+	_h="$(hysteria_path)"; [ -x "$_h" ] || _h=""
+	_g="$(geoview_path)"; [ -x "$_g" ] || _g=""
 	printf '{"dir":"%s","free":%s,"arch":"%s","cores":[' \
 		"$(json_escape "$DIR")" "$(free_bytes "$DIR")" \
 		"$(json_escape "$(openwrt_arch)")"
 	one xray "$_x"; printf ','
 	one sing-box "$_s"; printf ','
-	one hysteria "$_h"
-	printf ']}\n'
+	one hysteria "$_h"; printf ','
+	one geoview "$_g"
+	# This program itself, for the App Update page: what is installed and
+	# what has been published. It is updated by installing the new package,
+	# not from here - a package manager is the only thing that can replace a
+	# package cleanly - so this only says whether there is one to install.
+	_mine="$(pwplus_version)"; _mine="${_mine%-r*}"
+	_pub="$(latest_of passwall-plus)"
+	printf '],"app":{"version":"%s","latest":"%s","update":%s}}\n' \
+		"$(json_escape "$_mine")" "$(json_escape "${_pub#v}")" \
+		"$([ -n "$_pub" ] && [ "${_pub#v}" != "$_mine" ] && echo true || echo false)"
 	return 0
 }
 
 cmd_remove() {
 	case "$1" in
-		sing-box|hysteria)
-			# Only ever our own copy. Something else on this router installed
-			# anything outside this directory, and it is not ours to delete.
-			if [ -e "$DIR/$1" ]; then
-				rm -f "$DIR/$1"
+		sing-box|hysteria|geoview)
+			# Only ever our own copy - the one at its App Path. Something
+			# else on this router installed anything else, and it is not
+			# ours to delete.
+			case "$1" in
+				sing-box) _rm="$(singbox_path)" ;;
+				hysteria) _rm="$(hysteria_path)" ;;
+				*)        _rm="$(geoview_path)" ;;
+			esac
+			if [ -e "$_rm" ]; then
+				rm -f "$_rm"
 				log "$1 removed"
 			fi
 			;;
@@ -381,7 +426,7 @@ cmd_remove() {
 			say_message "Xray is the engine and cannot be removed - it can only be updated."
 			return 1
 			;;
-		*) echo "usage: $0 remove sing-box|hysteria" >&2; return 1 ;;
+		*) echo "usage: $0 remove sing-box|hysteria|geoview" >&2; return 1 ;;
 	esac
 	return 0
 }
@@ -394,7 +439,8 @@ case "${1:-list}" in
 			xray)     install_xray ;;
 			sing-box) install_singbox ;;
 			hysteria) install_hysteria ;;
-			*) echo "usage: $0 install xray|sing-box|hysteria" >&2; exit 1 ;;
+			geoview)  install_geoview ;;
+			*) echo "usage: $0 install xray|sing-box|hysteria|geoview" >&2; exit 1 ;;
 		esac
 		;;
 	remove) clear_message; cmd_remove "${2:-}" ;;

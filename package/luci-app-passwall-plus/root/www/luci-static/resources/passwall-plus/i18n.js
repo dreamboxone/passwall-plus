@@ -1,5 +1,5 @@
 /*
- * SPDX-License-Identifier: GPL-3.0-only
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  * Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
  * Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
  *
@@ -53,32 +53,32 @@ var FA = {
 	'URL Test': 'تست URL',
 	'Test': 'تست',
 	'ICMP round trip to the address. Says nothing about the server behind it, which may not answer pings at all.':
-		'رفت‌وبرگشت ICMP تا آن آدرس. دربارهٔ سروری که پشتش است چیزی نمی‌گوید، و آن سرور ممکن است اصلاً به پینگ جواب ندهد.',
+		'رفت‌وبرگشت ICMP تا آن آدرس. درباره سروری که پشتش است چیزی نمی‌گوید، و آن سرور ممکن است اصلا به پینگ جواب ندهد.',
 	'A handshake to the port the tunnel will use.':
 		'یک هندشیک به همان پورتی که تونل استفاده می‌کند.',
 	'One whole request carried by this node. The only one that proves it works.':
-		'یک درخواست کامل که از همین نود عبور می‌کند. تنها تستی که ثابت می‌کند نود کار می‌کند.',
+		'یک درخواست کامل که از همین کانفیگ عبور می‌کند. تنها تستی که ثابت می‌کند کانفیگ کار می‌کند.',
 
 	/* ----------------------------------------------------------- the nodes */
-	'Node': 'نود',
-	'Nodes': 'نودها',
-	'%d nodes': '%d نود',
+	'Node': 'کانفیگ',
+	'Nodes': 'کانفیگ‌ها',
+	'%d nodes': '%d کانفیگ',
 	'Protocol': 'پروتکل',
 	'in use': 'در حال استفاده',
 	'Use': 'استفاده',
 	'This is the node the tunnel is using at the moment. Press Disconnect, or Choose again, before deleting it.':
-		'این همان نودی است که تونل الان از آن استفاده می‌کند. قبل از حذفش «قطع» یا «انتخاب دوباره» را بزنید.',
+		'این همان کانفیگی است که تونل الان از آن استفاده می‌کند. قبل از حذفش «قطع» یا «انتخاب دوباره» را بزنید.',
 	'Connecting through %s…': 'در حال اتصال از راه %s…',
-	'Nothing read yet. Press Read the subscriptions, or Connect on the main page.':
-		'هنوز چیزی خوانده نشده. «همین حالا اشتراک‌ها را بخوان» را بزنید، یا در صفحهٔ اصلی «اتصال».',
+	'Nothing read yet. Read the subscriptions on Node Subscribe, or turn on the main switch in Basic Settings.':
+		'هنوز چیزی خوانده نشده. اشتراک‌ها را در صفحه «اشتراک کانفیگ‌ها» بخوانید، یا کلید اصلی را در «تنظیمات پایه» روشن کنید.',
 	'Where nodes come from, and which ones to add by hand. Changes take effect the next time the list is read.':
-		'نودها از کجا می‌آیند، و کدام‌ها را دستی اضافه می‌کنید. تغییرات از دفعهٔ بعدی که لیست خوانده شود اعمال می‌شوند.',
-	'Which nodes to use': 'از کدام نودها استفاده شود',
-	'Nodes to use': 'نودهای مورد استفاده',
+		'کانفیگ‌ها از کجا می‌آیند، و کدام‌ها را دستی اضافه می‌کنید. تغییرات از دفعه بعدی که لیست خوانده شود اعمال می‌شوند.',
+	'Which nodes to use': 'از کدام کانفیگ‌ها استفاده شود',
+	'Nodes to use': 'کانفیگ‌های مورد استفاده',
 	'This decides who may be measured, not who wins: whichever node answers fastest is the one used, wherever it came from. A node added by hand joins the list rather than replacing it. To insist on one node, press “Use” beside it below.':
-		'این تعیین می‌کند چه کسی اندازه‌گیری شود، نه چه کسی برنده شود: هر نودی که سریع‌تر جواب بدهد همان استفاده می‌شود، از هر جا که آمده باشد. نودی که دستی اضافه می‌کنید به لیست اضافه می‌شود و جای آن را نمی‌گیرد. اگر روی یک نود خاص اصرار دارید، پایین همین صفحه کنارش «استفاده» را بزنید.',
-	'Mine and the subscriptions': 'مالِ من و اشتراک‌ها',
-	'Only Manually Added': 'فقط نودهای دستی',
+		'این تعیین می‌کند چه کسی اندازه‌گیری شود، نه چه کسی برنده شود: هر کانفیگی که سریع‌تر جواب بدهد همان استفاده می‌شود، از هر جا که آمده باشد. کانفیگی که دستی اضافه می‌کنید به لیست اضافه می‌شود و جای آن را نمی‌گیرد. اگر روی یک کانفیگ خاص اصرار دارید، پایین همین صفحه کنارش «استفاده» را بزنید.',
+	'All configs': 'همه کانفیگ‌ها',
+	'Only manually added configs': 'فقط کانفیگ‌های دستی',
 	'Only the subscriptions': 'فقط اشتراک‌ها',
 	'Subscriptions': 'اشتراک‌ها',
 	'Fetched every fifteen minutes. Xray, sing-box, Hysteria, Clash and WireGuard files are accepted, as are a plain list of links and a single base64 block.':
@@ -87,7 +87,7 @@ var FA = {
 	'Address': 'آدرس',
 	'Must start with http:// or https://': 'باید با ‎http://‎ یا ‎https://‎ شروع شود',
 	'On': 'فعال',
-	'Nodes added manually': 'نودهای دستی',
+	'Nodes added manually': 'ورود دستی کانفیگ‌ها',
 	'One share link per entry — vless, vmess, trojan, shadowsocks, socks, hysteria2, tuic or wireguard. A whole WireGuard .conf file can be pasted in as it stands. These are tried before the subscription list. The three test columns each measure something different; press one to run it.':
 		'برای هر ردیف یک لینک — vless، vmess، trojan، shadowsocks، socks، hysteria2، tuic یا wireguard. یک فایل ‎.conf وایرگارد را هم می‌توانید همان‌طور که هست اینجا بچسبانید. این‌ها پیش از لیست اشتراک‌ها امتحان می‌شوند. سه ستون تست هر کدام چیز متفاوتی را می‌سنجند؛ روی هرکدام بزنید تا اجرا شود.',
 	'Share link': 'لینک اشتراک‌گذاری',
@@ -106,15 +106,15 @@ var FA = {
 		'در حال خواندن اشتراک‌ها. این صفحه تا لحظاتی دیگر پر می‌شود.',
 	'Read the subscriptions now': 'همین حالا اشتراک‌ها را بخوان',
 	'Knocking on every node once. The TCPing column will fill in as answers come back.':
-		'یک بار به در هر نود می‌زند. ستون TCPing هر چه جواب برسد پر می‌شود.',
-	'Check every node': 'همهٔ نودها را بررسی کن',
+		'یک بار به در هر کانفیگ می‌زند. ستون TCPing هر چه جواب برسد پر می‌شود.',
+	'Check every node': 'همه کانفیگ‌ها را بررسی کن',
 	'“TCPing” is the handshake every node is checked with first, so it is filled in for all of them. “URL Test” is a complete request through the node, which is only run on the ones that answered and only until a fast enough one is found — so most of that column is empty by design. Both are the same measurements the buttons above take, done for the whole list at once.':
-		'«TCPing» همان هندشیکی است که همهٔ نودها اول با آن بررسی می‌شوند، پس برای همه پر می‌شود. «URL Test» یک درخواست کامل از داخل نود است، که فقط روی آن‌هایی اجرا می‌شود که جواب داده‌اند و فقط تا وقتی یکی به‌قدر کافی سریع پیدا شود — پس خالی بودن بیشترِ آن ستون عمدی است. هر دو همان اندازه‌گیری‌هایی هستند که دکمه‌های بالا انجام می‌دهند، این بار برای کل لیست.',
+		'«TCPing» همان هندشیکی است که همه کانفیگ‌ها اول با آن بررسی می‌شوند، پس برای همه پر می‌شود. «URL Test» یک درخواست کامل از داخل کانفیگ است، که فقط روی آن‌هایی اجرا می‌شود که جواب داده‌اند و فقط تا وقتی یکی به‌قدر کافی سریع پیدا شود — پس خالی بودن بیشتر آن ستون عمدی است. هر دو همان اندازه‌گیری‌هایی هستند که دکمه‌های بالا انجام می‌دهند، این بار برای کل لیست.',
 
 	/* --------------------------------------------------------- the traffic */
 	'Traffic through the tunnel': 'ترافیک عبوری از تونل',
 	'Today': 'امروز',
-	'Last 7 days': 'هفت روز اخیر',
+	'Last 7 days': 'هفته اخیر',
 	'This month': 'این ماه',
 	'Last 14 days': 'چهارده روز اخیر',
 	'total': 'مجموع',
@@ -122,7 +122,7 @@ var FA = {
 	'up': 'آپلود',
 	'Nothing recorded yet.': 'هنوز چیزی ثبت نشده.',
 	'Sent straight out this month (not tunnelled): ':
-		'مستقیم فرستاده‌شده در این ماه (بدون تونل): ',
+		'ترافیک مستقیم ماه جاری: ',
 
 	/* ---------------------------------------------------------- the status */
 	'Connect': 'اتصال',
@@ -130,33 +130,33 @@ var FA = {
 	'Choose again': 'انتخاب دوباره',
 	'Connected': 'متصل',
 	'Disconnected': 'قطع',
-	'Ready to connect': 'آمادهٔ اتصال',
+	'Ready to connect': 'آماده اتصال',
 	'Connecting…': 'در حال اتصال…',
 	'Disconnecting…': 'در حال قطع…',
 	'Starting…': 'در حال شروع…',
-	'Finding a node…': 'در حال یافتن نود…',
+	'Finding a node…': 'در حال یافتن کانفیگ…',
 	'Could not connect': 'اتصال برقرار نشد',
-	'Latency': 'تأخیر',
+	'Latency': 'تاخیر',
 	'Routing': 'مسیریابی',
 	'Dismiss': 'بستن',
 	'Iran is Direct': 'ایران مستقیم',
 	'Iran split is on, but the routing data is missing':
-		'تفکیک ایران روشن است، ولی دادهٔ مسیریابی نیست',
+		'تفکیک ایران روشن است، ولی داده مسیریابی نیست',
 	'Everything goes through the tunnel': 'همه‌چیز از تونل می‌رود',
 	'PassWall2 is also redirecting traffic — turn one of them off.':
 		'PassWall2 هم دارد ترافیک را منحرف می‌کند — یکی از این دو را خاموش کنید.',
 	'Checking which of %d nodes answer at all — %d so far':
-		'بررسی اینکه از %d نود کدام‌ها اصلاً جواب می‌دهند — تا اینجا %d',
+		'بررسی اینکه از %d کانفیگ کدام‌ها اصلا جواب می‌دهند — تا اینجا %d',
 	'Measuring the %d that answered, best first — %d done':
-		'اندازه‌گیری %d نودی که جواب دادند، بهترین اول — %d انجام شد',
+		'اندازه‌گیری %d کانفیگی که جواب دادند، بهترین اول — %d انجام شد',
 	'%d of %d nodes answered, but none completed a request':
-		'%d نود از %d جواب دادند، ولی هیچ‌کدام یک درخواست را کامل نکرد',
-	'No node on the list answered at all': 'هیچ نودی در لیست جواب نداد',
+		'%d کانفیگ از %d جواب دادند، ولی هیچ‌کدام یک درخواست را کامل نکرد',
+	'No node on the list answered at all': 'هیچ کانفیگی در لیست جواب نداد',
 
 	/* ------------------------------------------------------------- the log */
 	'Log': 'لاگ',
 	'The last few hundred lines this program wrote to the system log, newest at the bottom. It refreshes every five seconds. Nothing here is stored by this package — it is the router’s own log, and it is emptied when the router restarts.':
-		'چند صد خط آخری که این برنامه در لاگ سیستم نوشته، تازه‌ترین در پایین. هر پنج ثانیه تازه می‌شود. هیچ‌کدام از این‌ها را خود پکیج ذخیره نمی‌کند — لاگ خودِ روتر است و با ریستارت روتر پاک می‌شود.',
+		'چند صد خط آخری که این برنامه در لاگ سیستم نوشته، تازه‌ترین در پایین. هر پنج ثانیه تازه می‌شود. هیچ‌کدام از این‌ها را خود پکیج ذخیره نمی‌کند — لاگ خود روتر است و با ریستارت روتر پاک می‌شود.',
 	/* The lines themselves are never translated: they are the router's own
 	   log, written in English with paths and numbers in them, and a Persian
 	   rendering of half of them would be a worse thing to read than either. */
@@ -171,10 +171,10 @@ var FA = {
 	'English': 'English',
 	'Persian': 'فارسی',
 
-	'Routing data': 'دادهٔ مسیریابی',
+	'Routing data': 'داده مسیریابی',
 	'Send Iranian traffic direct': 'ترافیک ایران مستقیم برود',
 	'Iranian sites and addresses skip the tunnel. Needs the routing data below — until that is downloaded this does nothing, because a core asked for a geo file it has not got refuses to start rather than carrying on without it.':
-		'سایت‌ها و آدرس‌های ایرانی از تونل رد نمی‌شوند. به دادهٔ مسیریابیِ پایین نیاز دارد — تا وقتی آن دانلود نشده این گزینه هیچ کاری نمی‌کند، چون هسته‌ای که از آن فایل geo خواسته شده و ندارد اصلاً بالا نمی‌آید و بی‌خیالش هم نمی‌شود.',
+		'سایت‌ها و آدرس‌های ایرانی از تونل رد نمی‌شوند. به داده مسیریابی پایین نیاز دارد — تا وقتی آن دانلود نشده این گزینه هیچ کاری نمی‌کند، چون هسته‌ای که از آن فایل geo خواسته شده و ندارد اصلا بالا نمی‌آید و بی‌خیالش هم نمی‌شود.',
 	'Geoip source': 'منبع Geoip',
 	'geoip.dat file address': 'آدرس فایل ‎geoip.dat',
 	'Geosite source': 'منبع Geosite',
@@ -183,72 +183,72 @@ var FA = {
 	'Used for Iranian domains in split mode to keep CDN traffic local. Leave empty to keep split routing active without exposing DNS lookups to Iranian servers.':
 		'در حالت تفکیک برای دامنه‌های ایرانی استفاده می‌شود تا ترافیک CDN داخل کشور بماند. خالی بگذارید تا تفکیک کار کند بدون اینکه سرورهای ایرانی ببینند چه دامنه‌هایی جست‌وجو می‌شود.',
 	'Block advertising': 'مسدود کردن تبلیغات',
-	'Also needs the routing data.': 'این هم به دادهٔ مسیریابی نیاز دارد.',
+	'Also needs the routing data.': 'این هم به داده مسیریابی نیاز دارد.',
 	'Block BitTorrent': 'مسدود کردن بیت‌تورنت',
 	'BitTorrent through a free node is how a free node stops existing.':
-		'بیت‌تورنت روی یک نود رایگان همان کاری است که نود رایگان را از بین می‌برد.',
+		'استفاده از بیت‌تورنت موجب انسداد سرور فیلترشکن و قطع دائمی کانفیگ شما می‌گردد.',
 
 	'Network': 'شبکه',
-	'Name lookups': 'حل نام‌ها',
+	'Name lookups': 'روش پیدا کردن دامنه‌ها',
 	'“Through dnsmasq” keeps local machine names and DHCP names working and moves only the outside lookups into the tunnel. “Straight into the tunnel” resolves outside names and loses the ones on your own network.':
-		'«از راه dnsmasq» نام دستگاه‌های داخل شبکه و نام‌های DHCP را سرِ جایش نگه می‌دارد و فقط جست‌وجوی نام‌های بیرونی را به تونل می‌برد. «مستقیم داخل تونل» نام‌های بیرونی را حل می‌کند ولی نام‌های شبکهٔ خودتان را از دست می‌دهید.',
+		'«از راه dnsmasq» نام دستگاه‌های داخل شبکه و نام‌های DHCP را سر جایش نگه می‌دارد و فقط جست‌وجوی نام‌های بیرونی را به تونل می‌برد. «مستقیم داخل تونل» نام‌های بیرونی را حل می‌کند ولی نام‌های شبکه خودتان را از دست می‌دهید.',
 	'Through dnsmasq (recommended)': 'از راه dnsmasq (پیشنهادی)',
 	'Straight into the tunnel': 'مستقیم داخل تونل',
 	'Leave alone': 'دست نزن',
 	'Force DNS through the router': 'اجبار DNS از راه روتر',
 	'Some devices ignore the router and ask 8.8.8.8 or 1.1.1.1 themselves. Those questions leave without the tunnel, so the answer is whatever the censor wants it to be, and the device then connects to it — looking perfectly healthy while doing so. This drags such queries back to the router. Leave it on unless a device on your network genuinely has to reach a DNS server of its own.':
-		'بعضی دستگاه‌ها روتر را نادیده می‌گیرند و خودشان مستقیم از ‎8.8.8.8‎ یا ‎1.1.1.1‎ می‌پرسند. آن پرسش‌ها بدون تونل بیرون می‌روند، پس جوابش هر چیزی است که فیلترچی بخواهد، و دستگاه بعد به همان وصل می‌شود — بدون اینکه ظاهراً چیزی خراب باشد. این گزینه آن پرسش‌ها را به زور به روتر برمی‌گرداند. روشن بگذارید، مگر دستگاهی در شبکه‌تان واقعاً لازم داشته باشد به DNS خودش برسد.',
+		'بعضی دستگاه‌ها روتر را نادیده می‌گیرند و خودشان مستقیم از ‎8.8.8.8‎ یا ‎1.1.1.1‎ می‌پرسند. آن پرسش‌ها بدون تونل بیرون می‌روند، پس جوابش هر چیزی است که فیلترچی بخواهد، و دستگاه بعد به همان وصل می‌شود — بدون اینکه ظاهرا چیزی خراب باشد. این گزینه آن پرسش‌ها را به زور به روتر برمی‌گرداند. روشن بگذارید، مگر دستگاهی در شبکه‌تان واقعا لازم داشته باشد به DNS خودش برسد.',
 	'IPv6': 'IPv6',
 	'Almost no node on a free list carries IPv6, and a client that prefers it leaves without the tunnel while looking perfectly fine. Refusing it makes the client fall back to IPv4, which is tunnelled.':
-		'تقریباً هیچ نودی در لیست‌های رایگان IPv6 ندارد، و دستگاهی که IPv6 را ترجیح می‌دهد بدون تونل بیرون می‌رود و ظاهرش هم کاملاً سالم است. رد کردن IPv6 باعث می‌شود دستگاه به IPv4 برگردد، که تونل می‌شود.',
+		'تقریبا هیچ کانفیگی در لیست‌های رایگان IPv6 ندارد، و دستگاهی که IPv6 را ترجیح می‌دهد بدون تونل بیرون می‌رود و ظاهرش هم کاملا سالم است. رد کردن IPv6 باعث می‌شود دستگاه به IPv4 برگردد، که تونل می‌شود.',
 	'Refuse it while connected (recommended)': 'تا وقتی وصل است رد شود (پیشنهادی)',
 	'Leave it alone': 'دست نزن',
 	'Refuse QUIC': 'رد کردن QUIC',
 	'Makes browsers fall back to TCP. Worth turning on when the chosen node carries UDP badly; off by default, because where UDP works QUIC is faster.':
-		'مرورگرها را وادار می‌کند به TCP برگردند. وقتی نود انتخاب‌شده UDP را بد جابه‌جا می‌کند روشن کردنش می‌ارزد؛ به‌طور پیش‌فرض خاموش است، چون هر جا UDP کار کند QUIC سریع‌تر است.',
+		'فعال‌سازی این گزینه، زمانی‌که کانفیگ امکان عبور ترافیک از طریق پروتکل UDP را ندارد، موجب می‌گردد مرورگرها به اجبار از TCP استفاده کنند. به‌طور پیش‌فرض خاموش است، چون هر جا UDP کار کند QUIC سریع‌تر است.',
 	'Firewall': 'فایروال',
 	'Automatic is right unless this router has both and the wrong one is being picked.':
 		'خودکار درست است، مگر اینکه این روتر هر دو را داشته باشد و اشتباهی انتخاب شود.',
 	'Auto': 'خودکار',
 	'Interfaces to tunnel': 'اینترفیس‌هایی که تونل شوند',
 	'Read from this router. Left unset — which is how it ships — every LAN interface is tunnelled, which is what almost everyone wants. Choose one to pick traffic up from that interface only.':
-		'از خود همین روتر خوانده شده. اگر خالی بماند — که حالت پیش‌فرض است — همهٔ اینترفیس‌های LAN تونل می‌شوند، و تقریباً همه همین را می‌خواهند. اگر یکی را انتخاب کنید فقط ترافیک همان اینترفیس برداشته می‌شود.',
+		'از خود همین روتر خوانده شده. اگر خالی بماند — که حالت پیش‌فرض است — همه اینترفیس‌های LAN تونل می‌شوند، و تقریبا همه همین را می‌خواهند. اگر یکی را انتخاب کنید فقط ترافیک همان اینترفیس برداشته می‌شود.',
 	'Reconnect after a reboot': 'اتصال دوباره بعد از ریستارت',
 
-	'Choosing a node': 'انتخاب نود',
+	'Choosing a node': 'انتخاب کانفیگ',
 	'Two passes. A quick handshake to every node, then a real request through the ones that answered — ten at a time, best first, stopping at the first node fast enough. Connecting therefore takes seconds, not a minute.':
-		'دو مرحله. اول یک هندشیک سریع به همهٔ نودها، بعد یک درخواست واقعی از داخل آن‌هایی که جواب داده‌اند — ده‌تا ده‌تا، بهترین اول، و همان‌جا که اولین نودِ به‌قدر کافی سریع پیدا شد متوقف می‌شود. برای همین اتصال چند ثانیه طول می‌کشد، نه یک دقیقه.',
-	'First pass': 'مرحلهٔ اول',
+		'دو مرحله. اول یک هندشیک سریع به همه کانفیگ‌ها، بعد یک درخواست واقعی از داخل آن‌هایی که جواب داده‌اند — ده‌تا ده‌تا، بهترین اول، و همان‌جا که اولین کانفیگ به‌قدر کافی سریع پیدا شد متوقف می‌شود. برای همین اتصال چند ثانیه طول می‌کشد، نه یک دقیقه.',
+	'First pass': 'مرحله اول',
 	'A TCP handshake to the node’s real port is the right test. A ping is quicker and wrong often enough to matter: a node behind a CDN answers pings at the edge whatever state it is in, and plenty of working nodes drop ICMP entirely.':
-		'یک هندشیک TCP به پورت واقعی نود، تست درست است. پینگ سریع‌تر است ولی آن‌قدر اشتباه می‌کند که مهم باشد: نودی که پشت CDN است در هر حالی از لبه به پینگ جواب می‌دهد، و خیلی از نودهای سالم اصلاً ICMP را می‌اندازند دور.',
+		'یک هندشیک TCP به پورت واقعی کانفیگ، تست درست است. پینگ سریع‌تر است ولی آن‌قدر اشتباه می‌کند که مهم باشد: کانفیگی که پشت CDN است در هر حالی از لبه به پینگ جواب می‌دهد، و خیلی از کانفیگ‌های سالم اصلا ICMP را می‌اندازند دور.',
 	'TCP handshake (recommended)': 'هندشیک TCP (پیشنهادی)',
 	'Ping, then handshake': 'پینگ، بعد هندشیک',
 	'Good enough (ms)': 'به‌قدر کافی خوب (میلی‌ثانیه)',
 	'The first node measured faster than this is the one used. Lower means a better node and a longer wait.':
-		'اولین نودی که اندازه‌اش از این کمتر دربیاید همان استفاده می‌شود. عدد کمتر یعنی نود بهتر و انتظار بیشتر.',
-	'Measured at a time': 'هم‌زمان اندازه‌گیری‌شونده',
+		'اولین کانفیگی که اندازه‌اش از این کمتر دربیاید همان استفاده می‌شود. عدد کمتر یعنی کانفیگ بهتر و انتظار بیشتر.',
+	'Measured at a time': 'اندازه‌گیری همزمان کانفیگ',
 	'How many nodes are measured properly in one go.':
-		'در هر نوبت چند نود به‌طور کامل اندازه‌گیری شوند.',
+		'در هر نوبت چند کانفیگ به‌طور کامل اندازه‌گیری شوند.',
 	'Batches at most': 'حداکثر تعداد دسته',
 	'How far down the list to keep going when nothing is fast enough.':
 		'وقتی هیچ‌کدام به‌قدر کافی سریع نیستند، تا کجای لیست ادامه داده شود.',
-	'Checked at once': 'هم‌زمان بررسی‌شونده',
-	'How many handshakes run in parallel in the first pass. Lower this on a router that struggles.':
-		'در مرحلهٔ اول چند هندشیک هم‌زمان اجرا شود. روی روتری که کم می‌آورد این را کم کنید.',
+	'Checked at once': 'بررسی همزمان کانفیگ',
+	'How many handshakes run in parallel in the first pass. If your router has little RAM, lower this number.':
+		'در مرحله اول چند هندشیک هم‌زمان اجرا شود. اگر روتر شما رم پایینی دارد، این عدد را کم کنید.',
 
 	'Traffic': 'ترافیک',
 	'Every (Min)': 'هر (دقیقه)',
 	'How often the running total is written to storage, in minutes. Anything not yet written is lost if the router loses power. Five is the default and matches how often the counters are read, so at most one reading is ever at risk.':
-		'جمعِ در جریان هر چند دقیقه روی حافظه نوشته شود. هر چه هنوز نوشته نشده باشد با قطع برق روتر از دست می‌رود. پیش‌فرض پنج است و با فاصلهٔ خواندن شمارنده‌ها یکی است، پس حداکثر یک نوبتِ خوانده‌شده در خطر است.',
+		'جمع در جریان هر چند دقیقه روی حافظه نوشته شود. هر چه هنوز نوشته نشده باشد با قطع برق روتر از دست می‌رود. پیش‌فرض پنج است و با فاصله خواندن شمارنده‌ها یکی است، پس حداکثر یک نوبت خوانده‌شده در خطر است.',
 
 	'Does this router have what it needs?': 'آیا این روتر آنچه لازم دارد را دارد؟',
 	'These are questions put to the running system, not a list of package names. A package can be installed and the thing it provides still not work.':
-		'این‌ها سؤال‌هایی است که از سیستمِ در حال اجرا پرسیده شده، نه یک لیست از اسم پکیج‌ها. یک پکیج می‌تواند نصب باشد و چیزی که فراهم می‌کند باز هم کار نکند.',
+		'این‌ها سوال‌هایی است که از سیستم در حال اجرا پرسیده شده، نه یک لیست از اسم پکیج‌ها. یک پکیج می‌تواند نصب باشد و چیزی که فراهم می‌کند باز هم کار نکند.',
 	'Transparent proxy': 'پروکسی شفاف',
 	'the kernel can redirect traffic': 'کرنل می‌تواند ترافیک را منحرف کند',
 	'the kernel module for this is missing — nothing will be tunnelled':
-		'ماژول کرنلِ این کار نیست — هیچ چیزی تونل نمی‌شود',
-	'Policy routing': 'مسیریابی سیاستی',
+		'ماژول کرنل این کار نیست — هیچ چیزی تونل نمی‌شود',
+	'Policy routing': 'روش مسیریابی',
 	'the full ip command is installed': 'دستور کامل ip نصب است',
 	'busybox ip cannot add the route this needs — install ip-full':
 		'ip بیزی‌باکس این مسیر را نمی‌تواند اضافه کند — ip-full را نصب کنید',
@@ -276,7 +276,7 @@ var FA = {
 		'در حال دانلود. وقتی تمام شد، حجم جدید در همین صفحه نشان داده می‌شود.',
 	'Free space': 'فضای خالی',
 	'Remove both': 'حذف هر دو',
-	'Routing data removed.': 'دادهٔ مسیریابی حذف شد.',
+	'Routing data removed.': 'داده مسیریابی حذف شد.',
 	'The full files are about 17 MB and 8 MB. If they will not fit, the same project publishes geoip-lite.dat (38 KB) and geosite-lite.dat (2 MB), which carry the Iranian categories and nothing else — put those addresses in the boxes above. A download that will not fit is refused rather than half written.':
 		'فایل‌های کامل حدود ۱۷ و ۸ مگابایت هستند. اگر جا نمی‌شوند، همان پروژه ‎geoip-lite.dat‎ (۳۸ کیلوبایت) و ‎geosite-lite.dat‎ (۲ مگابایت) را هم منتشر می‌کند که فقط دسته‌های ایرانی را دارند — آدرس آن‌ها را در کادرهای بالا بگذارید. دانلودی که جا نشود رد می‌شود، نه اینکه نصفه نوشته شود.',
 
@@ -291,20 +291,590 @@ var FA = {
 	'Remove': 'حذف',
 	'%s removed.': '%s حذف شد.',
 	'Check for new versions': 'بررسی نسخه‌های جدید',
-	'Asking each project what it has published. The versions above will fill in shortly.':
-		'از هر پروژه پرسیده می‌شود چه نسخه‌ای منتشر کرده. نسخه‌های بالا تا لحظاتی دیگر پر می‌شوند.',
+	'Checking the latest version of each core. They will be shown in a moment.':
+		'آخرین نسخه هر هسته بررسی شده و تا لحظاتی دیگر اعلام می‌گردند.',
 	'(installed by another package — left alone)':
 		'(توسط پکیج دیگری نصب شده — دست‌نخورده مانده)',
 	'Xray carries the traffic. sing-box and hysteria are only needed for nodes that speak hysteria2 or tuic, which Xray does not — one of them is then run as a local helper for that one node, and everything else works exactly as before.':
-		'ترافیک را Xray می‌برد. sing-box و hysteria فقط برای نودهایی لازم‌اند که hysteria2 یا tuic حرف می‌زنند و Xray بلد نیست — آن وقت یکی از این دو فقط برای همان یک نود به‌عنوان کمکیِ محلی اجرا می‌شود و بقیهٔ چیزها دقیقاً مثل قبل کار می‌کنند.',
+		'ترافیک را Xray می‌برد. sing-box و hysteria فقط برای کانفیگ‌هایی لازم‌اند که hysteria2 یا tuic حرف می‌زنند و Xray بلد نیست — آن وقت یکی از این دو فقط برای همان یک کانفیگ به‌عنوان کمکی محلی اجرا می‌شود و بقیه چیزها دقیقا مثل قبل کار می‌کنند.',
 
-	'Traffic history': 'تاریخچهٔ ترافیک',
-	'Forget all recorded traffic': 'همهٔ ترافیک ثبت‌شده را فراموش کن',
-	'Traffic history cleared.': 'تاریخچهٔ ترافیک پاک شد.',
+	'Traffic history': 'تاریخچه مصرف',
+	'Forget all recorded traffic': 'حذف تاریخچه مصرف',
+	'Traffic history cleared.': 'تاریخچه مصرف پاک شد.',
+
+	/* --------------------------------------------------- the traffic rules */
+	'Traffic Rules': 'قوانین ترافیکی',
+	'Sites with a rebind weakness': 'سایت‌های دارای ضعف امنیتی Rebind Attack',
+	'Some sites answer with a private address — Iranian banks and government services among them, which resolve to 10.x addresses inside the country. The router’s DNS protection against rebind attacks refuses those answers, and the site simply does not open. Every name listed here is excused from that protection, together with everything under it.':
+		'بعضی سایت‌ها با یک آدرس خصوصی جواب می‌دهند — از جمله بانک‌ها و سرویس‌های دولتی ایران، که داخل کشور به آدرس‌های ‎10.x‎ می‌رسند. محافظت DNS روتر در برابر حمله Rebind این جواب‌ها را رد می‌کند و سایت اصلا باز نمی‌شود. هر دامنه‌ای که اینجا باشد، همراه با همه زیردامنه‌هایش، از این محافظت معاف می‌شود.',
+	'Domains': 'دامنه‌ها',
+	'That does not look like a domain name': 'این شبیه یک نام دامنه نیست',
+	'Direct addresses': 'IPهای مستقیم',
+	'These addresses always go straight out, never through the tunnel. One address or one range per entry.':
+		'این آدرس‌ها همیشه مستقیم می‌روند و هیچ‌وقت از تونل رد نمی‌شوند. در هر ردیف یک آدرس یا یک رنج.',
+	'Addresses': 'آدرس‌ها',
+	'Direct domains': 'دامنه‌های مستقیم',
+	'These sites always go straight out, never through the tunnel. A name covers everything under it: example.com also covers www.example.com. Xray’s own forms — full:, regexp:, keyword: — are accepted as written.':
+		'این سایت‌ها همیشه مستقیم می‌روند و هیچ‌وقت از تونل رد نمی‌شوند. هر دامنه زیردامنه‌هایش را هم شامل می‌شود: ‎example.com‎ شامل ‎www.example.com‎ هم هست. شکل‌های خود Xray — ‎full:‎، ‎regexp:‎، ‎keyword:‎ — همان‌طور که نوشته شوند پذیرفته می‌شوند.',
+
+	/* --------------------------------------------------- the access control */
+	'Access Control': 'کنترل دسترسی',
+	'ACLs': 'کنترل دسترسی',
+	'ACLs is a tools which used to designate specific IP proxy mode.':
+		'کنترل دسترسی ابزاری است برای تعیین حالت پروکسی برای IPهای مشخص.',
+	'Main switch': 'کلید اصلی',
+	'Main': 'اصلی',
+	'Proxy': 'پروکسی',
+	'Enable': 'فعال',
+	'Remarks': 'نام',
+	'Source Interface': 'اینترفیس مبدا',
+	'All': 'همه',
+	'Source': 'مبدا',
+	'Example:': 'مثال:',
+	'MAC': 'MAC',
+	'IP': 'IP',
+	'IP CIDR': 'IP CIDR',
+	'IP range': 'رنج IP',
+	'IPSet': 'IPSet',
+	'Not true format, please re-enter!': 'قالب درست نیست، دوباره وارد کنید!',
+	'Mode': 'حالت',
+	'No Proxy': 'بدون پروکسی',
+	'Use global config': 'با تنظیمات سراسری',
+	'the node the tunnel is using': 'کانفیگی که تونل از آن استفاده می‌کند',
+	'Nodes added by hand on the Node List page. A hysteria2 or tuic node cannot be given a rule of its own; such a rule uses the node the tunnel is using instead.':
+		'کانفیگ‌هایی که در صفحه «فهرست کانفیگ‌ها» دستی اضافه شده‌اند. برای کانفیگ hysteria2 یا tuic نمی‌شود قانون جداگانه داشت؛ چنین قانونی به‌جایش از کانفیگی که تونل استفاده می‌کند می‌رود.',
+	'TCP No Redir Ports': 'پورت‌های TCP بدون انتقال',
+	'UDP No Redir Ports': 'پورت‌های UDP بدون انتقال',
+	'TCP Redir Ports': 'پورت‌های TCP انتقالی',
+	'UDP Redir Ports': 'پورت‌های UDP انتقالی',
+	'No patterns are used': 'استفاده نشود',
+	'Common Use': 'پرکاربرد',
+	'The port settings support single ports and ranges. Separate multiple ports with commas (,). Example: 21,80,443,1000:2000.':
+		'پورت‌ها می‌توانند تکی یا رنج باشند. چند پورت را با کاما (,) جدا کنید. مثال: ‎21,80,443,1000:2000‎.',
+
+	/* ------------------------------------------------------ the router clock */
+	'Router clock': 'ساعت روتر',
+	'Sets the router clock to Iran time. If the router clock is wrong, secure connections and tunnel connections cannot be made.':
+		'تنظیم ساعت روتر به کشور ایران. اگر ساعت روتر اشتباه باشد اتصال‌های امن و همچنین اتصال‌های تونل برقرار نمی‌شوند.',
+	'Set router clock': 'تنظیم ساعت روتر',
+	'The router clock was already set.': 'ساعت روتر قبلا تنظیم شده است.',
+	'Router clock set: Tehran time, with the Iranian time servers.':
+		'ساعت روتر تنظیم شد: ساعت تهران، با سرورهای زمان ایرانی.',
+
+	/* ------------------------------------------ the frame, banner, footer */
+	'Light': 'روشن',
+	'Dark': 'تیره',
+	'Display mode': 'حالت نمایش',
+	'Status': 'وضعیت',
+	'Complete tunnel management on your router': 'مدیریت کامل فیلترشکن در روتر شما',
+	'Version %s, revision %s': 'نسخه %s ویرایش %s',
+	'No warranty': 'بدون ضمانت',
+	'Source code': 'کد منبع',
+
+	/* ------------------------------------------ the status page, PW2 style */
+	'Main switch is off': 'کلید اصلی خاموش است',
+	'RUNNING': 'در حال اجرا',
+	'NOT RUNNING': 'اجرا نمی‌شود',
+	'Checking…': 'در حال بررسی…',
+	'Problem detected!': 'مشکل پیدا شد!',
+	'Core': 'هسته',
+	'Helper core': 'هسته کمکی',
+	'Iranian site': 'سایت ایرانی',
+	'Touch Check': 'برای بررسی بزنید',
+	'Google Connection': 'اتصال گوگل',
+	'GitHub Connection': 'اتصال گیت‌هاب',
+
+	/* ------------------------------------------------ the settings tabs */
+	'Node selection': 'انتخاب کانفیگ',
+	'DNS': 'DNS',
+	'Xray': 'Xray',
+	'Maintain': 'نگهداری',
+
+	'Direct DNS Protocol': 'پروتکل DNS مستقیم',
+	'Direct DNS answers for everything that goes straight out, and for the names of the nodes themselves — which can never be looked up through the tunnel they are the way into. Auto uses the router’s own upstream, then the ISP’s.':
+		'DNS مستقیم به هر چیزی که بدون تونل بیرون می‌رود جواب می‌دهد، و به نام خود کانفیگ‌ها — که هیچ‌وقت نمی‌شود از داخل همان تونلی پیدایشان کرد که راه ورود به آن هستند. «خودکار» از DNS بالادستی خود روتر استفاده می‌کند، و اگر نبود از DNS اینترنت‌دهنده.',
+	'Direct DNS': 'DNS مستقیم',
+	'Direct Query Strategy': 'روش پرس‌وجوی مستقیم',
+	'Remote DNS Protocol': 'پروتکل DNS راه دور',
+	'TCP is the default because a great many free nodes carry no UDP at all, and a lookup sent as UDP through one of them is simply lost.':
+		'پیش‌فرض TCP است، چون خیلی از کانفیگ‌های رایگان اصلا UDP را جابه‌جا نمی‌کنند و پرس‌وجویی که با UDP از داخل آن‌ها فرستاده شود گم می‌شود.',
+	'Remote DNS': 'DNS راه دور',
+	'Remote DNS DoH': 'DoH برای DNS راه دور',
+	'An address, or an address and the server’s own IP after a comma so its name is never itself a lookup.':
+		'یک آدرس، یا آدرس و بعد از یک کاما IP خود سرور، تا نام خودش هیچ‌وقت نیاز به پرس‌وجو نداشته باشد.',
+	'DoH request address': 'آدرس درخواست DoH',
+	'Format must be:': 'قالب باید این باشد:',
+	'Remote DNS EDNS Client Subnet': 'EDNS Client Subnet برای DNS راه دور',
+	'Tells the DNS server where the client is, so that a CDN can answer with an edge near it. It cannot be a private address, and the server has to support EDNS Client Subnet (RFC 7871).':
+		'به سرور DNS می‌گوید دستگاه کجاست، تا CDN نزدیک‌ترین سرورش را جواب بدهد. نمی‌تواند آدرس خصوصی باشد، و سرور باید EDNS Client Subnet ‏(RFC 7871) را پشتیبانی کند.',
+	'Remote DNS Outbound': 'مسیر DNS راه دور',
+	'Remote': 'از تونل',
+	'Direct': 'مستقیم',
+	'Answers with a made-up address and lets the tunnel find the real one at the far end, which saves a lookup on every new site. Only takes effect with “Straight into the tunnel” above: with dnsmasq in front, the router’s own lookups would be made up too, and nothing the router fetches for itself would work.':
+		'با یک آدرس ساختگی جواب می‌دهد و پیدا کردن آدرس واقعی را به آن سر تونل می‌سپارد، که برای هر سایت تازه یک پرس‌وجو صرفه‌جویی می‌کند. فقط با «مستقیم داخل تونل» در بالا کار می‌کند: وقتی dnsmasq جلوی کار است، جواب پرس‌وجوهای خود روتر هم ساختگی می‌شد و هیچ چیزی که روتر برای خودش دانلود می‌کند کار نمی‌کرد.',
+	'Remote Query Strategy': 'روش پرس‌وجوی راه دور',
+	'Domain Override': 'جایگزینی دامنه',
+	'One per line: a name, a space, and the address it should resolve to.':
+		'در هر خط یکی: یک نام، یک فاصله، و آدرسی که باید برگرداند.',
+	'DNS Redirect': 'تغییر مسیر DNS',
+
+	'Preproxy': 'پیش‌پروکسی',
+	'Every node the tunnel may choose dials out through this node first — PassWall2’s pre-proxy. For a node that cannot be reached from here directly, or to hide which nodes are being used. With it on, the first-pass handshake is skipped, because no node is reached directly.':
+		'هر کانفیگی که تونل انتخاب کند، اول از داخل این کانفیگ وصل می‌شود — همان پیش‌پروکسی پسوال۲. برای کانفیگی که از اینجا مستقیم در دسترس نیست، یا برای پنهان کردن اینکه از کدام کانفیگ‌ها استفاده می‌شود. وقتی روشن است، هندشیک مرحله اول انجام نمی‌شود، چون به هیچ کانفیگی مستقیم وصل نمی‌شویم.',
+	'Preproxy Node': 'کانفیگ پیش‌پروکسی',
+	'Nodes added by hand on the Node List page.': 'کانفیگ‌هایی که در صفحه فهرست کانفیگ‌ها دستی اضافه شده‌اند.',
+	'Fragment': 'فرگمنت',
+	'TCP fragments, which can deceive the censorship system in some cases, such as bypassing SNI blacklists.':
+		'تکه‌تکه کردن TCP، که در بعضی موارد سیستم فیلترینگ را فریب می‌دهد، مثلا برای رد شدن از لیست سیاه SNI.',
+	'Fragment Packets': 'بسته‌های فرگمنت',
+	'“tlshello” splits the TLS client hello. “1-3” splits at the TCP layer, the first one to three writes the client makes.':
+		'«tlshello» پیام client hello در TLS را تکه می‌کند. «1-3» در لایه TCP تکه می‌کند، یعنی یک تا سه نوشتن اول دستگاه.',
+	'Fragment Length': 'طول فرگمنت',
+	'Fragmented packet length (byte)': 'طول هر تکه (بایت)',
+	'Fragment Delay': 'تاخیر فرگمنت',
+	'Fragmentation interval (ms)': 'فاصله بین تکه‌ها (میلی‌ثانیه)',
+	'Max Split': 'حداکثر تکه',
+	'Limit the maximum number of splits.': 'حداکثر تعداد تکه‌ها را محدود می‌کند.',
+	'Noise': 'نویز',
+	'UDP noise, Under some circumstances it can bypass some UDP based protocol restrictions. The packets are in the Xray Noise Packets table below; Xray sends them on mKCP nodes and on xhttp over HTTP/3.':
+		'نویز UDP، که در بعضی شرایط از محدودیت‌های پروتکل‌های مبتنی بر UDP رد می‌شود. بسته‌ها در جدول «بسته‌های نویز Xray» پایین همین صفحه‌اند؛ Xray آن‌ها را روی کانفیگ‌های mKCP و xhttp روی HTTP/3 می‌فرستد.',
+	'Mux': 'Mux',
+	'Several connections carried in one. Not used on a VLESS flow, xhttp or WireGuard node, where it cannot work.':
+		'چند اتصال داخل یک اتصال. روی کانفیگ‌های VLESS با flow، xhttp و وایرگارد استفاده نمی‌شود، چون آنجا کار نمی‌کند.',
+	'Mux concurrency': 'تعداد هم‌زمان Mux',
+	'XUDP Mux concurrency': 'تعداد هم‌زمان XUDP',
+	'Enable Node Log': 'لاگ کانفیگ فعال باشد',
+	'What the core itself says, shown on the Log page beside this program’s own runtime log.':
+		'چیزهایی که خود هسته می‌گوید، که در صفحه لاگ کنار لاگ خود برنامه نشان داده می‌شود.',
+	'Log Level': 'سطح لاگ',
+	'Traffic: written every (Min)': 'ترافیک: ذخیره هر (دقیقه)',
+	'Xray Noise Packets': 'بسته‌های نویز Xray',
+	'To send noise packets, select "Noise" in Xray Settings.':
+		'برای فرستادن بسته‌های نویز، «نویز» را در زبانه Xray روشن کنید.',
+	'Type': 'نوع',
+	'Packet | Rand Length': 'بسته | طول تصادفی',
+	'Delay (ms)': 'تاخیر (میلی‌ثانیه)',
+
+	/* -------------------------------------------------------- App Update */
+	'App Update': 'به‌روزرسانی',
+	'%s is available': 'نسخه %s آماده است',
+	'It is the latest version': 'آخرین نسخه است',
+	'Check update': 'بررسی به‌روزرسانی',
+	'Force update': 'به‌روزرسانی اجباری',
+	'This program is updated by installing its new package, the same way it was installed: only the package manager can replace a package cleanly.':
+		'خود این برنامه با نصب پکیج جدیدش به‌روز می‌شود، همان‌طور که نصب شد: فقط مدیر پکیج می‌تواند یک پکیج را تمیز جایگزین کند.',
+	'The full files are about 17 MB and 8 MB. If they will not fit, the same project publishes geoip-lite.dat (38 KB) and geosite-lite.dat (2 MB), which carry the Iranian categories and nothing else — put those addresses in the boxes below. A download that will not fit is refused rather than half written.':
+		'فایل‌های کامل حدود ۱۷ و ۸ مگابایت هستند. اگر جا نمی‌شوند، همان پروژه ‎geoip-lite.dat‎ (۳۸ کیلوبایت) و ‎geosite-lite.dat‎ (۲ مگابایت) را هم منتشر می‌کند که فقط دسته‌های ایرانی را دارند — آدرس آن‌ها را در کادرهای پایین بگذارید. دانلودی که جا نشود رد می‌شود، نه اینکه نصفه نوشته شود.',
+	'App Path': 'مسیر برنامه‌ها',
+	'Folder for downloaded cores': 'پوشه هسته‌های دانلودشده',
+	'Point this at USB storage on a router short of flash. A core another package installed is used where it is and never moved.':
+		'روی روتری که حافظه‌اش کم است، این را روی حافظه USB بگذارید. هسته‌ای که پکیج دیگری نصب کرده همان‌جا که هست استفاده می‌شود و جابه‌جا نمی‌شود.',
+	'Xray App Path': 'مسیر Xray',
+	'Empty means: whichever Xray on this router accepts the configuration, preferring one already installed.':
+		'خالی یعنی: هر Xray روی این روتر که کانفیگ را بپذیرد، و اولویت با نسخه‌ای است که از قبل نصب بوده.',
+
+	/* ------------------------------------------------------ Runtime Logs */
+	'Runtime Logs': 'لاگ‌های اجرا',
+	'The node log is switched off in Settings → Log.': 'لاگ کانفیگ در تنظیمات ← لاگ خاموش است.',
+	'The core has not said anything yet.': 'هسته هنوز چیزی نگفته.',
+	'What this program did, step by step. It refreshes every five seconds and lives in memory, so it is empty again after a restart.':
+		'کارهایی که این برنامه انجام داده، قدم به قدم. هر پنج ثانیه تازه می‌شود و در حافظه موقت است، پس بعد از ریستارت دوباره خالی است.',
+	'Clear logs': 'پاک کردن لاگ‌ها',
+	'Node log': 'لاگ کانفیگ',
+	'What Xray itself said. When a node is refused or a connection fails, the reason is usually here.':
+		'چیزهایی که خود Xray گفته. وقتی کانفیگی رد می‌شود یا اتصالی برقرار نمی‌شود، معمولا دلیلش اینجاست.',
+
+	/* ------------------------------------------------------- chain proxy */
+	'Chain Proxy': 'پروکسی زنجیره‌ای',
+	'Close': 'خاموش',
+	'Landing Node': 'کانفیگ فرود',
+	'This node is reached through the one chosen here.': 'این کانفیگ از داخل کانفیگی که اینجا انتخاب شود وصل می‌شود.',
+	'A node cannot be its own pre-proxy.': 'یک کانفیگ نمی‌تواند پیش‌پروکسی خودش باشد.',
+	'Traffic goes through this node first and leaves from the one chosen here.':
+		'ترافیک اول از این کانفیگ می‌گذرد و از کانفیگی که اینجا انتخاب شود بیرون می‌رود.',
+	'A node cannot be its own landing node.': 'یک کانفیگ نمی‌تواند کانفیگ فرود خودش باشد.',
+
+	/* ----------------------------------------------------- traffic rules */
+	'What goes through the tunnel, what goes straight out, and what goes nowhere.':
+		'چه چیزی از تونل برود، چه چیزی مستقیم، و چه چیزی هیچ‌جا.',
+	'Iran': 'ایران',
+	'Iranian sites and addresses skip the tunnel. Needs the routing data above — until that is downloaded this does nothing, because a core asked for a geo file it has not got refuses to start rather than carrying on without it.':
+		'سایت‌ها و آدرس‌های ایرانی از تونل رد نمی‌شوند. به داده مسیریابی بخش «وضعیت قوانین» در بالا نیاز دارد — تا وقتی آن دانلود نشده این گزینه کاری نمی‌کند، چون هسته‌ای که فایل geo از آن خواسته شود و نداشته باشد اصلا بالا نمی‌آید.',
+	'Block': 'مسدودسازی',
+	'For every device on the network. The names come from the category-ads-all list inside the same routing data, so this also needs it.':
+		'برای همه دستگاه‌های شبکه. نام‌ها از فهرست category-ads-all داخل همان داده مسیریابی می‌آیند، پس این هم به آن نیاز دارد.',
+
+	/* ------------------------------------------------- Basic Settings */
+	'Basic Settings': 'تنظیمات پایه',
+	'The tunnel on or off - the same switch as on the Status page. It holds across a reboot.':
+		'روشن یا خاموش بودن تونل — همان کلید صفحه وضعیت. بعد از ریستارت هم همان‌طور می‌ماند.',
+	'Auto measures the nodes and uses the fastest. A node added by hand is used as it is, and nothing is measured.':
+		'خودکار، کانفیگ‌ها را اندازه می‌گیرد و سریع‌ترین را استفاده می‌کند. کانفیگی که دستی اضافه شده همان‌طور که هست استفاده می‌شود و چیزی اندازه‌گیری نمی‌شود.',
+	'Auto (fastest)': 'خودکار (سریع‌ترین)',
+	'Localhost Proxy': 'پروکسی خود روتر',
+	'When selected, the router’s own traffic goes through the tunnel as well — its downloads, its clock, its package manager. While a node is being measured it goes direct, so that the measurement is of the node. Off by default: when the tunnel is down, so is the router’s own way out.':
+		'وقتی انتخاب شود، ترافیک خود روتر هم از تونل می‌رود — دانلودهایش، ساعتش، مدیر پکیجش. وقتی کانفیگی در حال اندازه‌گیری است مستقیم می‌رود تا اندازه‌گیری مال همان کانفیگ باشد. به‌طور پیش‌فرض خاموش است: وقتی تونل قطع باشد، راه خروج خود روتر هم قطع است.',
+	'Client Proxy': 'پروکسی دستگاه‌های شبکه',
+	'When selected, devices in LAN go through the tunnel. Otherwise they do not, but the devices named on the Access Control page still do.':
+		'وقتی انتخاب شود، دستگاه‌های شبکه LAN از تونل می‌روند. در غیر این صورت نمی‌روند، ولی دستگاه‌هایی که در صفحه کنترل دسترسی آمده‌اند همچنان می‌روند.',
+	'Node Socks Listen Port': 'پورت SOCKS کانفیگ',
+	'A SOCKS server on the router that goes out the way the tunnel does. Empty for none.':
+		'یک سرور SOCKS روی روتر که از همان راه تونل بیرون می‌رود. خالی یعنی هیچ.',
+	'Node Socks Bind Local': 'SOCKS کانفیگ فقط برای خود روتر',
+	'When selected, it can only be accessed localhost.': 'وقتی انتخاب شود، فقط از خود روتر قابل دسترسی است.',
+	'Socks Main switch': 'کلید اصلی SOCKS',
+	'More SOCKS ports, each through a node of its own — the table below.':
+		'پورت‌های SOCKS بیشتر، هر کدام از داخل کانفیگ خودش — جدول پایین.',
+	'Socks Config': 'تنظیمات SOCKS',
+	'Socks Node': 'کانفیگ SOCKS',
+	'The node the tunnel is using': 'کانفیگی که تونل استفاده می‌کند',
+	'Socks Listen Port': 'پورت SOCKS',
+	'What the core itself says, shown on the Runtime Logs page beside this program’s own log.':
+		'چیزهایی که خود هسته می‌گوید، که در صفحه لاگ‌های اجرا کنار لاگ خود برنامه نشان داده می‌شود.',
+	'Asking the router…': 'در حال پرسیدن از روتر…',
+
+	/* ----------------------------------------------------------- units */
+	'TB': 'ترابایت',
+	'GB': 'گیگابایت',
+	'MB': 'مگابایت',
+	'KB': 'کیلوبایت',
+	'B': 'بایت',
+	'ms': 'میلی‌ثانیه',
+
+	/* ------------------------------------------------- Other Settings */
+	'Other Settings': 'تنظیمات دیگر',
+	'Delay Settings': 'تنظیمات تاخیر',
+	'Open and close Daemon': 'بررسی و ترمیم خودکار',
+	'Every quarter of an hour: bring the tunnel back when it should be up and is not, and move to another node when the one in use carries nothing.':
+		'هر ربع ساعت: وقتی تونل باید روشن باشد و نیست دوباره بالا می‌آورد، و وقتی کانفیگ فعلی چیزی جابه‌جا نمی‌کند به کانفیگ دیگری می‌رود.',
+	'Delay Start': 'تاخیر در شروع',
+	'Units:seconds': 'واحد: ثانیه',
+	'Stop automatically mode': 'توقف خودکار',
+	'Stop Time': 'زمان توقف',
+	'Start automatically mode': 'شروع خودکار',
+	'Start Time': 'زمان شروع',
+	'Restart automatically mode': 'راه‌اندازی مجدد خودکار',
+	'Restart Time': 'زمان راه‌اندازی مجدد',
+	'Disable': 'غیرفعال',
+	'Loop Mode': 'حالت تکرار',
+	'Restart Interval(Hour)': 'فاصله راه‌اندازی مجدد (ساعت)',
+	'Hour': 'ساعت',
+	'Every day': 'هر روز',
+	'Every Monday': 'هر دوشنبه',
+	'Every Tuesday': 'هر سه‌شنبه',
+	'Every Wednesday': 'هر چهارشنبه',
+	'Every Thursday': 'هر پنجشنبه',
+	'Every Friday': 'هر جمعه',
+	'Every Saturday': 'هر شنبه',
+	'Every Sunday': 'هر یکشنبه',
+	'Forwarding Settings': 'تنظیمات هدایت ترافیک',
+	'Fill in the ports you don\'t want to be forwarded by the agent, with the highest priority.':
+		'پورت‌هایی را که نمی‌خواهید از تونل بروند وارد کنید؛ این بالاترین اولویت را دارد.',
+	'Only Web': 'فقط وب',
+	'Prefer firewall tools': 'ابزار فایروال',
+	'TCP Proxy Way': 'روش پروکسی TCP',
+	'TPROXY carries TCP and UDP on one port. REDIRECT sends TCP to a port of its own, for a kernel whose TPROXY misbehaves with TCP; UDP is always TPROXY.':
+		'TPROXY، ترافیک TCP و UDP را روی یک پورت می‌برد. REDIRECT، ترافیک TCP را به پورت جداگانه‌ای می‌فرستد، برای کرنلی که TPROXY آن با TCP مشکل دارد؛ UDP همیشه TPROXY است.',
+	'Hijacking ICMP (PING)': 'پاسخ به پینگ (ICMP)',
+	'A tunnel carries no ICMP, so a ping to a tunnelled address never comes back. With this on, the router answers it.':
+		'تونل ICMP را جابه‌جا نمی‌کند، پس پینگ به آدرسی که از تونل می‌رود هیچ‌وقت برنمی‌گردد. با روشن کردن این، خود روتر جواب می‌دهد.',
+	'Direct IP List': 'لیست IPهای مستقیم',
+	'These had been joined ip addresses will connect directly (not entering the core).':
+		'این آدرس‌ها مستقیم وصل می‌شوند و وارد هسته نمی‌شوند.',
+	'Xray Settings': 'تنظیمات Xray',
+	'Override the connection destination address': 'جایگزینی آدرس مقصد اتصال',
+	'Override the connection destination address with the sniffed domain. Otherwise the sniffed domain is used for routing only.':
+		'آدرس مقصد اتصال با دامنه‌ای که از خود اتصال خوانده شده جایگزین می‌شود. در غیر این صورت آن دامنه فقط برای مسیریابی استفاده می‌شود.',
+	'Excluded Domains': 'دامنه‌های مستثنا',
+	'If the traffic sniffing result is in this list, the destination address will not be overridden.':
+		'اگر دامنه خوانده‌شده از ترافیک در این لیست باشد، آدرس مقصد جایگزین نمی‌شود.',
+	'Buffer Size': 'اندازه بافر',
+	'Buffer size for every connection (kB)': 'اندازه بافر هر اتصال (کیلوبایت)',
+
+	/* ------------------------------------------ Node List, Node Subscribe */
+	'Node List': 'فهرست کانفیگ‌ها',
+	'Node Subscribe': 'اشتراک کانفیگ‌ها',
+	'Automatic detection delay': 'بررسی خودکار تاخیر',
+	'When this page opens, each node added by hand is measured this way, and the answer put in its column.':
+		'با باز شدن این صفحه، هر کانفیگ دستی با این روش اندازه‌گیری می‌شود و نتیجه در ستون خودش نشان داده می‌شود.',
+	'Show server address and port': 'نمایش آدرس و پورت سرور',
+	'URL Test Address': 'آدرس تست URL',
+	'What a real request through a node asks for, when a node is measured and when the URL Test column is pressed.':
+		'آدرسی که هنگام اندازه‌گیری کانفیگ و زدن ستون «تست URL»، یک درخواست واقعی از طریق کانفیگ به آن فرستاده می‌شود.',
+	'The tunnel on or off. Save and apply for it to take effect; it holds across a reboot.':
+		'روشن یا خاموش کردن تونل. برای اعمال، «ذخیره و اعمال» را بزنید. پس از راه‌اندازی دوباره روتر هم همین‌طور می‌ماند.',
+	'Node num': 'تعداد کانفیگ',
+	'Discard List': 'فهرست حذف',
+	'Keep List': 'فهرست نگه‌داشتن',
+	'Discard List,But Keep List First': 'فهرست حذف، با اولویت فهرست نگه‌داشتن',
+	'Keep List,But Discard List First': 'فهرست نگه‌داشتن، با اولویت فهرست حذف',
+	'Subscriptions are not used now: on the Node List page, “Nodes to use” is set to only manually added configs.':
+		'اشتراک‌ها الان استفاده نمی‌شوند: در صفحه «فهرست کانفیگ‌ها»، گزینه «کانفیگ‌های مورد استفاده» روی «فقط کانفیگ‌های دستی» است.',
+	'Filter keyword Mode': 'حالت فیلتر کلمات',
+	'Nodes are kept or dropped by words in their names. A word matches anywhere in the name, exactly as written.':
+		'کانفیگ‌ها بر اساس کلمات موجود در نامشان نگه داشته یا حذف می‌شوند. کلمه در هر جای نام باشد، دقیقا همان‌طور که نوشته شده، پیدا می‌شود.',
+	'Nodes kept at most': 'حداکثر تعداد کانفیگ‌ها',
+	'From all the subscriptions together. A long list takes longer to measure and more memory to hold.':
+		'از مجموع همه اشتراک‌ها. فهرست طولانی‌تر، زمان بیشتری برای اندازه‌گیری و حافظه بیشتری لازم دارد.',
+	'Manual subscription All': 'به‌روزرسانی دستی همه اشتراک‌ها',
+	'Delete All Subscribe Node': 'حذف همه کانفیگ‌های اشتراک',
+	'Delete the nodes of every subscription? They come back the next time the subscriptions are read.':
+		'کانفیگ‌های همه اشتراک‌ها حذف شوند؟ دفعه بعد که اشتراک‌ها خوانده شوند دوباره برمی‌گردند.',
+	'Deleted.': 'حذف شد.',
+	'Read every fifteen minutes. Xray, sing-box, Hysteria, Clash and WireGuard files are accepted, as are a plain list of links and a single base64 block. When adding a new subscription, please save and apply before manually subscribing.':
+		'هر پانزده دقیقه خوانده می‌شوند. فایل‌های Xray، sing-box، Hysteria، Clash و WireGuard پذیرفته می‌شوند، و همچنین فهرست ساده لینک‌ها و یک بلوک base64. پس از افزودن اشتراک جدید، پیش از به‌روزرسانی دستی آن، «ذخیره و اعمال» را بزنید.',
+	'Remark cannot be empty.': 'نام نمی‌تواند خالی باشد.',
+	'This remark already exists, please change a new remark.': 'این نام قبلا استفاده شده است. نام دیگری انتخاب کنید.',
+	'Subscribe Info': 'اطلاعات اشتراک',
+	'Subscribe URL': 'آدرس اشتراک',
+	'a file': 'یک فایل',
+	'Subscribe URL Access Method': 'روش دسترسی به آدرس اشتراک',
+	'Auto reads it the way the router’s own traffic goes when Localhost Proxy is on; otherwise through the tunnel when it is up, and straight out when it is not.':
+		'خودکار: وقتی «پروکسی خود روتر» روشن است، مثل بقیه ترافیک روتر خوانده می‌شود. در غیر این صورت اگر تونل برقرار باشد از طریق تونل، و اگر نباشد مستقیم.',
+	'Direct Connection': 'اتصال مستقیم',
+	'User-Agent': 'User-Agent',
+
+	/* ------------------------------------------------------ Shunt Rule */
+	'Shunt Rule': 'قانون عبور',
+	'Shunt Rule Group': 'گروه قانون عبور',
+	'default': 'پیش‌فرض',
+	'Default': 'پیش‌فرض',
+	'Rule': 'قانون',
+	'Port': 'پورت',
+	'Domain': 'دامنه',
+	'Domain Strategy': 'استراتژی دامنه',
+	'Domain matcher': 'روش تطبیق دامنه',
+	'Close (Not use)': 'خاموش (استفاده نشود)',
+	'Use default node': 'مثل ردیف پیش‌فرض',
+	'The node the tunnel is using': 'کانفیگی که تونل استفاده می‌کند',
+	'Blackhole (Block)': 'مسدود',
+	'Inbound Tag': 'ورودی',
+	'Transparent proxy': 'پروکسی شفاف',
+	'None ticked is both.': 'اگر هیچ‌کدام انتخاب نشود، هر دو.',
+	'Where everything no rule claims goes.': 'ترافیکی که با هیچ قانونی جور نشود به اینجا می‌رود.',
+	'Only the rules of this group are used. Save and apply for the table below to show them.':
+		'فقط قانون‌های این گروه استفاده می‌شوند. برای نمایش آن‌ها در جدول پایین، ذخیره و اعمال کنید.',
+	'No shunt rules yet. They are made on the Rule Manage page.':
+		'هنوز قانون عبوری وجود ندارد. قانون‌ها در صفحه «مدیریت قوانین» ساخته می‌شوند.',
+	'AsIs: only the name is used for routing. IPIfNonMatch: when no rule matches the name, it is resolved to addresses and all the rules are tried again. IPOnDemand: whenever an address rule is met, the name is resolved at once. Auto chooses IPIfNonMatch when a rule or the Iran split has addresses in it, and AsIs otherwise.':
+		'AsIs: فقط نام دامنه برای مسیریابی استفاده می‌شود. IPIfNonMatch: اگر هیچ قانونی با نام جور نشود، نام به آدرس تبدیل می‌شود و همه قانون‌ها دوباره امتحان می‌شوند. IPOnDemand: به محض رسیدن به یک قانون آدرسی، نام فورا به آدرس تبدیل می‌شود. خودکار: اگر قانونی یا جداسازی ایران آدرس داشته باشد IPIfNonMatch، وگرنه AsIs.',
+	'Which traffic each rule is about. Where it goes — a node, direct, or blocked — is chosen in the Shunt Rule tab of Basic Settings. The rules steer the tunnel’s own traffic, in this order, ahead of the Iran split; a device with a node of its own on the Access Control page keeps it.':
+		'هر قانون مشخص می‌کند درباره کدام ترافیک است. اینکه آن ترافیک کجا برود (یک کانفیگ، مستقیم یا مسدود) در زبانه «قانون عبور» صفحه «تنظیمات پایه» انتخاب می‌شود. قانون‌ها به همین ترتیب و پیش از جداسازی ایران روی ترافیک تونل اعمال می‌شوند. دستگاهی که در «کنترل دسترسی» کانفیگ جداگانه دارد، همان را نگه می‌دارد.',
+	'A device’s address, a range such as 192.168.1.0/24, or geoip:private.':
+		'آدرس یک دستگاه، یک محدوده مثل 192.168.1.0/24، یا geoip:private.',
+	'Such as 443, 80,443 or 1000-2000.': 'مثل 443 یا 80,443 یا 1000-2000.',
+	'One a line. domain:example.com is that name and everything under it; full: that name only; regexp: a regular expression; keyword: or a plain word anywhere in the name; geosite: a list from the routing data. A line starting with # is a comment.':
+		'در هر خط یکی. domain:example.com یعنی همان دامنه و همه زیردامنه‌هایش. full: فقط همان نام. regexp: یک عبارت باقاعده. keyword: یا یک کلمه ساده یعنی هر جای نام. geosite: یک فهرست از داده‌های مسیریابی. خطی که با # شروع شود توضیح است.',
+	'One a line: an address, a range such as 10.0.0.0/8, or geoip: and a country code from the routing data. A line starting with # is a comment.':
+		'در هر خط یکی: یک آدرس، یک محدوده مثل 10.0.0.0/8، یا geoip: و کد یک کشور از داده‌های مسیریابی. خطی که با # شروع شود توضیح است.',
+	'Rule Manage': 'مدیریت قوانین',
+	'FakeDNS Main switch': 'کلید اصلی FakeDNS',
+	'Geo View': 'نمای Geo',
+	'Geoview App Path': 'مسیر برنامه Geoview',
+	'Only the Geo View page needs it. Empty means this program’s own copy in the folder above.':
+		'فقط صفحه «نمای Geo» به آن نیاز دارد. خالی یعنی نسخه خود این برنامه در پوشه بالا.',
+	'Enter something to look for first.': 'اول چیزی برای جست‌وجو وارد کنید.',
+	'Processing, please wait…': 'در حال پردازش، لطفا صبر کنید…',
+	'Geoview is not installed. Install it with the button below, or on the App Update page.':
+		'Geoview نصب نیست. با دکمه پایین یا در صفحه «به‌روزرسانی» نصبش کنید.',
+	'The routing data is not on the router yet. Download it on the Rule Manage page.':
+		'داده‌های مسیریابی هنوز روی روتر نیستند. آن‌ها را در صفحه «مدیریت قوانین» دانلود کنید.',
+	'Write the list as geoip: or geosite: and its name, such as geosite:google.':
+		'نام فهرست را با geoip: یا geosite: بنویسید، مثل geosite:google.',
+	'That is not a name or an address.': 'این یک دامنه یا آدرس نیست.',
+	'No results were found!': 'نتیجه‌ای پیدا نشد!',
+	'Rules containing this value:': 'قانون‌هایی که این مقدار را دارند:',
+	'Query': 'جست‌وجو',
+	'Searches the routing data on this router with Geoview: which lists hold a domain or an address, and what a list such as geosite:ir holds. Useful for writing shunt rules.':
+		'داده‌های مسیریابی روی روتر را با Geoview جست‌وجو می‌کند: یک دامنه یا آدرس در کدام فهرست‌هاست، و یک فهرست مثل geosite:ir چه چیزهایی دارد. برای نوشتن قانون‌های عبور مفید است.',
+	'Domain/IP Query': 'جست‌وجوی دامنه یا IP',
+	'GeoIP/Geosite Query': 'جست‌وجوی فهرست GeoIP یا Geosite',
+	'Install Geoview': 'نصب Geoview',
+	'Downloading Geoview. It is ready when it shows on the App Update page.':
+		'Geoview در حال دانلود است. وقتی در صفحه «به‌روزرسانی» نشان داده شد آماده است.',
+	'Geoview publishes no build for this router\'s processor.': 'Geoview برای پردازنده این روتر نسخه‌ای منتشر نمی‌کند.',
+	'Auto Update': 'به‌روزرسانی خودکار',
+	'Update Once on Boot': 'به‌روزرسانی یک‌بار هنگام راه‌اندازی',
+	'Updates the subscription the first time runs automatically after each system boot.':
+		'بعد از هر بار روشن شدن روتر، اشتراک یک بار به‌طور خودکار به‌روز می‌شود.',
+	'Disable: read only when its button is pressed, or once if it has never been read. What it brought is kept on flash, so a reboot does not lose it.':
+		'غیرفعال: فقط با زدن دکمه‌اش خوانده می‌شود، یا یک بار اگر هرگز خوانده نشده باشد. کانفیگ‌های آن روی حافظه روتر نگه داشته می‌شوند و با راه‌اندازی دوباره از بین نمی‌روند.',
+	'Every 15 minutes': 'هر ۱۵ دقیقه',
+	'Chained proxy works only with Xray nodes; a hysteria2 or tuic node of this subscription is left out of a landing chain. Only support a layer of proxy.':
+		'زنجیره فقط با کانفیگ‌های Xray کار می‌کند؛ کانفیگ hysteria2 یا tuic این اشتراک در زنجیره کانفیگ مقصد کنار گذاشته می‌شود. فقط یک لایه پشتیبانی می‌شود.',
+	'Every node of this subscription is reached through the one chosen here.':
+		'همه کانفیگ‌های این اشتراک از طریق کانفیگی که اینجا انتخاب می‌شود وصل می‌شوند.',
+	'Traffic goes through a node of this subscription first and leaves from the one chosen here.':
+		'ترافیک اول از یک کانفیگ این اشتراک عبور می‌کند و از کانفیگی که اینجا انتخاب می‌شود خارج می‌شود.',
+	'Add the node via the link': 'افزودن کانفیگ با لینک',
+	'Enter share links, one per line. Subscription links are not supported!': 'لینک‌های کانفیگ را وارد کنید، هر خط یک لینک. لینک اشتراک پذیرفته نمی‌شود!',
+	'Please enter the correct link.': 'لطفا لینک درست وارد کنید.',
+	'None of those could be read as a node.': 'هیچ‌کدام از این‌ها به‌عنوان کانفیگ خوانده نشد.',
+	'No node is selected.': 'هیچ کانفیگی انتخاب نشده است.',
+	'Reassign Group': 'تغییر گروه',
+	'The group for the %d nodes selected. Empty is the default group.': 'گروه برای %d کانفیگ انتخاب‌شده. خالی یعنی گروه پیش‌فرض.',
+	'Letters, digits, space, dot, dash and underscore only.': 'فقط حروف، عدد، فاصله، نقطه، خط تیره و زیرخط.',
+	'Select all': 'انتخاب همه',
+	'DeSelect all': 'لغو انتخاب همه',
+	'Delete select nodes': 'حذف کانفیگ‌های انتخاب‌شده',
+	'Are you sure to delete select nodes?': 'کانفیگ‌های انتخاب‌شده حذف شوند؟',
+	'Clear all nodes': 'حذف همه کانفیگ‌ها',
+	'Are you sure to clear all nodes?': 'همه کانفیگ‌های دستی حذف شوند؟',
+	'Group Name': 'نام گروه',
+	'To Top': 'به بالا',
+	'Are you sure set this node?': 'این کانفیگ به‌عنوان کانفیگ اصلی تنظیم شود؟',
+	'This is now the node in Basic Settings.': 'این کانفیگ الان کانفیگ «تنظیمات پایه» است.',
+	'Copy': 'کپی',
+	'Sing-Box App Path': 'مسیر برنامه Sing-Box',
+	'Hysteria App Path': 'مسیر برنامه Hysteria',
+	'Empty means this program’s own copy in the folder above.': 'خالی یعنی نسخه خود این برنامه در پوشه بالا.',
+	'To run a core from memory, give a path beginning with /tmp, save and apply, then press Install beside it above. It has to be installed again after every reboot.':
+		'برای اجرای هسته از حافظه RAM، مسیری که با /tmp شروع می‌شود بدهید، ذخیره و اعمال کنید و بعد دکمه نصب کنار آن هسته را در بالا بزنید. بعد از هر راه‌اندازی دوباره روتر باید دوباره نصب شود.',
+	'Rule status': 'وضعیت قوانین',
+	'GeoIP Update URL': 'آدرس به‌روزرسانی GeoIP',
+	'Geosite Update URL': 'آدرس به‌روزرسانی Geosite',
+	'Location of Geo rule files': 'محل فایل‌های قوانین Geo',
+	'This variable specifies a directory where geoip.dat and geosite.dat files are. The full files are about 17 MB and 8 MB; on a router short of flash, point this at USB storage or choose the lite files above.':
+		'پوشه‌ای که فایل‌های geoip.dat و geosite.dat در آن هستند. فایل‌های کامل حدود 17 و 8 مگابایت‌اند؛ روی روتری که حافظه کمی دارد، اینجا را به حافظه USB ببرید یا فایل‌های lite را در بالا انتخاب کنید.',
+	'Auto Update Mode': 'حالت به‌روزرسانی خودکار',
+	'The files ticked below are downloaded again at this time, and the tunnel, if it is running, restarted to read them.':
+		'فایل‌هایی که پایین تیک خورده‌اند در این زمان دوباره دانلود می‌شوند و اگر تونل روشن باشد، برای خواندن آن‌ها دوباره راه‌اندازی می‌شود.',
+	'Update Time': 'زمان به‌روزرسانی',
+	'Update Interval(hour)': 'فاصله به‌روزرسانی (ساعت)',
+	'Updated by the button below and by the automatic update.': 'با دکمه پایین و با به‌روزرسانی خودکار به‌روز می‌شود.',
+	'Rule version': 'نسخه قوانین',
+	'Manually update': 'به‌روزرسانی دستی',
+	'Tick GeoIP, Geosite or both first.': 'اول GeoIP یا Geosite یا هر دو را تیک بزنید.',
+	'Rollback': 'بازگشت به نسخه قبل',
+	'Put back. Reconnect for it to take effect.': 'نسخه قبلی برگردانده شد. برای اعمال، دوباره وصل شوید.',
+	'That file could not be put back.': 'آن فایل برگردانده نشد.',
+	'unknown file': 'فایل ناشناخته',
+	'Not valid, please re-enter: %s': 'نادرست است، دوباره وارد کنید: %s',
+	'Names that go through a node are answered with made-up addresses, and the node looks up the real one at the far end — for streaming services that unlock by DNS, or to save a lookup. Tick it for each rule below that should use it. The router itself can open those names only with Localhost Proxy on.':
+		'برای دامنه‌هایی که از کانفیگ عبور می‌کنند آدرس ساختگی برگردانده می‌شود و کانفیگ آدرس واقعی را در سمت سرور پیدا می‌کند؛ برای سرویس‌های پخش ویدیو که با DNS باز می‌شوند، یا برای صرفه‌جویی در یک پرس‌وجو. برای هر قانونی که باید از آن استفاده کند، تیک آن را در جدول پایین بزنید. خود روتر فقط وقتی «پروکسی خود روتر» روشن باشد می‌تواند این دامنه‌ها را باز کند.',
+	'FakeDNS works with its main switch on, for a rule whose names go through a node. Preproxy: the rule’s hand-added node is reached through this node first — only for a rule that goes to a hand-added node, and one layer only: a node with a chain of its own keeps it.':
+		'FakeDNS وقتی کار می‌کند که کلید اصلی آن روشن باشد و دامنه‌های آن قانون از یک کانفیگ عبور کنند. پیش‌پروکسی: کانفیگ دستی آن قانون از طریق این کانفیگ وصل می‌شود؛ فقط برای قانونی که به یک کانفیگ دستی می‌رود، و فقط یک لایه: کانفیگی که زنجیره خودش را دارد همان را نگه می‌دارد.',
+	'Everything the tunnel carries gets made-up addresses — the DNS tab’s FakeDNS. Like that one, it takes effect only with lookups sent straight into the tunnel.':
+		'برای همه ترافیک تونل آدرس ساختگی برگردانده می‌شود؛ همان FakeDNS زبانه DNS. مثل آن، فقط وقتی اثر دارد که روش پیدا کردن دامنه‌ها «مستقیم داخل تونل» باشد.',
+	'When the Default row goes to a hand-added node, it is reached through this node first.':
+		'وقتی ردیف پیش‌فرض به یک کانفیگ دستی می‌رود، آن کانفیگ از طریق این کانفیگ وصل می‌شود.',
+	'Delete the subscribed node': 'حذف کانفیگ‌های این اشتراک',
+	'Manual subscription': 'به‌روزرسانی دستی',
+	'Reading it now. The count will change when it is done.': 'در حال خواندن. پس از پایان، تعداد به‌روز می‌شود.',
+	'Cloudflare Connection': 'اتصال کلادفلر',
+	'The main switch is in the Main tab below.': 'کلید اصلی در زبانه «اصلی» پایین همین صفحه است.',
+
+	/* What the router says back about a subscription. */
+	'download failed': 'دانلود نشد',
+	'answer too short': 'پاسخ خیلی کوتاه بود',
+	'no servers in that configuration': 'هیچ سروری در این فایل نبود',
+	'nothing that looks like a server link': 'هیچ لینک کانفیگی در آن نبود',
+	'the tunnel is not running, and this is read only through it': 'تونل روشن نیست و این اشتراک فقط از طریق تونل خوانده می‌شود',
+	'unknown subscription': 'اشتراک ناشناخته',
+	'Save and apply this subscription first': 'اول این اشتراک را ذخیره و اعمال کنید',
+	'that server is not in the list any more': 'این کانفیگ دیگر در فهرست نیست',
+
+	/* What the router says on the first page when something needs doing. */
+	'No node on the list answered at all. The connection itself may be blocking them, or the list may be stale.':
+		'هیچ کانفیگی در فهرست جواب نداد. ممکن است خود اینترنت جلوی آن‌ها را گرفته باشد یا فهرست قدیمی شده باشد.',
+	'No node on the list can carry traffic, and neither can the one in use. The tunnel has been taken out of the way so that the network works without it. Add a node that works on the Node List page, or check the subscription.':
+		'هیچ کانفیگی در فهرست، و نه کانفیگ در حال استفاده، ترافیک را عبور نمی‌دهد. تونل کنار گذاشته شد تا شبکه بدون آن کار کند. در صفحه «فهرست کانفیگ‌ها» یک کانفیگ سالم اضافه کنید، یا اشتراک را بررسی کنید.',
+	'Nothing in the list could be read as a node': 'هیچ چیز در فهرست به‌عنوان کانفیگ خوانده نشد',
+	'There is no node list yet: no subscription could be read and none has been saved before. Add one node by hand on the Node List page - a single share link is enough - or check the subscription address on Node Subscribe.':
+		'هنوز فهرست کانفیگی وجود ندارد: هیچ اشتراکی خوانده نشد و فهرست ذخیره‌شده‌ای هم نیست. در صفحه «فهرست کانفیگ‌ها» یک کانفیگ دستی اضافه کنید (یک لینک کافی است)، یا آدرس اشتراک را در صفحه «اشتراک کانفیگ‌ها» بررسی کنید.',
+	'The node chosen in Basic Settings cannot be read. Choose another there, or set it back to Auto.':
+		'کانفیگ انتخاب‌شده در «تنظیمات پایه» خوانده نمی‌شود. کانفیگ دیگری انتخاب کنید یا آن را روی خودکار بگذارید.',
+	'The helper for this node\'s protocol would not start.': 'هسته کمکی پروتکل این کانفیگ اجرا نشد.',
+	'The tunnel process started but never accepted connections. Check the system log for what it said.':
+		'هسته تونل اجرا شد اما هیچ اتصالی نپذیرفت. پیام آن را در «گزارش‌های اجرا» ببینید.',
+	'Iran routing is switched on but geoip.dat and geosite.dat are not on the router yet - press Update beside them. Until then everything goes through the tunnel.':
+		'مسیریابی ایران روشن است اما geoip.dat و geosite.dat هنوز روی روتر نیستند. در صفحه «به‌روزرسانی برنامه» دکمه به‌روزرسانی کنار آن‌ها را بزنید. تا آن موقع همه ترافیک از تونل می‌رود.',
+	'The routing data on this router is not the pair this expects: the core refused geoip:ir and geosite:ir. Connected with the Iran split off. Press Update beside the routing data on the settings page to fetch the right files.':
+		'داده‌های مسیریابی روی روتر درست نیستند: هسته geoip:ir و geosite:ir را نپذیرفت. اتصال بدون جداسازی ایران برقرار شد. در صفحه «به‌روزرسانی برنامه» داده‌های مسیریابی را به‌روز کنید.',
+	'This router has neither nftables nor iptables available, so traffic cannot be redirected.':
+		'روی این روتر نه nftables هست و نه iptables، پس ترافیک را نمی‌توان هدایت کرد.',
+	'This kernel cannot do transparent proxying with nftables. Install kmod-nft-tproxy (the Dependencies button on the settings page will do it).':
+		'کرنل این روتر با nftables پروکسی شفاف انجام نمی‌دهد. kmod-nft-tproxy را نصب کنید (دکمه نصب وابستگی‌ها در صفحه «به‌روزرسانی برنامه»).',
+	'This kernel cannot do transparent proxying with iptables. Install iptables-mod-tproxy (the Dependencies button on the settings page will do it).':
+		'کرنل این روتر با iptables پروکسی شفاف انجام نمی‌دهد. iptables-mod-tproxy را نصب کنید (دکمه نصب وابستگی‌ها در صفحه «به‌روزرسانی برنامه»).',
+	'Could not find the directory dnsmasq reads its extra configuration from, so name lookups are being redirected straight into the tunnel instead. Local machine names will not resolve while connected.':
+		'پوشه تنظیمات اضافه dnsmasq پیدا نشد، پس پرس‌وجوهای دامنه مستقیم به تونل فرستاده می‌شوند. تا وقتی وصل هستید نام دستگاه‌های شبکه محلی پیدا نمی‌شوند.',
+	'Could not download the package index. The router needs a working internet connection before dependencies can be installed.':
+		'فهرست بسته‌ها دانلود نشد. برای نصب وابستگی‌ها روتر باید به اینترنت وصل باشد.',
+	'This router has neither opkg nor apk, so nothing can be installed automatically.':
+		'روی این روتر نه opkg هست و نه apk، پس چیزی به‌طور خودکار نصب نمی‌شود.',
+	'Xray is the engine and cannot be removed - it can only be updated.': 'Xray هسته اصلی است و حذف نمی‌شود، فقط به‌روز می‌شود.',
+	'The Xray download did not contain a program - the address or the release may have changed.':
+		'فایل دانلودشده Xray برنامه‌ای در خود نداشت. شاید آدرس یا نسخه منتشرشده تغییر کرده باشد.',
+	'unzip is needed to install Xray and is not on this router. Press Install dependencies on the settings page.':
+		'برای نصب Xray برنامه unzip لازم است که روی این روتر نیست. در صفحه «به‌روزرسانی برنامه» وابستگی‌ها را نصب کنید.',
+	'Could not reach GitHub to find out which sing-box is current. Connect the tunnel first, then try again.':
+		'به گیت‌هاب دسترسی نبود تا آخرین نسخه sing-box پیدا شود. اول تونل را وصل کنید و دوباره امتحان کنید.',
+	'No sing-box program inside the archive.': 'در فایل فشرده، برنامه sing-box نبود.',
+	'The sing-box download could not be unpacked.': 'فایل دانلودشده sing-box باز نشد.',
+	'sing-box publishes no build for this router\'s processor.': 'sing-box برای پردازنده این روتر نسخه‌ای منتشر نمی‌کند.',
+	'hysteria publishes no build for this router\'s processor.': 'hysteria برای پردازنده این روتر نسخه‌ای منتشر نمی‌کند.',
 
 	'yes': 'بله',
 	'no': 'خیر'
 };
+
+/* LuCI's own words - the buttons and messages its form draws for us: Add,
+   Edit, Delete, Save & Apply, an empty table. LuCI translates them through
+   its own catalogue, which on a router whose LuCI is in English says them in
+   English whatever this page's language is. On these pages, in Persian, they
+   are said in Persian; the rest of LuCI is left as it was. Kept apart from
+   the dictionary above because a word can mean two things - "Close" is
+   خاموش on a chain setting and بستن on a window's button. */
+var LUCI_FA = {
+	'Add': 'افزودن',
+	'Edit': 'ویرایش',
+	'Delete': 'حذف',
+	'Save': 'ذخیره',
+	'Save & Apply': 'ذخیره و اعمال',
+	'Apply unchecked': 'اعمال بدون بررسی',
+	'Reset': 'بازنشانی',
+	'Dismiss': 'بستن',
+	'Close': 'بستن',
+	'This section contains no values yet': 'این بخش هنوز تنظیم نشده است.',
+	'Drag to reorder': 'برای جابه‌جایی بکشید',
+	'Expand/Collapse': 'باز/بسته',
+	'-- custom --': '-- دلخواه --',
+	'-- Please choose --': '-- انتخاب کنید --',
+	'unspecified': 'تعیین نشده',
+	'Yes': 'بله',
+	'No': 'خیر',
+	'Enabled': 'فعال',
+	'Disabled': 'غیرفعال',
+	'Unsaved Changes': 'تغییرات ذخیره‌نشده',
+	'Changes': 'تغییرات',
+	'Revert': 'برگرداندن',
+	'Apply': 'اعمال',
+	'Configuration changes applied.': 'تغییرات اعمال شد.',
+	'Configuration changes have been rolled back!': 'تغییرات برگردانده شد!',
+	'Starting configuration apply…': 'در حال شروع اعمال تغییرات…',
+	'Applying configuration changes… %ds': 'در حال اعمال تغییرات… %d ثانیه',
+	'Waiting for configuration to get applied… %ds': 'در انتظار اعمال تغییرات… %d ثانیه',
+	'There are no changes to apply': 'تغییری برای اعمال وجود ندارد',
+	'Some fields are invalid, cannot save values!': 'بعضی فیلدها نامعتبرند؛ ذخیره ممکن نیست!',
+	'Expecting: %s': 'مقدار مورد انتظار: %s'
+};
+
+var patched = false;
+
+/* LuCI's _() is one global function, which its form calls as it draws. It is
+   wrapped once, and the wrapper only answers for LuCI_FA's words while this
+   page is in Persian; anything else goes to LuCI's own as before. */
+function patchLuci() {
+	if (patched || typeof window._ !== 'function') return;
+	var orig = window._;
+	window._ = function(s, c) {
+		if (LANG === 'fa' && c == null && Object.prototype.hasOwnProperty.call(LUCI_FA, s))
+			return LUCI_FA[s];
+		return orig.apply(this, arguments);
+	};
+	patched = true;
+}
 
 function tr(s) {
 	if (LANG !== 'fa') return s;
@@ -345,7 +915,7 @@ function page(children) {
 return baseclass.extend({
 	/* Called by each view once it knows what the setting says. Anything other
 	   than "fa" is English, including a value nobody has set yet. */
-	setLang: function(l) { LANG = (l === 'fa') ? 'fa' : 'en'; },
+	setLang: function(l) { LANG = (l === 'fa') ? 'fa' : 'en'; if (LANG === 'fa') patchLuci(); },
 	get: function() { return LANG; },
 	dir: function() { return LANG === 'fa' ? 'rtl' : 'ltr'; },
 	page: page,

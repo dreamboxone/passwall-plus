@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
@@ -537,5 +537,141 @@ if printf '%s' "$LX" | grep -q amnezia; then
 else
 	ok "AmneziaWG is left out rather than offered as a node that cannot work"
 fi
+
+# ------------------------------------------------------------ the Xray tab
+#
+# Pre-proxy, landing node, fragment, noise and mux, and the DNS tab - all of
+# it written into the configuration and offered to the core that will run
+# it. Everything here is also what a measurement uses, so a mistake would
+# not only fail to start the tunnel: it would measure every node as dead.
+echo "== the Xray tab and the DNS tab"
+PP='vless://11111111-2222-3333-4444-555555555555@pre.example.com:443?encryption=none&security=tls&sni=pre.example.com&type=ws&path=%2Fp#PRE'
+LAND='trojan://pw@land.example.com:443?sni=land.example.com&type=tcp#LAND'
+MAIN='vless://11111111-2222-3333-4444-555555555555@main.example.com:443?encryption=none&security=tls&sni=main.example.com&type=ws&path=%2Fm#MAIN'
+rig_clear
+rig_set cfgpre.link "$PP"
+rig_set cfgpre.name "PRE"
+rig_set cfgland.link "$LAND"
+rig_set cfgmain.link "$MAIN"
+rig_set cfgmain.chain_proxy 2
+rig_set cfgmain.to_node cfgland
+
+# A landing node: the record keeps the first hop's address, and carries the
+# landing node's outbound, dialling out through the first hop.
+REC="$(sh -c '. "$PWPLUS_LIB/pwplus-common.sh"; node_records cfgmain')"
+check "$(printf '%s' "$REC" | cut -f4)" "main.example.com" "a landing chain is knocked on at its first hop"
+check "$(printf '%s' "$REC" | cut -f3)" "trojan" "and speaks the landing node's protocol"
+if printf '%s' "$REC" | cut -f6- | grep -q '"dialerProxy":"chain-cfgmain"'; then
+	ok "the landing node dials out through the first hop"
+else
+	bad "the landing node dials out through the first hop"
+fi
+
+# The tunnel's own node, with the pre-proxy under it and every mask on.
+printf '%s\n' "$MAIN" | LC_ALL=C awk -f "$RIG/lib/pwplus-parse" | head -1 | cut -f6 > "$RIG/etc/best.json"
+printf 'tag=n0\nlabel=MAIN\nprotocol=vless\nhost=main.example.com\nport=443\n' > "$RIG/etc/best.meta"
+rig_set preproxy_enabled 1
+rig_set preproxy_node cfgpre
+rig_set fragment 1
+rig_set noise 1
+rig_set mux 1
+rig_set direct_dns_protocol udp
+rig_set direct_dns 178.22.122.100
+rig_set remote_dns_protocol doh
+rig_set remote_dns_doh 'https://dns.example.net/dns-query,9.9.9.9'
+rig_set remote_dns_client_ip 5.1.2.3
+rig_set dns_hosts 'router.lan 192.168.1.1'
+sh "$RIG/lib/pwplus-mkconfig" > "$WORK/xtab.json" 2>"$WORK/xtab.err" || bad "mkconfig failed: $(cat "$WORK/xtab.err")"
+
+for want in \
+	'"tag":"proxy"' \
+	'"dialerProxy":"chain-cfgpre"' \
+	'"tag":"chain-cfgpre"' \
+	'"type":"fragment"' \
+	'"mux":{"enabled":true' \
+	'"tag":"dns-direct","address":"178.22.122.100","port":53' \
+	'"full:pre.example.com"' \
+	'"address":"https://dns.example.net/dns-query"' \
+	'"clientIp":"5.1.2.3"' \
+	'"dns.example.net":"9.9.9.9"' \
+	'"router.lan":"192.168.1.1"' \
+	'"inboundTag":["dns-remote"],"outboundTag":"proxy"'; do
+	if tr -d '\n' < "$WORK/xtab.json" | grep -qF "$want"; then
+		ok "carried through: $want"
+	else
+		bad "carried through: $want"
+	fi
+done
+# The mask goes on the hop that meets the network: the pre-proxy, not the
+# node carried inside it.
+PROXY_LINE="$(grep '"tag":"proxy"' "$WORK/xtab.json")"
+if printf '%s' "$PROXY_LINE" | grep -q '"type":"fragment"'; then
+	bad "fragment is left off the node carried inside the pre-proxy"
+else
+	ok "fragment is left off the node carried inside the pre-proxy"
+fi
+if grep '"tag":"chain-cfgpre"' "$WORK/xtab.json" | grep -q '"domainStrategy":"UseIPv4"'; then
+	ok "the pre-proxy's own name is resolved through the direct resolver"
+else
+	bad "the pre-proxy's own name is resolved through the direct resolver"
+fi
+
+# FakeDNS is refused in front of dnsmasq, where it would make the router's own
+# lookups fake too, and written with lookups sent straight to the tunnel.
+rig_set remote_fakedns 1
+sh "$RIG/lib/pwplus-mkconfig" 2>/dev/null | grep -q '"fakedns"' && bad "FakeDNS is refused with dnsmasq in front" || ok "FakeDNS is refused with dnsmasq in front"
+rig_set dns_mode direct
+if sh "$RIG/lib/pwplus-mkconfig" 2>/dev/null | grep -q '"address":"fakedns"'; then
+	ok "and used with lookups sent straight to the tunnel"
+else
+	bad "and used with lookups sent straight to the tunnel"
+fi
+sh "$RIG/lib/pwplus-mkconfig" > "$WORK/xtab-fake.json" 2>/dev/null || true
+
+# Basic and Other Settings: the router's SOCKS port, REDIRECT for TCP, the
+# name used for routing only, and a buffer size.
+rig_set dns_mode dnsmasq
+rig_set remote_fakedns 0
+rig_set node_socks_port 1070
+rig_set node_socks_bind_local 0
+rig_set tcp_proxy_way redirect
+rig_set sniffing_override_dest 0
+rig_set buffer_size 512
+sh "$RIG/lib/pwplus-mkconfig" > "$WORK/other.json" 2>"$WORK/other.err" || bad "mkconfig failed: $(cat "$WORK/other.err")"
+OTHER="$(tr -d '\n' < "$WORK/other.json")"
+for want in \
+	'"tag": "socks-in", "listen": "0.0.0.0", "port": 1070' \
+	'"tag": "redir-in"' \
+	'"tproxy": "redirect"' \
+	'"routeOnly": true' \
+	'"bufferSize": 512' \
+	'"mark": 255'; do
+	if printf '%s' "$OTHER" | grep -qF "$want"; then
+		ok "carried through: $want"
+	else
+		bad "carried through: $want"
+	fi
+done
+
+if [ -x "$RIG/core/xray" ]; then
+	if "$RIG/core/xray" run -test -config "$WORK/xtab.json" >"$WORK/xtab.test" 2>&1; then
+		ok "the core accepts all of it"
+	else
+		bad "the core accepts all of it: $(grep -i 'fail\|error' "$WORK/xtab.test" | head -2)"
+	fi
+	if "$RIG/core/xray" run -test -config "$WORK/other.json" >"$WORK/other.test" 2>&1; then
+		ok "and the SOCKS port, REDIRECT and the buffer"
+	else
+		bad "and the SOCKS port, REDIRECT and the buffer: $(grep -i 'fail\|error' "$WORK/other.test" | head -2)"
+	fi
+	if "$RIG/core/xray" run -test -config "$WORK/xtab-fake.json" >"$WORK/xtab.test" 2>&1; then
+		ok "and FakeDNS too"
+	else
+		bad "and FakeDNS too: $(grep -i 'fail\|error' "$WORK/xtab.test" | head -2)"
+	fi
+else
+	echo "  skip - no core to check the Xray tab against (set RIG_XRAY)"
+fi
+rig_clear
 
 rig_report

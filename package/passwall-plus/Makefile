@@ -1,22 +1,22 @@
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=passwall-plus
-PKG_VERSION:=1.0.9
+PKG_VERSION:=1.1.0
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=routekernel <https://t.me/routekernel1>
-PKG_LICENSE:=GPL-3.0-only
+PKG_LICENSE:=AGPL-3.0-or-later
 
 include $(INCLUDE_DIR)/package.mk
 
 # Kept in step with build/packages.inc.sh, which is what the release builds
 # use. A helper that reaches one of them and not the other is a helper that
 # is missing on exactly half of the installations.
-PWPLUS_SCRIPTS:=pwplus-nodes pwplus-probe pwplus-connect pwplus-refresh pwplus-parse pwplus-mkconfig pwplus-rules pwplus-dns pwplus-stats pwplus-test pwplus-geo pwplus-cores pwplus-deps pwplus-bridge
+PWPLUS_SCRIPTS:=pwplus-nodes pwplus-probe pwplus-connect pwplus-refresh pwplus-parse pwplus-mkconfig pwplus-rules pwplus-dns pwplus-stats pwplus-test pwplus-geo pwplus-cores pwplus-deps pwplus-bridge pwplus-router
 
 define Package/passwall-plus
   SECTION:=net
@@ -72,7 +72,25 @@ mkdir -p /etc/passwall-plus /etc/passwall-plus/geo /var/run/passwall-plus
 # went on sitting on the front page after the release that stopped
 # saying it. Nothing here is worth carrying across an install.
 rm -f /var/run/passwall-plus/message
+# The rebind exceptions that ship on the Traffic Rules page. A configuration
+# kept from an older version has no such list; it gets one once, and a list
+# the reader has since trimmed is never filled back in.
+if [ -z "$$(uci -q get passwall-plus.config.rebind_seeded)" ]; then
+	for d in banksepah.ir cbi.ir ebanksepah.ir esata.ir gov.ir medu.ir qmb.ir tamin.ir meedc.net ntp.faraborddi.com; do
+		uci -q add_list passwall-plus.config.rebind_domain="$$d"
+	done
+	uci -q set passwall-plus.config.rebind_seeded='1'
+	uci -q commit passwall-plus
+fi
+/usr/libexec/pwplus-router rebind >/dev/null 2>&1 || true
 touch /etc/crontabs/root
+if [ -n "$$(uci -q get passwall-plus.config.ir_dns)" ] && [ -z "$$(uci -q get passwall-plus.config.direct_dns)" ]; then
+	uci -q set passwall-plus.config.direct_dns_protocol='udp'
+	uci -q set passwall-plus.config.direct_dns="$$(uci -q get passwall-plus.config.ir_dns)"
+fi
+uci -q delete passwall-plus.config.ir_dns
+uci -q delete passwall-plus.config.autostart
+uci -q commit passwall-plus
 sed -i '\|/usr/libexec/pwplus-|d' /etc/crontabs/root
 echo '*/15 * * * * /usr/libexec/pwplus-refresh >/dev/null 2>&1' >> /etc/crontabs/root
 echo '*/5 * * * * /usr/libexec/pwplus-stats sample >/dev/null 2>&1' >> /etc/crontabs/root
@@ -88,6 +106,8 @@ echo '*/5 * * * * /usr/libexec/pwplus-stats sample >/dev/null 2>&1' >> /etc/cron
 if ! ubus list 2>/dev/null | grep -q '^luci.passwall-plus$$'; then
 	/etc/init.d/rpcd restart >/dev/null 2>&1
 fi
+# Always in the boot sequence; the main switch decides whether it runs.
+/etc/init.d/passwall-plus enable >/dev/null 2>&1
 exit 0
 endef
 

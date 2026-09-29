@@ -10,17 +10,17 @@
 		}
 	},
 
-	"admin/services/passwall-plus/overview": {
-		"title": "Status",
+	"admin/services/passwall-plus/settings": {
+		"title": "Basic Settings",
 		"order": 10,
 		"action": {
 			"type": "view",
-			"path": "passwall-plus/overview"
+			"path": "passwall-plus/settings"
 		}
 	},
 
 	"admin/services/passwall-plus/nodes": {
-		"title": "Nodes",
+		"title": "Node List",
 		"order": 20,
 		"action": {
 			"type": "view",
@@ -28,21 +28,73 @@
 		}
 	},
 
-	"admin/services/passwall-plus/settings": {
-		"title": "Settings",
+	"admin/services/passwall-plus/subscribe": {
+		"title": "Node Subscribe",
 		"order": 30,
 		"action": {
 			"type": "view",
-			"path": "passwall-plus/settings"
+			"path": "passwall-plus/subscribe"
+		}
+	},
+
+	"admin/services/passwall-plus/other": {
+		"title": "Other Settings",
+		"order": 40,
+		"action": {
+			"type": "view",
+			"path": "passwall-plus/other"
+		}
+	},
+
+	"admin/services/passwall-plus/update": {
+		"title": "App Update",
+		"order": 50,
+		"action": {
+			"type": "view",
+			"path": "passwall-plus/update"
+		}
+	},
+
+	"admin/services/passwall-plus/traffic": {
+		"title": "Rule Manage",
+		"order": 60,
+		"action": {
+			"type": "view",
+			"path": "passwall-plus/traffic"
+		}
+	},
+
+	"admin/services/passwall-plus/geoview": {
+		"title": "Geo View",
+		"order": 70,
+		"action": {
+			"type": "view",
+			"path": "passwall-plus/geoview"
+		}
+	},
+
+	"admin/services/passwall-plus/acl": {
+		"title": "Access Control",
+		"order": 80,
+		"action": {
+			"type": "view",
+			"path": "passwall-plus/acl"
 		}
 	},
 
 	"admin/services/passwall-plus/log": {
-		"title": "Log",
-		"order": 40,
+		"title": "Runtime Logs",
+		"order": 90,
 		"action": {
 			"type": "view",
 			"path": "passwall-plus/log"
+		}
+	},
+
+	"admin/services/passwall-plus/overview": {
+		"action": {
+			"type": "alias",
+			"path": "admin/services/passwall-plus/settings"
 		}
 	}
 }

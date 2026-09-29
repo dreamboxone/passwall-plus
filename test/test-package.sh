@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
@@ -94,6 +94,14 @@ done
 echo "== the menu names views that are shipped"
 MENU="$ROOT/package/luci-app-passwall-plus/root/usr/share/luci/menu.d/luci-app-passwall-plus.json"
 for v in $(grep -o '"path": *"[^"]*"' "$MENU" | cut -d'"' -f4); do
+	# An alias - the old address of a page that has moved - names a menu
+	# entry, not a view.
+	case "$v" in
+		admin/*)
+			if grep -q "\"$v\": *{" "$MENU"; then ok "alias to $v"; else bad "the menu aliases $v, which is not in it"; fi
+			continue
+			;;
+	esac
 	if [ -s "$ROOT/package/luci-app-passwall-plus/root/www/luci-static/resources/view/$v.js" ]; then
 		ok "$v.js"
 	else
@@ -126,11 +134,13 @@ done
 
 echo "== settings the scripts read all have a default in the shipped config"
 CONF="$ROOT/package/passwall-plus/files/passwall-plus.config"
-for k in $(grep -ho 'cfg\(_bool\)\? [a-z_0-9]*' "$ROOT"/package/passwall-plus/files/* |
+# Capitals too: PassWall2 names some of its options that way - fragment_maxSplit -
+# and a name cut short at its first capital is a name that is never found.
+for k in $(grep -ho 'cfg\(_bool\)\? [a-zA-Z_0-9]*' "$ROOT"/package/passwall-plus/files/* |
            awk '{print $2}' | sort -u); do
 	case "$k" in enabled) continue ;; esac
 	# a commented default counts: it documents the setting and its value
-	if grep -q "option $k " "$CONF" || grep -q "#[[:space:]]*option $k " "$CONF"; then
+	if grep -Eq "(option|list) $k " "$CONF"; then
 		:
 	else
 		bad "the scripts read '$k' but /etc/config/passwall-plus ships no default for it"
@@ -159,11 +169,15 @@ fi
 # and nothing said so, because the shell builders - which the releases use -
 # ship all three.
 echo "== every file the web interface needs is in both packaging paths"
-LUCI_FILES="www/luci-static/resources/view/passwall-plus/overview.js
+LUCI_FILES="www/luci-static/resources/view/passwall-plus/subscribe.js
+www/luci-static/resources/view/passwall-plus/geoview.js
 www/luci-static/resources/view/passwall-plus/nodes.js
+www/luci-static/resources/view/passwall-plus/traffic.js
+www/luci-static/resources/view/passwall-plus/acl.js
 www/luci-static/resources/view/passwall-plus/settings.js
 www/luci-static/resources/view/passwall-plus/log.js
 www/luci-static/resources/passwall-plus/i18n.js
+www/luci-static/resources/passwall-plus/status.js
 usr/share/luci/menu.d/luci-app-passwall-plus.json
 usr/share/rpcd/acl.d/luci-app-passwall-plus.json"
 MISSING=""

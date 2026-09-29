@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
@@ -85,9 +85,20 @@ count() { wc -l < "$1" 2>/dev/null | tr -d ' \t' || echo 0; }
 # completed or it did not.
 tcp_ms() {
 	_h="$1"
-	# a bare IPv6 literal needs brackets before it can go in a URL
-	case "$_h" in *:*) _h="[$_h]" ;; esac
-	_t="$(curl -s -o /dev/null \
+	# A name is looked up through the direct resolver, not the router's own.
+	# While the tunnel is up the router's resolver is the tunnel, and when the
+	# node it is on has died - which is exactly when this runs - every node
+	# with a name in its address would fail to resolve and be thrown out as
+	# dead, leaving only the ones written as bare addresses to choose from.
+	_resolve=""
+	case "$_h" in
+		*:*) _h="[$_h]" ;;   # a bare IPv6 literal needs brackets in a URL
+		*[!0-9.]*)
+			_ip="$(resolve_direct "$_h")" || _ip=""
+			[ -n "$_ip" ] && _resolve="$_h:$2:$_ip"
+			;;
+	esac
+	_t="$(curl -s -o /dev/null ${_resolve:+--resolve "$_resolve"} \
 		--connect-timeout "$SIFT_TIMEOUT" --max-time "$SIFT_TIMEOUT" \
 		-w '%{time_connect}' "http://$_h:$2/" 2>/dev/null)" || _t=""
 	[ -n "$_t" ] || { echo 0; return 0; }
@@ -114,8 +125,28 @@ icmp_ms() {
 }
 
 sift_one() {
-	_tag="$1"; _host="$2"; _port="$3"; _proto="${4:-}"
+	_tag="$1"; _host="$2"; _port="$3"; _proto="${4:-}"; _chained="${5:-0}"
 	_ms=0
+
+	# A node reached through another one. A handshake from the router to its
+	# address asks about a path the tunnel will never use, and a node that is
+	# only reachable through its pre-proxy would be thrown out for it. The
+	# second pass measures the whole chain, which is the question that
+	# matters. A chain the reader set up on one node is put first: it was set
+	# up on purpose. With the pre-proxy under every node, none of them is
+	# reached directly, so the list goes through in its own order.
+	case "$_chained" in
+		own)
+			printf '%06d\t%s\n' 0 "$_tag" >> "$ALIVE"
+			echo x >> "$ATTEMPTS"
+			return 0
+			;;
+		all)
+			printf '%06d\t%s\n' 9000 "$_tag" >> "$ALIVE"
+			echo x >> "$ATTEMPTS"
+			return 0
+			;;
+	esac
 
 	# A handshake asks a question these protocols cannot answer. WireGuard,
 	# hysteria2 and tuic live on UDP and nothing is listening on the TCP port
@@ -161,11 +192,24 @@ cmd_sift() {
 	_total="$(count "$PWPLUS_CANDIDATES")"
 	progress prefilter "$_total" 0 0 0 0
 
+	# Asked once for the whole run rather than once per node.
+	PWPLUS_DDNS="$(direct_dns)"
+	export PWPLUS_DDNS
+	_everyone=0
+	if global_preproxy >/dev/null 2>&1; then
+		_everyone=1
+		log "every node dials through the pre-proxy - the handshake pass is skipped"
+	fi
+
 	_running=0
 	_pids=""
 	while IFS="	" read -r tag label proto host port payload; do
 		[ -n "$tag" ] || continue
-		sift_one "$tag" "$host" "$port" "$proto" &
+		_ch=0
+		if first_hop_is_chained "$payload"; then _ch=own
+		elif [ "$_everyone" = "1" ]; then _ch=all
+		fi
+		sift_one "$tag" "$host" "$port" "$proto" "$_ch" &
 		_pids="$_pids $!"
 		_running=$((_running + 1))
 		if [ "$_running" -ge "$SIFT_PARALLEL" ]; then
@@ -194,10 +238,39 @@ cmd_sift() {
 
 # ------------------------------------------------------------------ pass 2
 
+# The outbounds a measurement uses, as the tunnel would use them: the Xray tab
+# applied, the pre-proxy under every node that has none of its own, and the
+# node names resolved through the core's DNS. A node measured one way and run
+# another is a measurement of something else.
+decorated() {
+	_gp="$(global_preproxy)" || _gp=""
+	_ghp=""
+	if [ -n "$_gp" ]; then
+		_ghp="$(section_links "$_gp" | LC_ALL=C awk -v LIMIT=1 -f "$PWPLUS_LIB/pwplus-parse" 2>/dev/null |
+			head -1 | cut -f4,5 | tr '\t' '|')"
+	fi
+	DOMSTRAT="$(node_domain_strategy)" decorate "${_gp:+chain-$_gp}" "$_ghp" < "$1"
+}
+
+# What every measuring core needs besides the nodes themselves: somewhere to
+# resolve a node's name that is not the router's own resolver - which while
+# connected is the tunnel, and while this runs is quite possibly a tunnel
+# whose node has just died - and the plain way out that resolver is reached
+# through.
+measure_dns() {
+	set -- ${PWPLUS_DDNS:-$(direct_dns)}
+	if [ "$1" = "tcp" ]; then
+		printf '"dns":{"tag":"dns-module","servers":[{"address":"tcp://%s:%s"}],"queryStrategy":"%s"}' "$2" "$3" "$(node_domain_strategy)"
+	else
+		printf '"dns":{"tag":"dns-module","servers":[{"address":"%s","port":%s}],"queryStrategy":"%s"}' "$2" "$3" "$(node_domain_strategy)"
+	fi
+}
+
 # Everything the batch needs, in one small Xray: one SOCKS inbound per server,
 # that server's outbound behind it, and a routing rule joining the two.
 build_batch_config() {
 	_list="$1"
+	decorated "$_list" > "$_list.dec"
 	{
 		printf '{"log":{"loglevel":"none"},"inbounds":['
 		_i=0
@@ -207,7 +280,7 @@ build_batch_config() {
 			printf '{"tag":"in_%s","listen":"127.0.0.1","port":%d,"protocol":"socks","settings":{"udp":false}}' \
 				"$tag" $((BASE_PORT + _i))
 			_i=$((_i + 1))
-		done < "$_list"
+		done < "$_list.dec"
 		printf '],"outbounds":['
 		_i=0
 		while IFS="	" read -r tag label proto host port payload; do
@@ -215,17 +288,19 @@ build_batch_config() {
 			[ "$_i" -gt 0 ] && printf ','
 			printf '%s' "$payload" | sed "s/^{/{\"tag\":\"$tag\",/"
 			_i=$((_i + 1))
-		done < "$_list"
-		printf '],"routing":{"rules":['
-		_i=0
+		done < "$_list.dec"
+		chain_outbounds "$(cut -f6- "$_list.dec")" | while read -r _co; do
+			[ -n "$_co" ] && printf ',%s' "$_co"
+		done
+		printf ',{"tag":"direct","protocol":"freedom","streamSettings":{"sockopt":{"mark":255}}}],%s,"routing":{"rules":[' "$(measure_dns)"
+		printf '{"type":"field","inboundTag":["dns-module"],"outboundTag":"direct"}'
 		while IFS="	" read -r tag label proto host port payload; do
 			[ -n "$tag" ] || continue
-			[ "$_i" -gt 0 ] && printf ','
-			printf '{"type":"field","inboundTag":["in_%s"],"outboundTag":"%s"}' "$tag" "$tag"
-			_i=$((_i + 1))
-		done < "$_list"
+			printf ',{"type":"field","inboundTag":["in_%s"],"outboundTag":"%s"}' "$tag" "$tag"
+		done < "$_list.dec"
 		printf ']}}'
 	} > "$TEST_CFG"
+	rm -f "$_list.dec"
 	return 0
 }
 
@@ -256,8 +331,12 @@ prune_batch() {
 	: > "$_kept"
 	while IFS="	" read -r tag label proto host port payload; do
 		[ -n "$tag" ] || continue
-		printf '{"log":{"loglevel":"none"},"outbounds":[%s]}' \
-			"$(printf '%s' "$payload" | sed 's/^{/{"tag":"one",/')" > "$PWPLUS_RUN/one.json"
+		printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$tag" "$label" "$proto" "$host" "$port" "$payload" > "$PWPLUS_RUN/one.tsv"
+		_one="$(decorated "$PWPLUS_RUN/one.tsv" | cut -f6-)"
+		printf '{"log":{"loglevel":"none"},"outbounds":[%s%s,{"tag":"direct","protocol":"freedom","streamSettings":{"sockopt":{"mark":255}}}],%s}' \
+			"$(printf '%s' "$_one" | sed 's/^{/{"tag":"one",/')" \
+			"$(chain_outbounds "$_one" | while read -r _co; do [ -n "$_co" ] && printf ',%s' "$_co"; done)" \
+			"$(measure_dns)" > "$PWPLUS_RUN/one.json"
 		if find_xray "$PWPLUS_RUN/one.json" >/dev/null 2>&1; then
 			printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$tag" "$label" "$proto" "$host" "$port" "$payload" >> "$_kept"
 		else
@@ -265,7 +344,7 @@ prune_batch() {
 			log "dropping $host:$port - no core on this router can use it"
 		fi
 	done < "$_list"
-	rm -f "$PWPLUS_RUN/one.json"
+	rm -f "$PWPLUS_RUN/one.json" "$PWPLUS_RUN/one.tsv"
 	mv -f "$_kept" "$_list"
 	return 0
 }
@@ -437,6 +516,23 @@ select_tag() {
 
 	_row="$(awk -F'\t' -v t="$_tag" '$1 == t { print; exit }' "$PWPLUS_CANDIDATES")"
 	[ -n "$_row" ] || { warn "chosen server is not in the list any more"; return 1; }
+	select_row "$_row" "$_ms"
+}
+
+# PassWall2's Node setting: one hand-added node, used as it is, with nothing
+# measured. Its record is made here from the section - the candidate list may
+# not have been built since it was added - with its own chain if it has one.
+cmd_use() {
+	_row="$(node_records "$1" 1 2>/dev/null | head -1)"
+	[ -n "$_row" ] || { warn "the node chosen in Basic Settings is not there or cannot be read"; return 1; }
+	log "using the node chosen in Basic Settings: $(printf '%s' "$_row" | cut -f2)"
+	select_row "$_row" 0
+}
+
+select_row() {
+	_row="$1"
+	_ms="${2:-0}"
+	_tag="$(printf '%s' "$_row" | cut -f1)"
 
 	_label="$(printf '%s' "$_row" | cut -f2)"
 	_proto="$(printf '%s' "$_row" | cut -f3)"
@@ -502,6 +598,8 @@ case "${1:-select}" in
 	next)   cmd_next ;;
 	pick)   [ -n "${2:-}" ] || { echo "usage: $0 pick <tag>" >&2; exit 1; }
 	        select_tag "$2" 0 ;;
+	use)    [ -n "${2:-}" ] || { echo "usage: $0 use <section>" >&2; exit 1; }
+	        cmd_use "$2" ;;
 	# Rewrites a candidate file in place, keeping only what a core here can
 	# actually run. Useful on its own, and the only way to check the pruning
 	# without a network to check it over.

@@ -1,6 +1,6 @@
 #!/bin/sh /etc/rc.common
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 
@@ -18,25 +18,72 @@ BRIDGE="$PWPLUS_LIB/pwplus-bridge"
 STATS="$PWPLUS_LIB/pwplus-stats"
 STARTED_FLAG="$PWPLUS_RUN/instance-opened"
 
+# PassWall2's Delay Start: after a reboot, wait this many seconds before
+# starting. The network - and above all the WAN - is often not there yet when
+# the boot sequence reaches this, and a start that finds no way out chooses a
+# node against a connection that is still coming up.
+boot() {
+	_d="$(cfg start_delay 1)"
+	case "$_d" in ''|*[!0-9]*) _d=0 ;; esac
+	if [ "$_d" -gt 0 ]; then
+		( sleep "$_d"; /etc/init.d/passwall-plus start ) >/dev/null 2>&1 &
+		return 0
+	fi
+	start "$@"
+}
+
 start_service() {
 	rm -f "$STARTED_FLAG"
 
+	# The rebind exceptions on the Traffic Rules page belong to dnsmasq, not
+	# to the tunnel, so they are brought in step whether or not the tunnel is
+	# about to start - this runs on every boot and on every save.
+	"$PWPLUS_LIB/pwplus-router" rebind >/dev/null 2>&1 || true
+	# Nodes and subscriptions with names of their own, not places in the
+	# file - see pwplus-nodes. Before anything reads a setting naming one.
+	"$PWPLUS_LIB/pwplus-nodes" fixnames >/dev/null 2>&1 || true
+	# The scheduled stop, start and restart from Other Settings, kept in the
+	# crontab only while the main switch is on - as in PassWall2.
+	"$PWPLUS_LIB/pwplus-router" schedule sync >/dev/null 2>&1 || true
+
+	# The main switch, the way PassWall2 has it: this service is always
+	# enabled at boot, and the switch is what decides whether it runs. Off is
+	# off after a reboot too; on comes back on its own.
 	if [ "$(cfg_bool enabled 0)" != "1" ]; then
-		log "not starting: press Connect first"
+		log "Main switch is off - not starting"
 		return 0
 	fi
 
 	mkdir -p "$PWPLUS_RUN" /var/etc "$PWPLUS_ETC"
+	log_trim
+	log "Start running..."
+
+	# A node chosen in Basic Settings is the node, at every start - including
+	# the one that follows saving it there. Reading one link is quick enough
+	# for this, unlike measuring.
+	_fixed="$(cfg node '')"
+	if [ -n "$_fixed" ]; then
+		"$PWPLUS_LIB/pwplus-probe" use "$_fixed" >/dev/null 2>&1 ||
+			log_step "The node chosen in Basic Settings cannot be read - keeping the last one"
+	fi
 
 	# Choosing a server is seconds of timed requests and must not happen here:
 	# procd would be held for the whole measurement, and the service would be
 	# neither started nor failed while it waited. pwplus-connect does the
 	# choosing and then calls us. At boot there is a choice from last time,
-	# which is why it is kept in /etc and not in /var.
+	# which is why it is kept in /etc and not in /var - and when there is
+	# none, the switch is on and somebody has to choose, so it is handed to
+	# the one thing that does, and this start ends here.
 	if [ ! -s "$PWPLUS_BEST" ]; then
-		log "no server chosen yet - run pwplus-connect, or press Connect"
-		return 1
+		log_step "No node chosen yet - choosing one now"
+		if command -v setsid >/dev/null 2>&1; then
+			setsid "$PWPLUS_LIB/pwplus-connect" </dev/null >/dev/null 2>&1 &
+		else
+			( "$PWPLUS_LIB/pwplus-connect" </dev/null >/dev/null 2>&1 & ) &
+		fi
+		return 0
 	fi
+	log_step "Node: $(sed -n 's/^label=//p' "$PWPLUS_BEST_META" 2>/dev/null | tail -1) [$(sed -n 's/^protocol=//p' "$PWPLUS_BEST_META" 2>/dev/null | tail -1) $(sed -n 's/^host=//p' "$PWPLUS_BEST_META" 2>/dev/null | tail -1):$(sed -n 's/^port=//p' "$PWPLUS_BEST_META" 2>/dev/null | tail -1)]"
 
 	if ! "$MKCONFIG" > "$PWPLUS_CONFIG_JSON"; then
 		log "could not write $PWPLUS_CONFIG_JSON"
@@ -73,7 +120,16 @@ start_service() {
 		log "no xray on this router can run the generated configuration"
 		return 1
 	fi
-	log "using $PROG"
+	# Which core, and which version of it, written down once here for the
+	# status page - which asks every few seconds, and starting a core just to
+	# ask it its version is not something to do every few seconds.
+	_ver="$(core_version "$PROG")" || _ver=""
+	printf 'name=xray\npath=%s\nversion=%s\n' "$PROG" "$_ver" > "$PWPLUS_RUN/core.info" 2>/dev/null || true
+	log_step "Core: Xray ${_ver:-?} ($PROG)"
+	_gp="$(global_preproxy)" && log_step "Pre-proxy: $(uci -q get "passwall-plus.$_gp.name" 2>/dev/null || echo "$_gp")"
+	[ "$(cfg_bool fragment 0)" = "1" ] && log_step "Fragment: $(cfg fragment_packets tlshello), length $(cfg fragment_lengths '3-5,6-8,10-20'), delay $(cfg fragment_delays '10-20')"
+	[ "$(cfg_bool noise 0)" = "1" ] && log_step "Noise: on"
+	[ "$(cfg_bool mux 0)" = "1" ] && log_step "Mux: concurrency $(cfg mux_concurrency 8)"
 
 	# A server speaking a protocol Xray does not know needs a second program
 	# offering it as a local SOCKS port. It has to be running before the
@@ -81,7 +137,9 @@ start_service() {
 	# keeps it alive on the same terms.
 	if "$BRIDGE" needed 2>/dev/null; then
 		if BRIDGE_CMD="$("$BRIDGE" command 2>/dev/null)"; then
-			log "bridging $(sed -n 's/.*"type"[ \t]*:[ \t]*"\([^"]*\)".*/\1/p' "$PWPLUS_ETC/bridge.json" 2>/dev/null | head -1) through $BRIDGE_CMD"
+			log_step "Bridge: $(sed -n 's/.*"type"[ \t]*:[ \t]*"\([^"]*\)".*/\1/p' "$PWPLUS_ETC/bridge.json" 2>/dev/null | head -1) through $BRIDGE_CMD"
+			_bbin="${BRIDGE_CMD%% *}"
+			printf 'bridge=%s\nbridge_version=%s\n' "$_bbin" "$(core_version "$_bbin")" >> "$PWPLUS_RUN/core.info" 2>/dev/null || true
 			procd_open_instance bridge
 			# shellcheck disable=SC2086
 			procd_set_param command $BRIDGE_CMD
@@ -191,8 +249,9 @@ service_started() {
 	# since the tunnel came up rather than counting the core's start-up twice.
 	"$STATS" sample >/dev/null 2>&1 || true
 
+	log_step "Xray[$tproxy_port] transparent proxy, DNS[$(cfg dns_port 1053)], firewall: $("$RULES" status 2>/dev/null | sed -n 's/^backend:[ 	]*//p' | head -1)"
 	say_status ready
-	log "tunnel up"
+	log "Running complete!"
 	return 0
 }
 
@@ -205,7 +264,8 @@ stop_service() {
 
 	"$DNS" down >/dev/null 2>&1 || true
 	"$RULES" down >/dev/null 2>&1 || true
-	rm -f "$PWPLUS_CONFIG_JSON" "$STARTED_FLAG"
+	rm -f "$PWPLUS_CONFIG_JSON" "$STARTED_FLAG" "$PWPLUS_RUN/core.info"
+	log "Clearing and closing related programs complete."
 	return 0
 }
 

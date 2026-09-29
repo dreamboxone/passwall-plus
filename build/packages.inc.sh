@@ -1,16 +1,16 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
 # packages.inc.sh - what goes into a package, shared by the .apk and .ipk
 # builders so the two formats can never drift apart.
 
-VERSION=1.0.9
+VERSION=1.1.0
 RELEASE=1
 PKGVER="$VERSION-r$RELEASE"
-LICENSE="GPL-3.0-only"
+LICENSE="AGPL-3.0-or-later"
 URL="https://github.com/dreamboxone/passwall-plus"
 MAINTAINER="routekernel <https://t.me/routekernel1>"
 
@@ -46,7 +46,7 @@ LUCI_DESC="Web interface for Passwall+: connect, servers and subscriptions, traf
 CRON_LIST='*/15 * * * * /usr/libexec/pwplus-refresh >/dev/null 2>&1'
 CRON_STATS='*/5 * * * * /usr/libexec/pwplus-stats sample >/dev/null 2>&1'
 
-PWPLUS_SCRIPTS="pwplus-nodes pwplus-probe pwplus-connect pwplus-refresh pwplus-parse pwplus-mkconfig pwplus-rules pwplus-dns pwplus-stats pwplus-test pwplus-geo pwplus-cores pwplus-deps pwplus-bridge"
+PWPLUS_SCRIPTS="pwplus-nodes pwplus-probe pwplus-connect pwplus-refresh pwplus-parse pwplus-mkconfig pwplus-rules pwplus-dns pwplus-stats pwplus-test pwplus-geo pwplus-cores pwplus-deps pwplus-bridge pwplus-router"
 
 # stage_pwplus <staging-root> <source-root> <xray-binary>
 stage_pwplus() {
@@ -95,6 +95,29 @@ mkdir -p /etc/passwall-plus /etc/passwall-plus/geo /var/run/passwall-plus
 # went on sitting on the front page after the release that stopped
 # saying it. Nothing here is worth carrying across an install.
 rm -f /var/run/passwall-plus/message
+# The rebind exceptions that ship on the Traffic Rules page. A configuration
+# kept from an older version has no such list; it gets one once, and a list
+# the reader has since trimmed is never filled back in.
+if [ -z "\$(uci -q get passwall-plus.config.rebind_seeded)" ]; then
+	for d in banksepah.ir cbi.ir ebanksepah.ir esata.ir gov.ir medu.ir qmb.ir tamin.ir meedc.net ntp.faraborddi.com; do
+		uci -q add_list passwall-plus.config.rebind_domain="\$d"
+	done
+	uci -q set passwall-plus.config.rebind_seeded='1'
+	uci -q commit passwall-plus
+fi
+/usr/libexec/pwplus-router rebind >/dev/null 2>&1 || true
+# The DNS tab replaced the one Iranian resolver of earlier versions with
+# PassWall2's Direct DNS. A resolver chosen before is carried across as the
+# Direct DNS, so nothing the reader set is lost on the way.
+if [ -n "\$(uci -q get passwall-plus.config.ir_dns)" ] && [ -z "\$(uci -q get passwall-plus.config.direct_dns)" ]; then
+	uci -q set passwall-plus.config.direct_dns_protocol='udp'
+	uci -q set passwall-plus.config.direct_dns="\$(uci -q get passwall-plus.config.ir_dns)"
+fi
+uci -q delete passwall-plus.config.ir_dns
+# The main switch now decides what happens after a reboot, as it does in
+# PassWall2, so the separate setting for it is gone.
+uci -q delete passwall-plus.config.autostart
+uci -q commit passwall-plus
 # one set of crontab entries, however often this package is reinstalled
 touch /etc/crontabs/root
 sed -i '\|/usr/libexec/pwplus-|d' /etc/crontabs/root
@@ -116,6 +139,8 @@ bounded 15 /etc/init.d/rpcd reload >/dev/null 2>&1 || true
 if ! ubus list 2>/dev/null | grep -q '^luci.passwall-plus\$'; then
 	bounded 20 /etc/init.d/rpcd restart >/dev/null 2>&1 || true
 fi
+# Always in the boot sequence; the main switch decides whether it runs.
+bounded 15 /etc/init.d/passwall-plus enable >/dev/null 2>&1 || true
 exit 0
 EOF
 
@@ -144,7 +169,7 @@ stage_luci() {
 	install -d "$i/www/luci-static/resources/view/passwall-plus" \
 	           "$i/www/luci-static/resources/passwall-plus" \
 	           "$i/usr/share/luci/menu.d" "$i/usr/share/rpcd/acl.d"
-	for v in overview nodes settings log; do
+	for v in settings nodes subscribe other update traffic geoview acl log; do
 		install -m 0644 "$l/www/luci-static/resources/view/passwall-plus/$v.js" \
 			"$i/www/luci-static/resources/view/passwall-plus/$v.js"
 	done
@@ -152,6 +177,22 @@ stage_luci() {
 	# three blank pages - it ships beside them, not as an extra.
 	install -m 0644 "$l/www/luci-static/resources/passwall-plus/i18n.js" \
 		"$i/www/luci-static/resources/passwall-plus/i18n.js"
+	# The frame every page is drawn in, its stylesheet, and the Persian
+	# typeface it uses. Required by every view, like the strings above.
+	install -m 0644 "$l/www/luci-static/resources/passwall-plus/ui.js" \
+		"$i/www/luci-static/resources/passwall-plus/ui.js"
+	install -m 0644 "$l/www/luci-static/resources/passwall-plus/status.js" \
+		"$i/www/luci-static/resources/passwall-plus/status.js"
+	install -m 0644 "$l/www/luci-static/resources/passwall-plus/theme.css" \
+		"$i/www/luci-static/resources/passwall-plus/theme.css"
+	# The logo drawn light, for the dark banner every page opens with.
+	install -m 0644 "$l/www/luci-static/resources/passwall-plus/logo-light.png" \
+		"$i/www/luci-static/resources/passwall-plus/logo-light.png"
+	install -d "$i/www/luci-static/resources/passwall-plus/fonts"
+	install -m 0644 "$l/www/luci-static/resources/passwall-plus/fonts/Vazirmatn.woff2" \
+		"$i/www/luci-static/resources/passwall-plus/fonts/Vazirmatn.woff2"
+	install -m 0644 "$l/www/luci-static/resources/passwall-plus/fonts/OFL.txt" \
+		"$i/www/luci-static/resources/passwall-plus/fonts/OFL.txt"
 	# The artwork on the status page. Optional on purpose - it is the one file
 	# in this package that is not code, the page falls back to the name
 	# without it, and a build should not fail for want of a picture.

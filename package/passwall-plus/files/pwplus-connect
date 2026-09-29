@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
@@ -33,8 +33,40 @@ if ! pwplus_lock; then
 	exit 0
 fi
 
-trap 'say_status failed; pwplus_unlock' INT TERM
-trap pwplus_unlock EXIT
+# Measuring reaches every node directly, so the router's own traffic is taken
+# out of the tunnel while it happens - see `pwplus-rules local`. Whatever way
+# this ends, it goes back.
+PAUSED=0
+pause_local() {
+	if [ "$PAUSED" = "0" ] && [ "$(cfg_bool localhost_proxy 0)" = "1" ]; then
+		"$RULES" local pause >/dev/null 2>&1 || true
+		PAUSED=1
+	fi
+	return 0
+}
+on_exit() {
+	[ "$PAUSED" = "1" ] && "$RULES" local resume >/dev/null 2>&1
+	pwplus_unlock
+}
+trap 'say_status failed; on_exit' INT TERM
+trap on_exit EXIT
+
+# PassWall2's Node setting. A node chosen in Basic Settings is the node: it is
+# used as it is, whatever mode this was called in, and nothing is measured.
+FIXED="$(cfg node '')"
+if [ -n "$FIXED" ]; then
+	say_status starting
+	if ! "$PROBE" use "$FIXED" >/dev/null 2>&1; then
+		say_status failed
+		say_message "The node chosen in Basic Settings cannot be read. Choose another there, or set it back to Auto."
+		exit 0
+	fi
+	if [ "$MODE" = "prepare" ]; then
+		say_status idle
+		exit 0
+	fi
+	MODE=fixed
+fi
 
 # Opening the page must not throw away a choice that is already good, and must
 # never disturb a tunnel that is already up.
@@ -58,6 +90,9 @@ if [ -s "$PWPLUS_BEST" ]; then
 fi
 
 case "$MODE" in
+	fixed)
+		fresh=1
+		;;
 	force)
 		# The healer calls this when the tunnel should be up and is not, which
 		# means the server we chose has stopped working. Reusing that choice
@@ -83,6 +118,8 @@ if [ "$fresh" = "1" ]; then
 else
 	clear_message
 	say_status selecting
+	pause_local
+	log "Choosing a node..."
 	# A failure here is not fatal on its own: the saved list is still on disk
 	# and is very often good enough to connect with.
 	"$NODES" update >/dev/null 2>&1 || true
@@ -101,7 +138,7 @@ else
 		if tunnel_running && [ "$(cfg_bool enabled 0)" = "1" ]; then
 			if ! "${PWPLUS_LIB:-/usr/libexec}/pwplus-test" current >/dev/null 2>&1; then
 				log "no node can carry a request and the one in use cannot either - taking the network back"
-				say_message "No node on the list can carry traffic, and neither can the one in use. The tunnel has been taken out of the way so that the network works without it. Add a node that works on the Nodes page, or check the subscription."
+				say_message "No node on the list can carry traffic, and neither can the one in use. The tunnel has been taken out of the way so that the network works without it. Add a node that works on the Node List page, or check the subscription."
 				"$RULES" down >/dev/null 2>&1 || true
 				"${PWPLUS_LIB:-/usr/libexec}/pwplus-dns" down >/dev/null 2>&1 || true
 			fi
@@ -119,15 +156,12 @@ fi
 say_status starting
 
 if bounded 90 /etc/init.d/passwall-plus restart >/dev/null 2>&1; then
-	# autostart was a setting nothing read: the boot symlink was never made,
-	# so the tunnel could not come back after a power cut whatever it said.
-	# Done here rather than inside the init script, which would be asking the
-	# init script to run itself and wait on a lock it is already holding.
-	if [ "$(cfg autostart 0)" = "1" ]; then
-		bounded 15 /etc/init.d/passwall-plus enable >/dev/null 2>&1 || true
-	else
-		bounded 15 /etc/init.d/passwall-plus disable >/dev/null 2>&1 || true
-	fi
+	# The main switch decides, as in PassWall2: the service is always in the
+	# boot sequence and starts only when the switch is on. So a switch left
+	# on brings the tunnel back after a power cut, and one turned off keeps
+	# it off. Done here rather than inside the init script, which would be
+	# asking the init script to run itself and wait on a lock it holds.
+	bounded 15 /etc/init.d/passwall-plus enable >/dev/null 2>&1 || true
 	# service_started sets this to `ready` when the rules actually went in.
 	# Anything else means the process is alive and the network is untouched,
 	# which must not be reported as connected.

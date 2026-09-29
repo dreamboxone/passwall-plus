@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
@@ -32,6 +32,9 @@ CONNECT="${PWPLUS_LIB:-/usr/libexec}/pwplus-connect"
 # disk stays, and the next quarter hour will try again.
 "$NODES" fetch >/dev/null 2>&1 || true
 
+# The runtime log lives in RAM; keep it to its last few hundred lines.
+log_trim
+
 # Is the web interface actually reachable?
 #
 # Everything the pages do goes through one rpcd object, and rpcd only
@@ -54,6 +57,14 @@ if command -v ubus >/dev/null 2>&1 && ! ubus list 2>/dev/null | grep -q "^luci.p
 fi
 
 [ "$(cfg enabled 0)" = "1" ] || exit 0
+
+# PassWall2's "Open and close Daemon": off, and the tunnel is left as it is -
+# nothing is repaired and no other node is chosen behind the reader's back.
+[ "$(cfg_bool start_daemon 1)" = "1" ] || exit 0
+
+# Stopped on a schedule, and meant to stay stopped until the scheduled start
+# or the main switch says otherwise.
+[ -f "$PWPLUS_RUN/schedule.stopped" ] && exit 0
 
 # Already carrying traffic - leave it alone. Reconnecting a working tunnel to
 # chase a server that measured faster would drop every connection in progress

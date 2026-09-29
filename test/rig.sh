@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
@@ -30,15 +30,23 @@ rig_setup() {
 	cat > "$RIG/bin/uci" <<'UCI'
 #!/bin/sh
 # Stand-in for uci. Understands exactly what these scripts ask of it.
+#
+# The main section is written as "key=value"; any other section - a node
+# added by hand, named as a pre-proxy - as "section.key=value". A get of a
+# section that has nothing exits 1, as the real one does: that is how the
+# scripts tell a node that is there from one that is not.
 _get=""; _key=""
 for a in "$@"; do
 	case "$a" in
 		get) _get=1 ;;
 		passwall-plus.config.*) _key="${a#passwall-plus.config.}" ;;
+		passwall-plus.*.*) _key="${a#passwall-plus.}" ;;
 	esac
 done
 if [ -n "$_get" ] && [ -n "$_key" ]; then
-	sed -n "s/^$_key=//p" "${PWPLUS_TEST_UCI:-/dev/null}" 2>/dev/null | head -1
+	_v="$(awk -v k="$_key" 'index($0, k "=") == 1 { print substr($0, length(k) + 2); exit }' "${PWPLUS_TEST_UCI:-/dev/null}" 2>/dev/null)"
+	[ -n "$_v" ] || exit 1
+	printf '%s\n' "$_v"
 fi
 exit 0
 UCI

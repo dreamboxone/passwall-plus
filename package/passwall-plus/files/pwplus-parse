@@ -1,6 +1,6 @@
 #!/usr/bin/awk -f
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
@@ -257,16 +257,59 @@ function stream(net, sec, host, path, sni, fp, alpn, pbk, sid, spx, svc, hdr, mo
 
 # ------------------------------------------------------------------ output
 
+# PassWall2's keyword filter on node names, with its five modes: -v FMODE,
+# and the two lists from the environment, one keyword a line. A keyword
+# matches anywhere in the name, exactly as written.
+#   1 drop what matches the discard list
+#   2 keep only what matches the keep list
+#   3 drop what matches the discard list, unless it matches the keep list
+#   4 keep only what matches the keep list, unless it matches the discard list
+function fhit(label, arr, cnt,   i) {
+	for (i = 1; i <= cnt; i++)
+		if (arr[i] != "" && index(label, arr[i]) > 0) return 1
+	return 0
+}
+
+function flist(s, arr,   cnt, i, k, m) {
+	cnt = split(s, arr, "\n")
+	m = 0
+	for (i = 1; i <= cnt; i++) {
+		k = arr[i]
+		gsub(/\r/, "", k)
+		gsub(/^[ \t]+|[ \t]+$/, "", k)
+		if (k != "") arr[++m] = k
+	}
+	return m
+}
+
+function filtered(label) {
+	if (FMODE == "" || FMODE == "0") return 0
+	if (!fready) {
+		ndisc = flist(ENVIRON["PWPLUS_FDISCARD"], fdisc)
+		nkeep = flist(ENVIRON["PWPLUS_FKEEP"], fkeep)
+		fready = 1
+	}
+	if (FMODE == "1") return fhit(label, fdisc, ndisc)
+	if (FMODE == "2") return !fhit(label, fkeep, nkeep)
+	if (FMODE == "3") return fhit(label, fdisc, ndisc) && !fhit(label, fkeep, nkeep)
+	if (FMODE == "4") return !fhit(label, fkeep, nkeep) || fhit(label, fdisc, ndisc)
+	return 0
+}
+
 # The same server turns up in two subscriptions more often than not. Testing
 # it twice costs a slot in a batch that another server could have used.
 function emit(label, proto, payload,   key, tag) {
 	if (HOST == "" || PORT + 0 <= 0) return
+	if (label == "") label = HOST ":" PORT
+	if (filtered(label)) return
 	key = proto "|" HOST "|" PORT "|" payload
 	if (key in seen) return
 	seen[key] = 1
 	if (n >= LIMIT) return
+	# -v KEEPLINE=1: the list is being sifted rather than read, and what
+	# survives is the link itself, to be read with the rest later.
+	if (KEEPLINE) { print RAWLINE; n++; return }
 	tag = "n" n
-	if (label == "") label = HOST ":" PORT
 	printf "%s\t%s\t%s\t%s\t%d\t%s\n", tag, jesc(label), proto, HOST, PORT, payload
 	n++
 }
@@ -643,6 +686,95 @@ function jdrop(s, key,   i, out, ke, k, e, val, first, c) {
 		if (substr(s, i, 1) == ",") i++
 	}
 	return out "}"
+}
+
+# The same object with one member set, replacing it if it was there.
+function jset(s, key, val,   o) {
+	o = jdrop(s, key)
+	if (o == "{}") return "{\"" key "\":" val "}"
+	return substr(o, 1, length(o) - 1) ",\"" key "\":" val "}"
+}
+
+# An array with one more element on the end.
+function jappend(a, item) {
+	a = jtrim(a)
+	if (a == "" || a == "[]" || substr(a, 1, 1) != "[") return "[" item "]"
+	return substr(a, 1, length(a) - 1) "," item "]"
+}
+
+# ------------------------------------------------------------- decorating
+#
+# What the Xray tab adds to an outbound, the way PassWall2 adds it:
+#
+#   dialerProxy  the outbound dials out through another one - the pre-proxy
+#   finalmask    fragment on the TCP side, noise on the UDP side
+#   mux          several connections carried in one
+#
+# Fragment and noise go only on the hop that actually meets the network. An
+# outbound that dials through a pre-proxy is carried inside that pre-proxy's
+# own connection, and fragmenting a hello nobody on the wire can see would be
+# work for nothing - so the mask goes on the pre-proxy instead, which is
+# decorated as a first hop in its own right.
+#
+# The transports each mask applies to are PassWall2's: fragment for raw, ws,
+# httpupgrade, grpc and xhttp; noise for mKCP and for xhttp over HTTP/3.
+#
+# Mux is left off where it cannot work: a VLESS flow (Vision does its own
+# thing with UDP and refuses Mux), xhttp (which has its own), WireGuard, and
+# the bridge - a loopback SOCKS port in front of a core that is not Xray.
+function decorate(p, hp,   proto, ss, sock, net, fm, tcp, udp, first, d) {
+	if (substr(jtrim(p), 1, 1) != "{") return p
+	proto = tolower(jstr(p, "protocol"))
+	if (proto == "socks" && p ~ /"address":"127\.0\.0\.1"/) return p
+
+	ss = jraw(p, "streamSettings")
+	if (ss == "") ss = "{}"
+	sock = jraw(ss, "sockopt")
+	if (sock == "") sock = "{}"
+
+	d = (LAND_DIALER != "") ? LAND_DIALER : ENVIRON["DIALER"]
+	if (d != "" && jraw(sock, "dialerProxy") == "" && !(ENVIRON["SKIPHP"] != "" && hp == ENVIRON["SKIPHP"]))
+		sock = jset(sock, "dialerProxy", "\"" d "\"")
+	first = (jraw(sock, "dialerProxy") == "")
+	# How the server's own name is resolved: through the core's DNS, which
+	# asks the direct resolver, rather than through the router's - which
+	# while connected is this tunnel asking itself. Only on the first hop: a
+	# node reached through a pre-proxy has its name resolved at the far end.
+	if (first && ENVIRON["DOMSTRAT"] != "" && jraw(sock, "domainStrategy") == "")
+		sock = jset(sock, "domainStrategy", "\"" ENVIRON["DOMSTRAT"] "\"")
+	# The core's own connections carry a mark the firewall lets past, so
+	# that the router's traffic can be sent into the tunnel without the
+	# tunnel's own traffic following it in.
+	if (ENVIRON["SOMARK"] != "" && jraw(sock, "mark") == "")
+		sock = jset(sock, "mark", ENVIRON["SOMARK"] + 0)
+
+	net = tolower(jstr(ss, "network"))
+	if (net == "") net = "tcp"
+	# Twice over is once: a mask already on the outbound is not added again.
+	if (first && proto != "wireguard") {
+		tcp = ""; udp = ""
+		if (ENVIRON["FRAG"] != "" && net ~ /^(tcp|raw|ws|httpupgrade|grpc|xhttp|splithttp)$/ &&
+		    jraw(ss, "finalmask") !~ /"type":[ \t]*"fragment"/)
+			tcp = ENVIRON["FRAG"]
+		if (ENVIRON["NOISE"] != "" && (net ~ /^(kcp|mkcp)$/ || (net ~ /^(xhttp|splithttp)$/ && ss ~ /"alpn":[ \t]*\[[^]]*"h3"/)) &&
+		    jraw(ss, "finalmask") !~ /"type":[ \t]*"noise"/)
+			udp = ENVIRON["NOISE"]
+		if (tcp != "" || udp != "") {
+			fm = jraw(ss, "finalmask")
+			if (fm == "") fm = "{}"
+			if (tcp != "") fm = jset(fm, "tcp", jappend(jraw(fm, "tcp"), tcp))
+			if (udp != "") fm = jset(fm, "udp", jappend(jraw(fm, "udp"), udp))
+			ss = jset(ss, "finalmask", fm)
+		}
+	}
+	if (sock != "{}") ss = jset(ss, "sockopt", sock)
+	if (ss != "{}") p = jset(p, "streamSettings", ss)
+
+	if (ENVIRON["MUX"] != "" && jraw(p, "mux") == "" &&
+	    proto ~ /^(vmess|vless|trojan|shadowsocks|socks|http)$/ &&
+	    p !~ /"flow":[ \t]*"[^"]+"/ && net !~ /^(xhttp|splithttp)$/)
+		p = jset(p, "mux", ENVIRON["MUX"])
+	return p
 }
 
 # --------------------------------------------------------------- builders
@@ -1066,13 +1198,62 @@ BEGIN {
 # that may not be installed.
 DECODE { blob = blob $0; next }
 
+# -v DECORATE=1: the input is outbounds already made - records, or bare
+# outbound objects one per line - and each is written back with the Xray tab
+# applied. The same JSON reader as everything above, rather than a second
+# one in shell that would disagree with it about a brace inside a string.
+DECORATE {
+	line = $0
+	gsub(/\r/, "", line)
+	if (line == "") next
+	if (split(line, rec, "\t") >= 6) {
+		p = line
+		for (i = 1; i <= 5; i++) sub(/^[^\t]*\t/, "", p)
+		printf "%s\t%s\t%s\t%s\t%s\t%s\n", rec[1], rec[2], rec[3], rec[4], rec[5], \
+			decorate(p, rec[4] "|" rec[5])
+	} else {
+		print decorate(line, "")
+	}
+	next
+}
+
+# -v LANDING=1: PassWall2's landing node, for every node of a subscription.
+# Each record on stdin is one of its nodes, and comes back as the landing
+# node - $LAND, a record - reached through that node: the first hop's address
+# is kept, because that is the hop the router actually reaches, and the name
+# says both. The node itself is written to $LAND_SIDE, under the name the
+# landing node dials ($LAND_ID and a number), for whatever builds the
+# outbounds to find. A node Xray cannot speak cannot be dialled through, and
+# is left out rather than let traffic leave from the wrong place.
+LANDING {
+	line = $0
+	gsub(/\r/, "", line)
+	if (line == "" || split(line, rec, "\t") < 6) next
+	if (rec[3] ~ /^(hysteria2|hysteria|tuic)$/) next
+	if (!lready) {
+		split(ENVIRON["LAND"], land, "\t")
+		lp = ENVIRON["LAND"]
+		for (i = 1; i <= 5; i++) sub(/^[^\t]*\t/, "", lp)
+		lready = 1
+	}
+	p = line
+	for (i = 1; i <= 5; i++) sub(/^[^\t]*\t/, "", p)
+	lid = ENVIRON["LAND_ID"] (++lcount)
+	print lid "\t" p >> ENVIRON["LAND_SIDE"]
+	LAND_DIALER = "chain-" lid
+	printf "%s\t%s → %s\t%s\t%s\t%s\t%s\n", rec[1], rec[2], land[2], land[3], rec[4], rec[5], \
+		decorate(lp, "")
+	LAND_DIALER = ""
+	next
+}
+
 # One link per line, unless the file turns out to be a configuration.
 #
 # Which it is, is decided on the first line with anything on it: a brace or a
 # bracket there means the whole file has to be read before any of it means
 # anything, and anything else means a list, which is the common case and is
 # handled a line at a time so that a long one is never held in memory whole.
-!DECODE {
+!DECODE && !LANDING {
 	line = $0
 	gsub(/\r/, "", line)
 	if (!probed) {
@@ -1123,6 +1304,7 @@ function do_line(line) {
 	if (n >= LIMIT) return
 
 	HOST = ""; PORT = 0
+	RAWLINE = line
 
 	if      (index(line, "vmess://")     == 1) do_vmess(substr(line, 9))
 	else if (index(line, "vless://")     == 1) do_vless(substr(line, 9))

@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
@@ -68,9 +68,9 @@ row_for() {
 	# A section of /etc/config/passwall-plus, parsed here and now. The link may
 	# have been typed thirty seconds ago and belong to no list yet.
 	command -v uci >/dev/null 2>&1 || return 1
-	_link="$(uci -q get "passwall-plus.$_id.link" 2>/dev/null)" || _link=""
-	[ -n "$_link" ] || return 1
-	_r="$(printf '%s\n' "$_link" | LC_ALL=C awk -f "$PARSE" 2>/dev/null | head -1)"
+	# With its own chain when it has one: the test is of the node as the
+	# tunnel would use it.
+	_r="$(node_records "$_id" 1 2>/dev/null | head -1)"
 	[ -n "$_r" ] || return 1
 	printf '%s\n' "$_r"
 	return 0
@@ -152,8 +152,24 @@ url_ms() {
 	done
 
 	_cfg="$PWPLUS_RUN/one-test.json"
-	printf '{"log":{"loglevel":"none"},"inbounds":[{"tag":"in","listen":"127.0.0.1","port":%d,"protocol":"socks","settings":{"udp":false}}],"outbounds":[%s],"routing":{"rules":[{"type":"field","inboundTag":["in"],"outboundTag":"out"}]}}' \
-		"$PORT" "$(printf '%s' "$_payload" | sed 's/^{/{"tag":"out",/')" > "$_cfg"
+	# The node as the tunnel would run it: the Xray tab applied, dialling
+	# through the pre-proxy unless it is the pre-proxy, and its name resolved
+	# through the direct resolver rather than through the tunnel - the tunnel
+	# being, very often, the thing whose node is in question.
+	_gp="$(global_preproxy)" || _gp=""
+	_ghp=""
+	if [ -n "$_gp" ]; then
+		_ghp="$(section_links "$_gp" | LC_ALL=C awk -v LIMIT=1 -f "$PARSE" 2>/dev/null |
+			head -1 | cut -f4,5 | tr '\t' '|')"
+	fi
+	_out="$(printf 'x\tx\tx\t%s\t%s\t%s\n' "${2:-}" "${3:-}" "$_payload" |
+		DOMSTRAT="$(node_domain_strategy)" decorate "${_gp:+chain-$_gp}" "$_ghp" | cut -f6-)"
+	set -- $(direct_dns)
+	if [ "$1" = "tcp" ]; then _dns="{\"address\":\"tcp://$2:$3\"}"; else _dns="{\"address\":\"$2\",\"port\":$3}"; fi
+	printf '{"log":{"loglevel":"none"},"inbounds":[{"tag":"in","listen":"127.0.0.1","port":%d,"protocol":"socks","settings":{"udp":false}}],"outbounds":[%s%s,{"tag":"direct","protocol":"freedom","streamSettings":{"sockopt":{"mark":255}}}],"dns":{"tag":"dns-module","servers":[%s],"queryStrategy":"%s"},"routing":{"rules":[{"type":"field","inboundTag":["dns-module"],"outboundTag":"direct"},{"type":"field","inboundTag":["in"],"outboundTag":"out"}]}}' \
+		"$PORT" "$(printf '%s' "$_out" | sed 's/^{/{"tag":"out",/')" \
+		"$(chain_outbounds "$_out" | while read -r _co; do [ -n "$_co" ] && printf ',%s' "$_co"; done)" \
+		"$_dns" "$(node_domain_strategy)" > "$_cfg"
 
 	if ! _x="$(find_xray "$_cfg")"; then
 		rm -f "$_cfg"
@@ -202,7 +218,7 @@ do_url() {
 		hysteria2|hysteria|tuic) echo -2 > "$_out"; return 0 ;;
 	esac
 
-	url_ms "$_payload2" > "$_out" 2>/dev/null || true
+	url_ms "$_payload2" "$4" "$5" > "$_out" 2>/dev/null || true
 	return 0
 }
 
@@ -224,7 +240,9 @@ cmd_current() {
 		echo 0
 		return 1
 	fi
-	url_ms "$(cat "$PWPLUS_BEST")"
+	url_ms "$(cat "$PWPLUS_BEST")" \
+		"$(sed -n 's/^host=//p' "$PWPLUS_BEST_META" 2>/dev/null | tail -1)" \
+		"$(sed -n 's/^port=//p' "$PWPLUS_BEST_META" 2>/dev/null | tail -1)"
 	return $?
 }
 
@@ -265,8 +283,19 @@ cmd_run() {
 
 	case "$_kind" in
 		ping) do_ping "$_id" "$_host" ;;
-		tcp)  do_tcp  "$_id" "$_host" "$_port" ;;
-		url)  do_url  "$_id" "$_proto" "$_payload" ;;
+		tcp)
+			# A handshake from the router, which with Localhost Proxy on
+			# would go through the tunnel and measure the tunnel instead.
+			_lp="$(cfg_bool localhost_proxy 0)"
+			if [ "$_lp" = "1" ]; then
+				"$PWPLUS_LIB/pwplus-rules" local pause >/dev/null 2>&1 || true
+			fi
+			do_tcp "$_id" "$_host" "$_port"
+			if [ "$_lp" = "1" ]; then
+				"$PWPLUS_LIB/pwplus-rules" local resume >/dev/null 2>&1 || true
+			fi
+			;;
+		url)  do_url  "$_id" "$_proto" "$_payload" "$_host" "$_port" ;;
 		*) echo "usage: $0 ping|tcp|url <id>" >&2; return 1 ;;
 	esac
 	return 0

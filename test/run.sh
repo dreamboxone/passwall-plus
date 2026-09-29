@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# SPDX-License-Identifier: GPL-3.0-only
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
 # Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
 #
@@ -17,7 +17,7 @@
 cd "$(dirname "$0")/.."
 
 rc=0
-for t in test/test-package.sh test/test-stats.sh test/test-rules.sh test/test-config.sh test/test-probe.sh; do
+for t in test/test-package.sh test/test-stats.sh test/test-rules.sh test/test-acl.sh test/test-config.sh test/test-probe.sh; do
 	echo
 	echo "######## $t"
 	sh "$t" || rc=1
