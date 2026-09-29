@@ -242,12 +242,14 @@ jobs:
           for base in verifyl/apk verifyl/ipk/data; do
             test -s "$base/usr/share/luci/menu.d/luci-app-passwall-plus.json"
             test -s "$base/usr/share/rpcd/acl.d/luci-app-passwall-plus.json"
-            for v in overview nodes settings; do
+            for v in settings nodes subscribe other update traffic geoview acl log; do
               test -s "$base/www/luci-static/resources/view/passwall-plus/$v.js"
             done
           done
           # every menu entry has to name a view the package actually ships
-          for view in $(grep -o '"path": *"[^"]*"' verifyl/apk/usr/share/luci/menu.d/luci-app-passwall-plus.json | cut -d'"' -f4); do
+          # (an alias - the old address of a page that moved - names a menu
+          # entry, not a view)
+          for view in $(grep -o '"path": *"[^"]*"' verifyl/apk/usr/share/luci/menu.d/luci-app-passwall-plus.json | cut -d'"' -f4 | grep -v '^admin/'); do
             test -s "verifyl/apk/www/luci-static/resources/view/$view.js"
             echo "== menu entry $view.js is in the package"
           done
