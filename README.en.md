@@ -1,6 +1,6 @@
 # Passwall+ — a router-wide tunnel for OpenWrt
 
-**Version 1.1.0** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
+**Version 1.2.0** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
 🇮🇷 **[راهنمای فارسی: README.md](README.md)**
 
 Install it on the router, turn on the **Main switch**, and from that moment

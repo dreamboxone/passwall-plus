@@ -20,7 +20,7 @@ var _ = i18n.tr;
 
 /* Put on the stylesheet's and the logo's addresses, so a browser holding the
    previous release's copies fetches these. Kept in step with PKG_VERSION. */
-var BUILD = '1.1.0-5';
+var BUILD = '1.2.0-1';
 
 var callAction = rpc.declare({ object: 'luci.passwall-plus', method: 'action',
                                params: [ 'name', 'arg' ], expect: { '': {} } });

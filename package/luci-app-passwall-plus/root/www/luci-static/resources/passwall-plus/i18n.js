@@ -669,6 +669,7 @@ var FA = {
 		'در هر خط یکی: یک آدرس، یک محدوده مثل 10.0.0.0/8، یا geoip: و کد یک کشور از داده‌های مسیریابی. خطی که با # شروع شود توضیح است.',
 	'Rule Manage': 'مدیریت قوانین',
 	'FakeDNS Main switch': 'کلید اصلی FakeDNS',
+	'Default Preproxy': 'پیش‌پراکسی پیش‌فرض',
 	'Geo View': 'نمای Geo',
 	'Geoview App Path': 'مسیر برنامه Geoview',
 	'Only the Geo View page needs it. Empty means this program’s own copy in the folder above.':

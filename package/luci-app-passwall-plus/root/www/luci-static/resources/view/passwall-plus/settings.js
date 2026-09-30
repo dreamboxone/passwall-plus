@@ -243,7 +243,7 @@ return view.extend({
 		o.depends('shunt_fakedns', '1');
 		o.default = '0';
 
-		o = s.taboption('shunt', form.ListValue, 'default_preproxy', _('Default') + ' ' + _('Preproxy'),
+		o = s.taboption('shunt', form.ListValue, 'default_preproxy', _('Default Preproxy'),
 			_('When the Default row goes to a hand-added node, it is reached through this node first.'));
 		o.value('', _('Close (Not use)'));
 		nodeChoices(o);
