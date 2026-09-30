@@ -21,7 +21,7 @@ var _ = i18n.tr;
 
 /* Put on the stylesheet's and the logo's addresses, so a browser holding the
    previous release's copies fetches these. Kept in step with PKG_VERSION. */
-var BUILD = '1.2.1-1';
+var BUILD = '1.2.1-2';
 
 var callAction = rpc.declare({ object: 'luci.passwall-plus', method: 'action',
                                params: [ 'name', 'arg' ], expect: { '': {} } });
@@ -57,7 +57,9 @@ var ICONS = {
 	layers:   '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5M3 16.5l9 5 9-5"/>',
 	clock:    '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
 	list:     '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2"/><circle cx="4.5" cy="12" r="1.2"/><circle cx="4.5" cy="18" r="1.2"/>',
-	rss:      '<path d="M5 11a8 8 0 0 1 8 8M5 5a14 14 0 0 1 14 14"/><circle cx="6" cy="18" r="1.5"/>'
+	rss:      '<path d="M5 11a8 8 0 0 1 8 8M5 5a14 14 0 0 1 14 14"/><circle cx="6" cy="18" r="1.5"/>',
+	'chevron-down': '<path d="M6 9l6 6 6-6"/>',
+	'chevron-up':   '<path d="M6 15l6-6 6 6"/>'
 };
 
 function icon(name, cls) {

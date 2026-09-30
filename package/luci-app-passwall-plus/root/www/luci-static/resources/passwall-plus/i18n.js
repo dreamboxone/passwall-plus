@@ -242,6 +242,10 @@ var FA = {
 		'جمع در جریان هر چند دقیقه روی حافظه نوشته شود. هر چه هنوز نوشته نشده باشد با قطع برق روتر از دست می‌رود. پیش‌فرض پنج است و با فاصله خواندن شمارنده‌ها یکی است، پس حداکثر یک نوبت خوانده‌شده در خطر است.',
 
 	'Does this router have what it needs?': 'آیا این روتر آنچه لازم دارد را دارد؟',
+	'Router requirements': 'پیش‌نیازهای روتر',
+	'Everything is ready': 'همه چیز آماده است',
+	'Details': 'جزئیات',
+	'Hide details': 'بستن جزئیات',
 	'These are questions put to the running system, not a list of package names. A package can be installed and the thing it provides still not work.':
 		'این‌ها سوال‌هایی است که از سیستم در حال اجرا پرسیده شده، نه یک لیست از اسم پکیج‌ها. یک پکیج می‌تواند نصب باشد و چیزی که فراهم می‌کند باز هم کار نکند.',
 	'Transparent proxy': 'پروکسی شفاف',

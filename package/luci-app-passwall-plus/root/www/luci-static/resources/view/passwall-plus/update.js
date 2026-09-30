@@ -101,12 +101,36 @@ function no()  { return chip(_('no'), 'error'); }
 
 /* What the router can actually do - moved here from the settings, because
    what it answers is a list of things to install. */
+var depsOpen = null;
+
 function renderDeps(deps) {
 	deps = deps || {};
 	var can = deps.can || {};
-	var dbox = document.getElementById('pwplus-deps');
-	if (!dbox) return;
-	while (dbox.firstChild) dbox.removeChild(dbox.firstChild);
+	var box = document.getElementById('pwplus-deps');
+	if (!box) return;
+	while (box.firstChild) box.removeChild(box.firstChild);
+
+	/* One line when everything is there; the details open by themselves
+	   when something is missing, and otherwise only when asked for. */
+	var missing = deps.missing || [];
+	var fw = deps.backend == 'nft' ? 'nftables' : deps.backend == 'ipt' ? 'iptables' : '';
+	var lacks = (can.tproxy ? 0 : 1) + (can.policy_routing ? 0 : 1) + (can.https ? 0 : 1) +
+	            (fw ? 0 : 1) + (missing.length ? 1 : 0);
+	var open = depsOpen != null ? depsOpen : lacks > 0;
+	box.appendChild(E('div', { 'style': 'display:flex;gap:10px;align-items:center;flex-wrap:wrap' }, [
+		lacks ? chip(_('%d missing').format(lacks), 'error') : chip(_('Everything is ready'), 'ok'),
+		fw ? E('span', { 'style': 'font-size:12.5px;color:var(--muted)' }, _('Firewall in use') + ': ' + fw) : '',
+		E('span', { 'style': 'flex:1' }),
+		pui.btn(open ? _('Hide details') : _('Details'), 'soft-blue mk-small', function() {
+			depsOpen = !open;
+			renderDeps(deps);
+		}, open ? 'chevron-up' : 'chevron-down')
+	]));
+	if (!open) return;
+	var dbox = E('div', { 'style': 'margin-top:8px' });
+	box.appendChild(dbox);
+	dbox.appendChild(E('p', { 'style': 'font-size:12px;color:var(--muted);margin:0 0 4px' },
+		_('These are questions put to the running system, not a list of package names. A package can be installed and the thing it provides still not work.')));
 	dbox.appendChild(row(_('Transparent proxy'),
 		[ can.tproxy ? yes() : no(),
 		  E('span', { 'style': 'color:var(--muted)' },
@@ -125,7 +149,6 @@ function renderDeps(deps) {
 	dbox.appendChild(row(_('Firewall in use'),
 		[ E('span', {}, deps.backend == 'nft' ? 'nftables'
 		              : deps.backend == 'ipt' ? 'iptables' : _('none found')) ]));
-	var missing = deps.missing || [];
 	dbox.appendChild(row(_('Packages'),
 		missing.length
 			? [ chip(_('%d missing').format(missing.length), 'warn'),
@@ -303,11 +326,8 @@ return view.extend({
 				E('div', { 'id': 'pwp-job', 'class': 'mk-alert', 'style': 'display:none' }, ''),
 				pui.card(_('App Update'), 'download', '#1e88e5', E('div', { 'id': 'pwp-app' }, [ waiting() ])),
 				pui.card(_('Cores'), 'cpu', '#8b5cf6', E('div', { 'id': 'pwp-cores' }, [ waiting() ])),
-				pui.card(_('Does this router have what it needs?'), 'shield', '#f59e0b', E('div', {}, [
-					E('p', { 'style': 'font-size:13px;color:var(--muted);margin:0 0 6px' },
-						_('These are questions put to the running system, not a list of package names. A package can be installed and the thing it provides still not work.')),
-					E('div', { 'id': 'pwplus-deps' }, [ waiting() ])
-				])),
+				pui.card(_('Router requirements'), 'shield', '#f59e0b',
+					E('div', { 'id': 'pwplus-deps' }, [ waiting() ])),
 				mapEl
 			];
 			/* Asked at once, and then every ten seconds while the page is open -
