@@ -5,8 +5,8 @@
  *
  * Rule Manage, PassWall2's page of that name: the routing data - where it
  * comes from, where it is kept, when it is updated, and going back to the
- * copy before - and the shunt rules, which traffic each rule is about. Where
- * each one goes is set in the Shunt Rule tab of Basic Settings.
+ * copy before. The shunt rules are in the Shunt Rule tab of Basic Settings,
+ * beside where each one goes.
  *
  * Under them, this program's own: Iranian traffic direct, the blocks, the
  * sites dnsmasq should stop refusing, and the names that never go through
@@ -96,43 +96,6 @@ var listening = false;
 
 function hostname(v) {
 	return /^[A-Za-z0-9_]([A-Za-z0-9_-]{0,62}\.)*[A-Za-z0-9_-]{1,63}\.?$/.test(v);
-}
-
-/* One entry a line, as Xray writes them, # starting a comment. The first line
-   that is not one is named in the answer. */
-function eachLine(value, ok) {
-	var lines = String(value || '').split(/\r?\n/);
-	for (var i = 0; i < lines.length; i++) {
-		var l = lines[i].trim();
-		if (!l || l.charAt(0) == '#') continue;
-		if (!ok(l)) return _('Not valid, please re-enter: %s').format(l);
-	}
-	return true;
-}
-
-function domainEntry(l) {
-	if (/\s/.test(l)) return false;
-	if (/^(regexp|keyword|geosite|ext|rule-set|rs):./.test(l)) return true;
-	return hostname(l.replace(/^(domain|full):/, '').replace(/^\./, ''));
-}
-
-function ipEntry(l) {
-	if (/^(geoip|ext|rule-set|rs):\S+$/.test(l)) return true;
-	if (/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(l)) return true;
-	return /^[0-9a-fA-F:]+:[0-9a-fA-F:]*(\/\d{1,3})?$/.test(l);
-}
-
-/* Where a rule goes, as the Shunt Rule tab says it: the words for a choice,
-   or the name of the hand-added node. */
-function whereText(v) {
-	switch (v || '') {
-	case '': return _('Close (Not use)');
-	case '_default': return _('Use default node');
-	case '_proxy': return _('The node the tunnel is using');
-	case '_direct': return _('Direct Connection');
-	case '_blackhole': return _('Blackhole (Block)');
-	}
-	return uci.get('passwall-plus', v, 'name') || v;
 }
 
 return view.extend({
@@ -239,95 +202,6 @@ return view.extend({
 					])
 				])
 			]);
-		};
-
-		/* ------------------------------------------------ shunt rules
-		   PassWall2's Rule Manage, field for field. */
-		s = m.section(form.GridSection, 'shunt_rules', _('Shunt Rule'),
-			_('Which traffic each rule is about. Where it goes — a node, direct, or blocked — is chosen in the Shunt Rule tab of Basic Settings. The rules steer the tunnel’s own traffic, in this order, ahead of the Iran split; a device with a node of its own on the Access Control page keeps it.'));
-		s.addremove = true;
-		s.anonymous = true;
-		s.sortable = true;
-
-		o = s.option(form.Value, 'remarks', _('Remarks'));
-		o.rmempty = false;
-		o.validate = function(section_id, value) {
-			value = String(value || '').trim();
-			if (!value) return _('Remark cannot be empty.');
-			var dup = uci.sections('passwall-plus', 'shunt_rules').some(function(x) {
-				return x['.name'] != section_id && String(x.remarks || '') == value;
-			});
-			return dup ? _('This remark already exists, please change a new remark.') : true;
-		};
-
-		var groups = {};
-		uci.sections('passwall-plus', 'shunt_rules').forEach(function(r) {
-			if (r.group) groups[r.group] = true;
-		});
-		o = s.option(form.Value, 'group', _('Shunt Rule Group'));
-		o.value('', _('default'));
-		Object.keys(groups).sort().forEach(function(g) { o.value(g); });
-		o.textvalue = function(section_id) {
-			return this.cfgvalue(section_id) || _('default');
-		};
-
-		o = s.option(form.DummyValue, '_where', _('Node'));
-		o.modalonly = false;
-		o.textvalue = function(section_id) {
-			return whereText(uci.get('passwall-plus', section_id, 'node'));
-		};
-
-		o = s.option(form.MultiValue, 'protocol', _('Protocol'));
-		o.modalonly = true;
-		o.value('http');
-		o.value('tls');
-		o.value('quic');
-		o.value('bittorrent');
-
-		o = s.option(form.MultiValue, 'inbound', _('Inbound Tag'),
-			_('None ticked is both.'));
-		o.modalonly = true;
-		o.value('tproxy', _('Transparent proxy'));
-		o.value('socks', 'Socks');
-
-		o = s.option(form.ListValue, 'network', _('Network'));
-		o.modalonly = true;
-		o.value('tcp,udp', 'TCP UDP');
-		o.value('tcp', 'TCP');
-		o.value('udp', 'UDP');
-
-		o = s.option(form.DynamicList, 'source', _('Source'),
-			_('A device’s address, a range such as 192.168.1.0/24, or geoip:private.'));
-		o.modalonly = true;
-		o.validate = function(section_id, value) {
-			if (!value || /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(value) || /^geoip:\S+$/.test(value)) return true;
-			return _('Not valid, please re-enter: %s').format(value);
-		};
-
-		o = s.option(form.Value, 'port', _('Port'),
-			_('Such as 443, 80,443 or 1000-2000.'));
-		o.modalonly = true;
-		o.validate = function(section_id, value) {
-			if (!value || /^[0-9]+([-:][0-9]+)?(,[0-9]+([-:][0-9]+)?)*$/.test(String(value).replace(/\s/g, ''))) return true;
-			return _('Not valid, please re-enter: %s').format(value);
-		};
-
-		o = s.option(form.TextValue, 'domain_list', _('Domain'),
-			_('One a line. domain:example.com is that name and everything under it; full: that name only; regexp: a regular expression; keyword: or a plain word anywhere in the name; geosite: a list from the routing data. A line starting with # is a comment.'));
-		o.modalonly = true;
-		o.rows = 8;
-		o.wrap = 'off';
-		o.validate = function(section_id, value) {
-			return eachLine(value, domainEntry);
-		};
-
-		o = s.option(form.TextValue, 'ip_list', 'IP',
-			_('One a line: an address, a range such as 10.0.0.0/8, or geoip: and a country code from the routing data. A line starting with # is a comment.'));
-		o.modalonly = true;
-		o.rows = 8;
-		o.wrap = 'off';
-		o.validate = function(section_id, value) {
-			return eachLine(value, ipEntry);
 		};
 
 		/* ------------------------------------------------------ Iran split */

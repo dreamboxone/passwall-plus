@@ -43,6 +43,34 @@ var IR_RESOLVERS = [
 	[ '185.55.225.25', 'Begzar' ]
 ];
 
+function hostname(v) {
+	return /^[A-Za-z0-9_]([A-Za-z0-9_-]{0,62}\.)*[A-Za-z0-9_-]{1,63}\.?$/.test(v);
+}
+
+/* One entry a line, as Xray writes them, # starting a comment. The first line
+   that is not one is named in the answer. */
+function eachLine(value, ok) {
+	var lines = String(value || '').split(/\r?\n/);
+	for (var i = 0; i < lines.length; i++) {
+		var l = lines[i].trim();
+		if (!l || l.charAt(0) == '#') continue;
+		if (!ok(l)) return _('Not valid, please re-enter: %s').format(l);
+	}
+	return true;
+}
+
+function domainEntry(l) {
+	if (/\s/.test(l)) return false;
+	if (/^(regexp|keyword|geosite|ext|rule-set|rs):./.test(l)) return true;
+	return hostname(l.replace(/^(domain|full):/, '').replace(/^\./, ''));
+}
+
+function ipEntry(l) {
+	if (/^(geoip|ext|rule-set|rs):\S+$/.test(l)) return true;
+	if (/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(l)) return true;
+	return /^[0-9a-fA-F:]+:[0-9a-fA-F:]*(\/\d{1,3})?$/.test(l);
+}
+
 return view.extend({
 	load: function() {
 		return Promise.all([
@@ -158,8 +186,8 @@ return view.extend({
 		o.default = 'en';
 
 		/* ---------------------------------------------------- shunt rule
-		   PassWall2's Shunt Rule tab: where each rule sends what it matches.
-		   The rules themselves are made on the Traffic Rules page. */
+		   PassWall2's Shunt Rule tab, with the rules themselves in it too:
+		   which traffic each rule is about, and where it goes. */
 		var rules = uci.sections('passwall-plus', 'shunt_rules');
 		var groups = {};
 		rules.forEach(function(r) {
@@ -199,36 +227,109 @@ return view.extend({
 		o.value('', _('default'));
 		Object.keys(groups).sort().forEach(function(g) { o.value(g); });
 
-		o = s.taboption('shunt', form.SectionValue, '_shunt', form.TableSection, 'shunt_rules');
+		/* The rules themselves, and where each goes, in one table: the row has
+		   the rule's name and where it sends what it matches; the edit window
+		   has which traffic that is. In this order, ahead of the Iran split. */
+		o = s.taboption('shunt', form.SectionValue, '_shunt', form.GridSection, 'shunt_rules');
 		var sr = o.subsection;
 		sr.anonymous = true;
-		sr.addremove = false;
+		sr.addremove = true;
+		sr.sortable = true;
 		sr.nodescriptions = true;
 		sr.filter = function(section_id) {
 			return String(uci.get('passwall-plus', section_id, 'group') || '').toLowerCase() == group;
 		};
 		/* The words only: LuCI puts them in a row of its own. */
 		sr.renderSectionPlaceholder = function() {
-			return E('em', {}, _('No shunt rules yet. They are made on the Rule Manage page.'));
+			return E('em', {}, _('No shunt rules yet. Add one with the button below.'));
 		};
 
-		so = sr.option(form.DummyValue, 'remarks', _('Rule'));
-		so.cfgvalue = function(section_id) {
-			return uci.get('passwall-plus', section_id, 'remarks') || section_id;
+		so = sr.option(form.Value, 'remarks', _('Rule'));
+		so.rmempty = false;
+		so.validate = function(section_id, value) {
+			value = String(value || '').trim();
+			if (!value) return _('Remark cannot be empty.');
+			var dup = uci.sections('passwall-plus', 'shunt_rules').some(function(x) {
+				return x['.name'] != section_id && String(x.remarks || '') == value;
+			});
+			return dup ? _('This remark already exists, please change a new remark.') : true;
 		};
 
 		so = sr.option(form.ListValue, 'node', _('Node'));
 		whereTo(so, true);
+		so.editable = true;
 
 		so = sr.option(form.Flag, 'fakedns', 'FakeDNS');
 		so.default = '0';
+		so.editable = true;
 
 		so = sr.option(form.ListValue, 'preproxy', _('Preproxy'));
 		so.value('', _('Close (Not use)'));
 		nodeChoices(so);
+		so.editable = true;
 		so.validate = function(section_id, value) {
 			var node = this.section.formvalue(section_id, 'node');
 			return value && value == node ? _('A node cannot be its own pre-proxy.') : true;
+		};
+
+		so = sr.option(form.Value, 'group', _('Shunt Rule Group'));
+		so.modalonly = true;
+		/* A new rule lands in the group on show, or the table would hide it. */
+		so.default = uci.get('passwall-plus', 'config', 'shunt_group') || '';
+		so.value('', _('default'));
+		Object.keys(groups).sort().forEach(function(g) { so.value(g); });
+
+		so = sr.option(form.MultiValue, 'protocol', _('Protocol'));
+		so.modalonly = true;
+		so.value('http');
+		so.value('tls');
+		so.value('quic');
+		so.value('bittorrent');
+
+		so = sr.option(form.MultiValue, 'inbound', _('Inbound Tag'),
+			_('None ticked is both.'));
+		so.modalonly = true;
+		so.value('tproxy', _('Transparent proxy'));
+		so.value('socks', 'Socks');
+
+		so = sr.option(form.ListValue, 'network', _('Network'));
+		so.modalonly = true;
+		so.value('tcp,udp', 'TCP UDP');
+		so.value('tcp', 'TCP');
+		so.value('udp', 'UDP');
+
+		so = sr.option(form.DynamicList, 'source', _('Source'),
+			_('A device’s address, a range such as 192.168.1.0/24, or geoip:private.'));
+		so.modalonly = true;
+		so.validate = function(section_id, value) {
+			if (!value || /^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(value) || /^geoip:\S+$/.test(value)) return true;
+			return _('Not valid, please re-enter: %s').format(value);
+		};
+
+		so = sr.option(form.Value, 'port', _('Port'),
+			_('Such as 443, 80,443 or 1000-2000.'));
+		so.modalonly = true;
+		so.validate = function(section_id, value) {
+			if (!value || /^[0-9]+([-:][0-9]+)?(,[0-9]+([-:][0-9]+)?)*$/.test(String(value).replace(/\s/g, ''))) return true;
+			return _('Not valid, please re-enter: %s').format(value);
+		};
+
+		so = sr.option(form.TextValue, 'domain_list', _('Domain'),
+			_('One a line. domain:example.com is that name and everything under it; full: that name only; regexp: a regular expression; keyword: or a plain word anywhere in the name; geosite: a list from the routing data. A line starting with # is a comment.'));
+		so.modalonly = true;
+		so.rows = 8;
+		so.wrap = 'off';
+		so.validate = function(section_id, value) {
+			return eachLine(value, domainEntry);
+		};
+
+		so = sr.option(form.TextValue, 'ip_list', 'IP',
+			_('One a line: an address, a range such as 10.0.0.0/8, or geoip: and a country code from the routing data. A line starting with # is a comment.'));
+		so.modalonly = true;
+		so.rows = 8;
+		so.wrap = 'off';
+		so.validate = function(section_id, value) {
+			return eachLine(value, ipEntry);
 		};
 
 		sr.description = _('FakeDNS works with its main switch on, for a rule whose names go through a node. Preproxy: the rule’s hand-added node is reached through this node first — only for a rule that goes to a hand-added node, and one layer only: a node with a chain of its own keeps it.');

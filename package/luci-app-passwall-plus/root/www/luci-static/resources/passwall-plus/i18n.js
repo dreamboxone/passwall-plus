@@ -678,8 +678,8 @@ var FA = {
 	'Where everything no rule claims goes.': 'ترافیکی که با هیچ قانونی جور نشود به اینجا می‌رود.',
 	'Only the rules of this group are used. Save and apply for the table below to show them.':
 		'فقط قانون‌های این گروه استفاده می‌شوند. برای نمایش آن‌ها در جدول پایین، ذخیره و اعمال کنید.',
-	'No shunt rules yet. They are made on the Rule Manage page.':
-		'هنوز قانون عبوری وجود ندارد. قانون‌ها در صفحه «مدیریت قوانین» ساخته می‌شوند.',
+	'No shunt rules yet. Add one with the button below.':
+		'هنوز قانون عبوری وجود ندارد. با دکمه پایین یکی اضافه کنید.',
 	'AsIs: only the name is used for routing. IPIfNonMatch: when no rule matches the name, it is resolved to addresses and all the rules are tried again. IPOnDemand: whenever an address rule is met, the name is resolved at once. Auto chooses IPIfNonMatch when a rule or the Iran split has addresses in it, and AsIs otherwise.':
 		'AsIs: فقط نام دامنه برای مسیریابی استفاده می‌شود. IPIfNonMatch: اگر هیچ قانونی با نام جور نشود، نام به آدرس تبدیل می‌شود و همه قانون‌ها دوباره امتحان می‌شوند. IPOnDemand: به محض رسیدن به یک قانون آدرسی، نام فورا به آدرس تبدیل می‌شود. خودکار: اگر قانونی یا جداسازی ایران آدرس داشته باشد IPIfNonMatch، وگرنه AsIs.',
 	'Which traffic each rule is about. Where it goes — a node, direct, or blocked — is chosen in the Shunt Rule tab of Basic Settings. The rules steer the tunnel’s own traffic, in this order, ahead of the Iran split; a device with a node of its own on the Access Control page keeps it.':

@@ -186,7 +186,7 @@ The form below has four tabs, in PassWall2's order.
 #### Shunt Rule
 
 PassWall2's routing by rules. The rules themselves — which traffic each is
-about — are made on **Rule Manage**; here you say where each one goes.
+about — and where each one goes are both here, in one table.
 
 | Option | In the file | Default | What it does |
 |---|---|---|---|
@@ -198,14 +198,30 @@ about — are made on **Rule Manage**; here you say where each one goes.
 | **Default FakeDNS** | `default_fakedns` | off | Everything the tunnel carries gets made-up addresses — the DNS tab's FakeDNS, and like it, only with lookups sent straight into the tunnel |
 | **Default Preproxy** | `default_preproxy` | none | When the Default row goes to a config added by hand, it is reached through this one first |
 
-The table has a row per rule of the chosen group, in the order Rule Manage
-lists them:
+The table has a row per rule of the chosen group (each row a
+`config shunt_rules` section). **Add** makes a new rule, **Edit** opens its
+details, **Delete** removes it, and the blue handle changes their order — the
+rules are applied in that order. Its columns:
 
-| Column | In the file (on the rule) | What it does |
+| Column | In the file | What it does |
 |---|---|---|
+| **Rule** | `remarks` | The rule's name |
 | **Node** | `node` | *Close (Not use)*: the rule is ignored. *Use default node*: wherever Default goes. *The config the tunnel is using*, *Direct Connection*, *Blackhole (Block)*, or one of your configs |
 | **FakeDNS** | `fakedns` | This rule's names get made-up addresses, when the main switch above is on. Not for a rule going direct or blocked |
 | **Preproxy** | `preproxy` | When the rule goes to one of your configs, it is reached through this one first. One layer only: a config with a chain of its own keeps it |
+
+In each rule's edit window, PassWall2's fields:
+
+| Field | In the file | What it does |
+|---|---|---|
+| **Shunt Rule Group** | `group` | Its group; this tab uses one group at a time. A new rule is made in the chosen group |
+| **Protocol** | `protocol` | http, tls, quic, bittorrent — matches only those |
+| **Inbound Tag** | `inbound` | Transparent proxy, Socks, or — none ticked — both |
+| **Network** | `network` | TCP, UDP or both |
+| **Source** | `source` | A device's address, a range, or `geoip:private` |
+| **Port** | `port` | Such as `443`, `80,443` or `1000-2000` |
+| **Domain** | `domain_list` | One a line: `domain:` a name and everything under it, `full:` that name only, `regexp:`, `keyword:` or a plain word anywhere in the name, `geosite:` a list from the routing data. `#` starts a comment |
+| **IP** | `ip_list` | One a line: an address, a range, or `geoip:` and a country code |
 
 Shunt rules steer the tunnel's own traffic — the transparent proxy and the
 SOCKS ports without a config of their own. They come after the blocks, the
@@ -475,21 +491,7 @@ PassWall2, until the next reboot or update. A download that will not fit is
 refused rather than half written, and a file the core cannot read is never
 installed.
 
-**Shunt Rule** — a `config shunt_rules` section per row, PassWall2's fields:
-
-| Field | In the file | What it does |
-|---|---|---|
-| **Remarks** | `remarks` | The rule's name |
-| **Shunt Rule Group** | `group` | Its group; the Shunt Rule tab uses one group at a time |
-| **Protocol** | `protocol` | http, tls, quic, bittorrent — matches only those |
-| **Inbound Tag** | `inbound` | Transparent proxy, Socks, or — none ticked — both |
-| **Network** | `network` | TCP, UDP or both |
-| **Source** | `source` | A device's address, a range, or `geoip:private` |
-| **Port** | `port` | Such as `443`, `80,443` or `1000-2000` |
-| **Domain** | `domain_list` | One a line: `domain:` a name and everything under it, `full:` that name only, `regexp:`, `keyword:` or a plain word anywhere in the name, `geosite:` a list from the routing data. `#` starts a comment |
-| **IP** | `ip_list` | One a line: an address, a range, or `geoip:` and a country code |
-
-The table shows where each rule goes, as set on the Shunt Rule tab.
+The shunt rules are in the **Shunt Rule** tab of Basic Settings.
 
 **This program's own**
 
