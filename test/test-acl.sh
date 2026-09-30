@@ -68,7 +68,7 @@ has "a set of them" "elements = { 1.2.3.4, 5.6.0.0/16 }"
 has "skipped before the tunnel" "ip daddr @direct return"
 hasnt "and nonsense left out" "not-an-address"
 d=$(chain prerouting | grep -n '@direct return' | cut -d: -f1)
-t=$(chain prerouting | grep -n 'tproxy ip to' | head -1 | cut -d: -f1)
+t=$(chain prerouting | grep -n 'tproxy ip to' | grep -v '10.10.34.' | head -1 | cut -d: -f1)
 if [ -n "$d" ] && [ -n "$t" ] && [ "$d" -lt "$t" ]; then
 	ok "ahead of the tproxy rules"
 else
@@ -130,7 +130,7 @@ hasnt "ipset-only rule left out under nftables" "jump acl_5"
 # every jump has to come after the reserved returns and before the catch-all.
 j=$(chain prerouting | grep -n 'jump acl_1' | head -1 | cut -d: -f1)
 r=$(chain prerouting | grep -n '@reserved return' | head -1 | cut -d: -f1)
-t=$(chain prerouting | grep -n 'tproxy ip to' | head -1 | cut -d: -f1)
+t=$(chain prerouting | grep -n 'tproxy ip to' | grep -v '10.10.34.' | head -1 | cut -d: -f1)
 if [ -n "$j" ] && [ -n "$r" ] && [ -n "$t" ] && [ "$r" -lt "$j" ] && [ "$j" -lt "$t" ]; then
 	ok "the jumps sit between the reserved returns and the catch-all"
 else

@@ -381,6 +381,22 @@ if [ "$(cfg tcp_proxy_way tproxy)" = "redirect" ]; then
     }"
 fi
 
+# Connections to the addresses Iran's resolvers give for a blocked name - see
+# pwplus-common.sh. The address is useless, so this one always replaces it
+# with the name in the connection, whatever the sniffing setting says. One
+# with no name in it keeps the address, and the private-range rule sends it
+# straight out, which is where it went before.
+poison_inbound=",
+    {
+      \"tag\": \"poison-in\",
+      \"listen\": \"0.0.0.0\",
+      \"port\": $(poison_port),
+      \"protocol\": \"dokodemo-door\",
+      \"settings\": { \"network\": \"tcp,udp\", \"followRedirect\": true },
+      \"streamSettings\": { \"sockopt\": { \"tproxy\": \"tproxy\" } },
+      \"sniffing\": { \"enabled\": true, \"destOverride\": [ \"http\", \"tls\", \"quic\" ], \"routeOnly\": false }
+    }"
+
 # ------------------------------------------------------------ shunt rules
 
 # PassWall2's Shunt Rule tab. The rules are `config shunt_rules` sections,
@@ -422,7 +438,7 @@ if [ "$FORCE_NO_GEO" = "1" ] || ! geo_dir >/dev/null 2>&1; then
 	shunt_nogeo=1
 fi
 
-main_in='"tproxy-in"'
+main_in='"tproxy-in","poison-in"'
 if [ -n "$redir_inbound" ]; then
 	main_in="$main_in,\"redir-in\""
 fi
@@ -784,7 +800,7 @@ cat <<EOF
       "settings": { "network": "tcp,udp", "followRedirect": true },
       "streamSettings": { "sockopt": { "tproxy": "tproxy" } },
       "sniffing": ${sniffing}
-    }${redir_inbound},
+    }${poison_inbound}${redir_inbound},
     {
       "tag": "dns-in",
       "listen": "0.0.0.0",

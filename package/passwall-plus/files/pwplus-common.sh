@@ -35,6 +35,19 @@ PWPLUS_VERSION_FILE="$PWPLUS_ETC/version"
 
 mkdir -p "$PWPLUS_RUN" "$PWPLUS_ETC" 2>/dev/null || true
 
+# The addresses Iran's resolvers hand out for a blocked name instead of its
+# real one. A phone or a laptop that looked a name up while the tunnel was off
+# keeps that answer for a while after it is switched on, and the address sits
+# inside 10.0.0.0/8, which the firewall treats as this network and leaves
+# alone - so the site stays dead until the device forgets it. Connections to
+# these go to an inbound of their own instead, which replaces the address with
+# the name found in the connection and sends it on like anything else.
+PWPLUS_POISON_V4="10.10.34.0/24"
+poison_port() {
+	echo $(( $(cfg tproxy_port 1082) + 2 ))
+	return 0
+}
+
 # The runtime log the Log page shows, the way PassWall2 keeps one: a file in
 # RAM, a date on every line, and a button that empties it. Everything also
 # goes to syslog as before - the file is what the page reads, the system log

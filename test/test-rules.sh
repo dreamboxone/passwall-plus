@@ -133,4 +133,27 @@ else
 fi
 rig_set block_quic 0
 
+# A device that looked a blocked name up while the tunnel was off still has the
+# filtering address for it. That address is inside 10.0.0.0/8, so it has to be
+# sent to the tunnel before the reserved-address return, or it never is.
+sh "$RIG/lib/pwplus-rules" dump > "$WORK/rules.nft"
+pre=$(awk '/chain prerouting/, /^	}/' "$WORK/rules.nft")
+p=$(printf '%s
+' "$pre" | grep -n 'ip daddr 10.10.34.0/24 meta l4proto tcp .*tproxy ip to 127.0.0.1:1084' | head -1 | cut -d: -f1)
+r=$(printf '%s
+' "$pre" | grep -n 'ip daddr @reserved return' | head -1 | cut -d: -f1)
+if [ -n "$p" ] && [ -n "$r" ] && [ "$p" -lt "$r" ]; then
+	ok "the filtering addresses go to their own inbound, ahead of the reserved return"
+else
+	bad "the filtering addresses go to their own inbound, ahead of the reserved return"
+fi
+rig_set client_proxy 0
+sh "$RIG/lib/pwplus-rules" dump > "$WORK/rules.nft"
+if grep -q '10.10.34.0/24' "$WORK/rules.nft"; then
+	bad "with Client Proxy off the filtering addresses are left alone"
+else
+	ok "with Client Proxy off the filtering addresses are left alone"
+fi
+rig_set client_proxy 1
+
 rig_report

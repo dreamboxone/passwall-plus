@@ -247,6 +247,22 @@ nft_ruleset() {
 "
 	fi
 
+	# The filtering addresses a device may still remember from before the
+	# tunnel was on - see pwplus-common.sh. Ahead of the reserved-address
+	# returns, which would otherwise send them straight out, and only when
+	# the LAN goes through the tunnel at all.
+	_poison=""
+	if [ "$client_proxy" = "1" ]; then
+		_pp="$(poison_port)"
+		if [ "$block_quic" = "1" ]; then
+			_poison="		ip daddr $PWPLUS_POISON_V4 udp dport 443 counter drop
+"
+		fi
+		_poison="$_poison		ip daddr $PWPLUS_POISON_V4 meta l4proto tcp counter tproxy ip to 127.0.0.1:$_pp meta mark set $MARK accept
+		ip daddr $PWPLUS_POISON_V4 meta l4proto udp counter tproxy ip to 127.0.0.1:$_pp meta mark set $MARK accept
+"
+	fi
+
 	_v6=""
 	if [ "$ipv6_mode" != "off" ]; then
 		_v6="		ip6 daddr @reserved6 return
@@ -462,7 +478,7 @@ $_lo		iifname != { $_iflist } return
 $_divert
 		# name lookups are the nat chain's business, not this one's
 		meta l4proto { tcp, udp } th dport 53 return
-		ip daddr @reserved return
+$_poison		ip daddr @reserved return
 		ip6 daddr @reserved6 return
 $_direct$_acljumps$_defaults	}
 
@@ -578,6 +594,14 @@ ipt_up() {
 	ipt -t mangle -A PWPLUS_PRE -p tcp -m socket -j PWPLUS_DIVERT
 	ipt -t mangle -A PWPLUS_PRE -p tcp --dport 53 -j RETURN
 	ipt -t mangle -A PWPLUS_PRE -p udp --dport 53 -j RETURN
+	# The filtering addresses - see the nftables side.
+	if [ "$client_proxy" = "1" ]; then
+		if [ "$block_quic" = "1" ]; then
+			ipt -t mangle -A PWPLUS_PRE -d "$PWPLUS_POISON_V4" -p udp --dport 443 -j DROP
+		fi
+		ipt_must -t mangle -A PWPLUS_PRE -d "$PWPLUS_POISON_V4" -p tcp -j TPROXY 			--on-ip 127.0.0.1 --on-port "$(poison_port)" --tproxy-mark "$MARK" || return 1
+		ipt_must -t mangle -A PWPLUS_PRE -d "$PWPLUS_POISON_V4" -p udp -j TPROXY 			--on-ip 127.0.0.1 --on-port "$(poison_port)" --tproxy-mark "$MARK" || return 1
+	fi
 	for _c in $RESERVED_V4; do
 		ipt -t mangle -A PWPLUS_PRE -d "$_c" -j RETURN
 	done
