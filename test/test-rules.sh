@@ -93,9 +93,13 @@ else
 fi
 
 # The return for port 53 has to come before the tproxy rules, or it never runs.
-order=$(awk '/chain prerouting/, /^\t}/' "$WORK/rules.nft" |
+# The LAN's rules, that is: the router's own traffic arrives on lo already
+# sifted - its output chain lets port 53, local and direct addresses past
+# before marking anything - and its rule has to come before the LAN-only
+# check, so it is first on purpose and left out here.
+order=$(awk '/chain prerouting/, /^\t}/' "$WORK/rules.nft" | grep -v 'iifname "lo"' |
 	grep -n 'th dport 53 return\|tproxy ip to' | head -2 | cut -d: -f2)
-first=$(awk '/chain prerouting/, /^\t}/' "$WORK/rules.nft" |
+first=$(awk '/chain prerouting/, /^\t}/' "$WORK/rules.nft" | grep -v 'iifname "lo"' |
 	grep -n 'th dport 53 return\|tproxy ip to' | head -1)
 case "$first" in
 	*"dport 53 return"*) ok "port 53 is let past before the tproxy rules" ;;
@@ -109,7 +113,7 @@ esac
 # nothing, which is what this asserts instead.
 rig_set block_quic 1
 sh "$RIG/lib/pwplus-rules" dump > "$WORK/rules.nft"
-pre=$(awk '/chain prerouting/, /^\t}/' "$WORK/rules.nft")
+pre=$(awk '/chain prerouting/, /^\t}/' "$WORK/rules.nft" | grep -v 'iifname "lo"')
 if printf '%s\n' "$pre" | grep -q 'dport 443'; then
 	ok "the QUIC rule is in the prerouting chain"
 	q=$(printf '%s\n' "$pre" | grep -n 'dport 443' | head -1 | cut -d: -f1)
