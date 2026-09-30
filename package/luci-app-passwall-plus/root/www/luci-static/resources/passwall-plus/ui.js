@@ -14,13 +14,14 @@
 'require baseclass';
 'require rpc';
 'require ui';
+'require uci';
 'require passwall-plus.i18n as i18n';
 
 var _ = i18n.tr;
 
 /* Put on the stylesheet's and the logo's addresses, so a browser holding the
    previous release's copies fetches these. Kept in step with PKG_VERSION. */
-var BUILD = '1.2.0-1';
+var BUILD = '1.2.0-2';
 
 var callAction = rpc.declare({ object: 'luci.passwall-plus', method: 'action',
                                params: [ 'name', 'arg' ], expect: { '': {} } });
@@ -143,6 +144,85 @@ function note(anchor, text, kind) {
 	window.clearTimeout(n.pwpTimer);
 	if (text && kind != 'warn' && kind != 'error')
 		n.pwpTimer = window.setTimeout(function() { n.style.display = 'none'; }, 10000);
+}
+
+/* Dragging rows by their ☰ handle, with pointer events.
+
+   LuCI makes the handle a draggable <button> and relies on the browser's own
+   drag and drop, which some browsers never start from a button, and which it
+   swaps for a touch-only scheme on any device that has a touch screen - where
+   a mouse then cannot drag at all. This does the same job with pointer
+   events, which every browser sends for a mouse, a pen and a finger alike:
+   the row follows the pointer's place in the table, and where it is let go
+   the move is staged in the configuration exactly as LuCI's own would be,
+   and saved with Save & Apply.
+
+   Delegated from the page, so tables drawn again after a save keep it. */
+function sortable(root, config) {
+	root.addEventListener('pointerdown', function(ev) {
+		var h = ev.target.closest && ev.target.closest('.drag-handle');
+		if (!h || ev.button > 0) return;
+		var row = h.closest('tr.cbi-section-table-row');
+		if (!row || !row.getAttribute('data-sid')) return;
+		ev.preventDefault();
+		var body = row.parentNode, target = null, below = false;
+		row.style.opacity = '0.45';
+		try { h.setPointerCapture(ev.pointerId); } catch (e) {}
+
+		function clear() {
+			var marked = body.querySelectorAll('.drag-over-above,.drag-over-below');
+			for (var i = 0; i < marked.length; i++)
+				marked[i].classList.remove('drag-over-above', 'drag-over-below');
+		}
+		/* The row the pointer is over, by height alone: whatever is drawn on
+		   top of it - the row being dragged, a tooltip - does not matter. */
+		function move(e) {
+			clear();
+			target = null;
+			var rows = body.children;
+			for (var i = 0; i < rows.length; i++) {
+				var tr = rows[i];
+				if (tr === row || !tr.getAttribute('data-sid')) continue;
+				var r = tr.getBoundingClientRect();
+				if (e.clientY >= r.top && e.clientY <= r.bottom) {
+					below = e.clientY > r.top + r.height / 2;
+					target = tr;
+					break;
+				}
+			}
+			if (target)
+				target.classList.add(below ? 'drag-over-below' : 'drag-over-above');
+		}
+		function done() {
+			h.removeEventListener('pointermove', move);
+			h.removeEventListener('pointerup', done);
+			h.removeEventListener('pointercancel', done);
+			row.style.opacity = '';
+			clear();
+			if (!target) return;
+			uci.move(config, row.getAttribute('data-sid'), target.getAttribute('data-sid'), below);
+			body.insertBefore(row, below ? target.nextSibling : target);
+		}
+		h.addEventListener('pointermove', move);
+		h.addEventListener('pointerup', done);
+		h.addEventListener('pointercancel', done);
+	});
+
+	/* The browser's own drag and drop, and LuCI's handlers for it, kept off
+	   the handle: two kinds of drag at once would fight over the row. */
+	function tame() {
+		var hs = root.querySelectorAll('.drag-handle');
+		for (var i = 0; i < hs.length; i++) {
+			hs[i].setAttribute('draggable', 'false');
+			hs[i].style.touchAction = 'none';
+		}
+	}
+	tame();
+	new MutationObserver(tame).observe(root, { childList: true, subtree: true });
+	root.addEventListener('dragstart', function(ev) {
+		if (ev.target.closest && ev.target.closest('.drag-handle')) ev.preventDefault();
+	}, true);
+	return root;
 }
 
 function ms(n) {
@@ -299,5 +379,6 @@ return baseclass.extend({
 	ms: ms,
 	versionText: versionText,
 	note: note,
+	sortable: sortable,
 	page: page
 });

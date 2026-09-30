@@ -168,7 +168,7 @@ The form below has four tabs, in PassWall2's order.
 | **Node** | `node` | Auto (fastest) | Auto measures the configs and uses the fastest. A config added by hand is used as it is, and nothing is measured |
 | **Preproxy** | `preproxy_enabled` | off | Every config the tunnel may choose dials out through a config of yours first — PassWall2's pre-proxy. For configs that cannot be reached from here directly, or to hide which ones are being used. With it on, the first-pass handshake is skipped, because no config is reached directly |
 | **Preproxy Node** | `preproxy_node` | — | The config dialled first. Only configs added by hand on Node List |
-| **Localhost Proxy** | `localhost_proxy` | off | The router's own traffic goes through the tunnel too — its downloads, its clock, its package manager. While a config is being measured it goes direct, so the measurement is of the config. Off by default: when the tunnel is down, so is the router's own way out |
+| **Localhost Proxy** | `localhost_proxy` | on | The router's own traffic goes through the tunnel too — its downloads, its clock, its package manager, and so the routing data and the cores from GitHub. While a config is being measured or a subscription read it goes direct, so the router can always repair its own tunnel. On by default, as in PassWall2 |
 | **Client Proxy** | `client_proxy` | on | Devices on the LAN go through the tunnel. Turned off, they do not, but the devices named on Access Control still do |
 | **Node Socks Listen Port** | `node_socks_port` | 1070 | A SOCKS server on the router that goes out the way the tunnel does. Empty for none |
 | **Node Socks Bind Local** | `node_socks_bind_local` | on | That SOCKS server answers the router itself only |

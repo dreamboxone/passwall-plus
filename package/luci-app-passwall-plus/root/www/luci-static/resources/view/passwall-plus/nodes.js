@@ -282,7 +282,7 @@ function addViaLinks() {
 		E('p', {}, _('Enter share links, one per line. Subscription links are not supported!')),
 		box,
 		E('div', { 'class': 'right' }, [
-			E('button', { 'class': 'btn cbi-button cbi-button-neutral', 'click': ui.hideModal }, _('Close')),
+			E('button', { 'class': 'btn cbi-button cbi-button-neutral', 'click': ui.hideModal }, _('Close window')),
 			' ',
 			E('button', {
 				'class': 'btn cbi-button cbi-button-positive',
@@ -319,7 +319,7 @@ function reassign(b) {
 		input,
 		E('datalist', { 'id': 'pwp-groups' }, groups().map(function(g) { return E('option', { 'value': g }); })),
 		E('div', { 'class': 'right' }, [
-			E('button', { 'class': 'btn cbi-button cbi-button-neutral', 'click': ui.hideModal }, _('Close')),
+			E('button', { 'class': 'btn cbi-button cbi-button-neutral', 'click': ui.hideModal }, _('Close window')),
 			' ',
 			E('button', {
 				'class': 'btn cbi-button cbi-button-positive',
@@ -795,6 +795,7 @@ return view.extend({
 				});
 			}, 0);
 
+			pui.sortable(mapEl, 'passwall-plus');
 			return pui.page([ mapEl, list ]);
 		});
 	}

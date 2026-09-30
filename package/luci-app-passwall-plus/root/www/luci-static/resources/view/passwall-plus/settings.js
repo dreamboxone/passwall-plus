@@ -102,8 +102,8 @@ return view.extend({
 		nodeChoices(o);
 
 		o = s.taboption('main', form.Flag, 'localhost_proxy', _('Localhost Proxy'),
-			_('When selected, the router’s own traffic goes through the tunnel as well — its downloads, its clock, its package manager. While a node is being measured it goes direct, so that the measurement is of the node. Off by default: when the tunnel is down, so is the router’s own way out.'));
-		o.default = '0';
+			_('When selected, the router’s own traffic goes through the tunnel as well — its downloads, its clock, its package manager, and so the routing data and the cores from GitHub. While a node is being measured or a subscription read it goes direct, so the router can always repair its own tunnel. On by default, as in PassWall2.'));
+		o.default = '1';
 		o.rmempty = false;
 
 		o = s.taboption('main', form.Flag, 'client_proxy', _('Client Proxy'),
@@ -371,6 +371,7 @@ return view.extend({
 		};
 
 		return m.render().then(function(mapEl) {
+			pui.sortable(mapEl, 'passwall-plus');
 			return pui.page(st.top.concat([ mapEl ]), { version: st.version });
 		});
 	}

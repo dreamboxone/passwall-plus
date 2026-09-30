@@ -286,7 +286,7 @@ cmd_run() {
 		tcp)
 			# A handshake from the router, which with Localhost Proxy on
 			# would go through the tunnel and measure the tunnel instead.
-			_lp="$(cfg_bool localhost_proxy 0)"
+			_lp="$(cfg_bool localhost_proxy 1)"
 			if [ "$_lp" = "1" ]; then
 				"$PWPLUS_LIB/pwplus-rules" local pause >/dev/null 2>&1 || true
 			fi

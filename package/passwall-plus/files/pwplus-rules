@@ -65,7 +65,7 @@ dns_hijack="$(cfg_bool dns_hijack 1)"
 # TPROXY; UDP has no other way. Hijacking ICMP answers pings to tunnelled
 # addresses from the router, since a tunnel carries no ICMP.
 client_proxy="$(cfg_bool client_proxy 1)"
-localhost_proxy="$(cfg_bool localhost_proxy 0)"
+localhost_proxy="$(cfg_bool localhost_proxy 1)"
 tcp_way="$(cfg tcp_proxy_way tproxy)"
 redir_port="$(cfg redir_port 1085)"
 accept_icmp="$(cfg_bool accept_icmp 0)"

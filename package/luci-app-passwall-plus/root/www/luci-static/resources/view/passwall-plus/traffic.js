@@ -392,6 +392,7 @@ return view.extend({
 			poll.add(function() {
 				return callGeo().then(renderGeo).catch(function() {});
 			}, 5);
+			pui.sortable(el, 'passwall-plus');
 			return pui.page([ el ]);
 		});
 	}

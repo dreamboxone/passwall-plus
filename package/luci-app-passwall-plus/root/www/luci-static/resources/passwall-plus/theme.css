@@ -448,3 +448,8 @@ body.pwp-fa #modal_overlay>.modal textarea,body.pwp-fa #modal_overlay>.modal inp
 .pwp-note-block{display:block;margin:8px 0 0}
 /* A core tile's title is the word and the core's name, on one line. */
 #pwp-core-t,#pwp-bridge-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Dragging a row by its handle: where it will land, as a line. */
+.mk .drag-handle{cursor:grab!important;touch-action:none}
+.mk .drag-handle:active{cursor:grabbing!important}
+.mk tr.drag-over-above>.td{box-shadow:inset 0 3px 0 #3b82f6}
+.mk tr.drag-over-below>.td{box-shadow:inset 0 -3px 0 #3b82f6}

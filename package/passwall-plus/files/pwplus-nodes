@@ -220,7 +220,7 @@ fetch_one() {
 			proxy)  _ways="proxy" ;;
 			direct) _ways="direct" ;;
 			*)
-				if [ "$(cfg_bool localhost_proxy 0)" = "1" ]; then
+				if [ "$(cfg_bool localhost_proxy 1)" = "1" ]; then
 					_ways="plain"
 				else
 					_ways="proxy direct"

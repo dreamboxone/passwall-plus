@@ -211,6 +211,7 @@ return view.extend({
 		o.depends('mode', '2');
 
 		return m.render().then(function(el) {
+			pui.sortable(el, 'passwall-plus');
 			return pui.page([ el ]);
 		});
 	}

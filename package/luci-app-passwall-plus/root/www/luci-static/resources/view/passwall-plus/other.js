@@ -316,6 +316,7 @@ return view.extend({
 					});
 				}, 'clock')
 			]));
+			pui.sortable(mapEl, 'passwall-plus');
 			return pui.page([ mapEl, clock ]);
 		});
 	}

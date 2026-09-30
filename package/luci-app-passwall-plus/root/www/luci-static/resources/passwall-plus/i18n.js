@@ -512,8 +512,8 @@ var FA = {
 		'خودکار، کانفیگ‌ها را اندازه می‌گیرد و سریع‌ترین را استفاده می‌کند. کانفیگی که دستی اضافه شده همان‌طور که هست استفاده می‌شود و چیزی اندازه‌گیری نمی‌شود.',
 	'Auto (fastest)': 'خودکار (سریع‌ترین)',
 	'Localhost Proxy': 'پروکسی خود روتر',
-	'When selected, the router’s own traffic goes through the tunnel as well — its downloads, its clock, its package manager. While a node is being measured it goes direct, so that the measurement is of the node. Off by default: when the tunnel is down, so is the router’s own way out.':
-		'وقتی انتخاب شود، ترافیک خود روتر هم از تونل می‌رود — دانلودهایش، ساعتش، مدیر پکیجش. وقتی کانفیگی در حال اندازه‌گیری است مستقیم می‌رود تا اندازه‌گیری مال همان کانفیگ باشد. به‌طور پیش‌فرض خاموش است: وقتی تونل قطع باشد، راه خروج خود روتر هم قطع است.',
+	'When selected, the router’s own traffic goes through the tunnel as well — its downloads, its clock, its package manager, and so the routing data and the cores from GitHub. While a node is being measured or a subscription read it goes direct, so the router can always repair its own tunnel. On by default, as in PassWall2.':
+		'وقتی انتخاب شود، ترافیک خود روتر هم از تونل می‌رود — دانلودهایش، ساعتش، مدیر پکیجش، و در نتیجه داده‌های مسیریابی و هسته‌ها از گیت‌هاب. وقتی کانفیگی در حال اندازه‌گیری است یا اشتراکی خوانده می‌شود مستقیم می‌رود، تا روتر همیشه بتواند تونل خودش را ترمیم کند. مثل پسوال۲ به‌طور پیش‌فرض روشن است.',
 	'Client Proxy': 'پروکسی دستگاه‌های شبکه',
 	'When selected, devices in LAN go through the tunnel. Otherwise they do not, but the devices named on the Access Control page still do.':
 		'وقتی انتخاب شود، دستگاه‌های شبکه LAN از تونل می‌روند. در غیر این صورت نمی‌روند، ولی دستگاه‌هایی که در صفحه کنترل دسترسی آمده‌اند همچنان می‌روند.',
@@ -669,6 +669,8 @@ var FA = {
 		'در هر خط یکی: یک آدرس، یک محدوده مثل 10.0.0.0/8، یا geoip: و کد یک کشور از داده‌های مسیریابی. خطی که با # شروع شود توضیح است.',
 	'Rule Manage': 'مدیریت قوانین',
 	'FakeDNS Main switch': 'کلید اصلی FakeDNS',
+	'Close window': 'بستن',
+	'Add': 'افزودن',
 	'Default Preproxy': 'پیش‌پراکسی پیش‌فرض',
 	'Geo View': 'نمای Geo',
 	'Geoview App Path': 'مسیر برنامه Geoview',
@@ -877,9 +879,14 @@ function patchLuci() {
 	patched = true;
 }
 
+/* Our own words first, then LuCI's: a page that draws a button of its own
+   with a word LuCI also uses - Save, Add - finds it there rather than coming
+   out in English. */
 function tr(s) {
 	if (LANG !== 'fa') return s;
 	var v = FA[s];
+	if (v === undefined && Object.prototype.hasOwnProperty.call(LUCI_FA, s))
+		v = LUCI_FA[s];
 	return (v === undefined) ? s : v;
 }
 

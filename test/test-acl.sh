@@ -21,6 +21,9 @@ rig_setup
 WORK="$RIG/work"
 mkdir -p "$WORK"
 rig_set lan_zone "br-lan"
+# The ordering checked here is of the LAN rules; the router's own traffic has
+# rules of its own, in their own chain, and is left out of this one.
+rig_set localhost_proxy 0
 
 TAB="$(printf '\t')"
 

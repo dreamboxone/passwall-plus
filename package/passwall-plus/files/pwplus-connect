@@ -38,7 +38,7 @@ fi
 # this ends, it goes back.
 PAUSED=0
 pause_local() {
-	if [ "$PAUSED" = "0" ] && [ "$(cfg_bool localhost_proxy 0)" = "1" ]; then
+	if [ "$PAUSED" = "0" ] && [ "$(cfg_bool localhost_proxy 1)" = "1" ]; then
 		"$RULES" local pause >/dev/null 2>&1 || true
 		PAUSED=1
 	fi

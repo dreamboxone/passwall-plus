@@ -417,6 +417,7 @@ return view.extend({
 			poll.add(function() {
 				return callSubs().then(renderInfo).catch(function() {});
 			}, 5);
+			pui.sortable(mapEl, 'passwall-plus');
 			return pui.page([ mapEl ]);
 		});
 	}
