@@ -2,7 +2,7 @@
 
 # Passwall+ — تونل سراسری برای روتر OpenWrt
 
-**نسخه ۱.۲.۰** · پشتیبانی و تماس: [t.me/routekernel1](https://t.me/routekernel1)
+**نسخه ۱.۲.۱** · پشتیبانی و تماس: [t.me/routekernel1](https://t.me/routekernel1)
 🇬🇧 **[English guide: README.en.md](README.en.md)**
 
 روی روتر نصبش می‌کنید، **کلید اصلی** را روشن می‌کنید، و از آن لحظه هر دستگاهی
