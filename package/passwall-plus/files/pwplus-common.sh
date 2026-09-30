@@ -119,16 +119,27 @@ say_status() {
 # never installed anything. All of it silent, on a freshly flashed router,
 # with every script behind it working perfectly by hand.
 #
-# So: use it where it exists, and do the same job with a background watchdog
+# So: use it where it works, and do the same job with a background watchdog
 # where it does not.
-PWPLUS_HAVE_TIMEOUT=0
-if command -v timeout >/dev/null 2>&1; then
-	PWPLUS_HAVE_TIMEOUT=1
-fi
+#
+# Where it works - not where it exists. A router can have /usr/bin/timeout as
+# a link to a busybox built without the applet: the link is there, `command -v`
+# finds it, and every call through it answers "applet not found" with 127.
+# That was the same silent failure all over again on a freshly flashed 25.12
+# router: the tunnel was never started, never enabled at boot, and dnsmasq
+# was never restarted. So it is asked to run something first - once per
+# process, the first time a ceiling is needed.
+PWPLUS_HAVE_TIMEOUT=""
 
 bounded() {
 	_bd_secs="$1"
 	shift
+	if [ -z "$PWPLUS_HAVE_TIMEOUT" ]; then
+		PWPLUS_HAVE_TIMEOUT=0
+		if command -v timeout >/dev/null 2>&1 && timeout 5 true >/dev/null 2>&1; then
+			PWPLUS_HAVE_TIMEOUT=1
+		fi
+	fi
 	if [ "$PWPLUS_HAVE_TIMEOUT" = "1" ]; then
 		timeout "$_bd_secs" "$@"
 		return $?

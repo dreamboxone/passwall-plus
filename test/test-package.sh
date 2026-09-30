@@ -426,4 +426,29 @@ else
 	bad "the watchdog did not cut the hang short (took ${BT_TOOK:-?} s)"
 fi
 
+# A timeout that is there and does not work: /usr/bin/timeout linked to a
+# busybox built without the applet, which answers everything with 127. It
+# was found on a freshly flashed 25.12 router, where every bounded call -
+# starting the tunnel among them - failed at once.
+echo "== a timeout that exists but does not run is not used"
+mkdir -p "$RIG/bt/bin"
+cat > "$RIG/bt/bin/timeout" <<'FAKE'
+#!/bin/sh
+echo "timeout: applet not found" >&2
+exit 127
+FAKE
+chmod 755 "$RIG/bt/bin/timeout"
+cat > "$RIG/bt2.sh" <<BT
+PATH="$RIG/bt/bin:\$PATH"
+PWPLUS_RUN="$RIG/bt/run"; PWPLUS_ETC="$RIG/bt/etc"
+. "$ROOT/package/passwall-plus/files/pwplus-common.sh"
+bounded 5 true; echo "true=\$?"
+bounded 5 sh -c 'exit 7'; echo "seven=\$?"
+echo "have=\$PWPLUS_HAVE_TIMEOUT"
+BT
+BT2_OUT="$(sh "$RIG/bt2.sh" 2>/dev/null)"
+check "$(printf '%s\n' "$BT2_OUT" | sed -n 's/^true=//p')" "0" "the command still runs, through the watchdog"
+check "$(printf '%s\n' "$BT2_OUT" | sed -n 's/^seven=//p')" "7" "and its own status still comes back"
+check "$(printf '%s\n' "$BT2_OUT" | sed -n 's/^have=//p')" "0" "the broken timeout was recognised as not working"
+
 rig_report
