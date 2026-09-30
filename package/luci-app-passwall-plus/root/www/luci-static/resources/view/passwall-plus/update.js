@@ -85,6 +85,17 @@ function checkUpdate(key) {
 	};
 }
 
+/* The version the page was opened with, and the last update result seen. */
+var firstVersion = '';
+var lastSelf = '';
+
+/* What the router says it is busy with, in the page's language. */
+function jobName(j) {
+	var m = /^Installing (.+)$/.exec(j);
+	if (m && m[1] != 'dependencies') return _('Installing %s').format(m[1]);
+	return _(j);
+}
+
 function yes() { return chip(_('yes'), 'ok'); }
 function no()  { return chip(_('no'), 'error'); }
 
@@ -134,7 +145,23 @@ function render(d) {
 	var job = document.getElementById('pwp-job');
 	if (job) {
 		job.style.display = d.job ? 'flex' : 'none';
-		job.textContent = d.job ? d.job + '…' : '';
+		job.textContent = d.job ? jobName(d.job) + '…' : '';
+	}
+
+	/* This program's own update. The install restarts the services the page
+	   talks to, so how it went is read afterwards from what the router left
+	   behind: a failure is shown under the row, and success - a different
+	   version from the one this page was opened with - reloads the page, whose
+	   own files have just been replaced. */
+	var app0 = (d.cores || {}).app || {};
+	if (app0.version && !firstVersion) firstVersion = app0.version;
+	var res = String(d.self || '');
+	if (res.indexOf('error ') == 0 && res != lastSelf)
+		say('app', _(res.slice(6)), 'error');
+	lastSelf = res;
+	if (!d.job && app0.version && firstVersion && app0.version != firstVersion) {
+		say('app', _('Updated to %s.').format(app0.version), 'info');
+		window.setTimeout(function() { location.reload(); }, 1500);
 	}
 
 	renderDeps(d.deps);
@@ -151,16 +178,15 @@ function render(d) {
 			value.push(E('span', { 'style': 'color:var(--muted)' }, _('It is the latest version')));
 		abox.appendChild(row('Passwall+', value, [
 			pui.btn(_('Check update'), 'primary mk-small', checkUpdate('app'), 'refresh'),
-			app.update
-				? E('a', {
-					'class': 'mk-btn success mk-small',
-					'href': 'https://github.com/dreamboxone/passwall-plus/releases/latest',
-					'target': '_blank', 'rel': 'noopener noreferrer'
-				}, [ pui.icon('download'), E('span', {}, _('Download')) ])
+			app.update && app.latest
+				? pui.btn(_('Update to %s').format(app.latest), 'success mk-small', function() {
+					return act('app', 'app_update', '',
+						_('Downloading and installing the new version. This takes a minute or two; the page reloads by itself when it is done.'));
+				}, 'download')
 				: ''
 		], 'app'));
 		abox.appendChild(E('p', { 'style': 'font-size:12px;color:var(--muted);margin:8px 0 0' },
-			_('This program is updated by installing its new package, the same way it was installed: only the package manager can replace a package cleanly.')));
+			_('The update button downloads the new version from GitHub, checks it against the release’s checksums and installs it with the router’s own package manager. The settings are kept, and the page reloads by itself when it is done.')));
 	}
 
 	/* ------------------------------------------------------------- cores */

@@ -461,8 +461,28 @@ var FA = {
 	'It is the latest version': 'آخرین نسخه است',
 	'Check update': 'بررسی به‌روزرسانی',
 	'Force update': 'به‌روزرسانی اجباری',
-	'This program is updated by installing its new package, the same way it was installed: only the package manager can replace a package cleanly.':
-		'خود این برنامه با نصب پکیج جدیدش به‌روز می‌شود، همان‌طور که نصب شد: فقط مدیر پکیج می‌تواند یک پکیج را تمیز جایگزین کند.',
+	'The update button downloads the new version from GitHub, checks it against the release’s checksums and installs it with the router’s own package manager. The settings are kept, and the page reloads by itself when it is done.':
+		'دکمه به‌روزرسانی نسخه جدید را از گیت‌هاب دانلود می‌کند، آن را با چک‌سام‌های همان انتشار بررسی می‌کند و با مدیر پکیج خود روتر نصب می‌کند. تنظیمات حفظ می‌شوند و وقتی کار تمام شد صفحه خودش دوباره بارگذاری می‌شود.',
+	'Downloading and installing the new version. This takes a minute or two; the page reloads by itself when it is done.':
+		'در حال دانلود و نصب نسخه جدید. یکی دو دقیقه طول می‌کشد؛ وقتی تمام شد صفحه خودش دوباره بارگذاری می‌شود.',
+	'Updated to %s.': 'به نسخه %s به‌روز شد.',
+	'This router does not say what processor it has.': 'این روتر نوع پردازنده‌اش را اعلام نمی‌کند.',
+	'No package manager found on this router.': 'روی این روتر مدیر پکیج پیدا نشد.',
+	'GitHub could not be reached.': 'به گیت‌هاب دسترسی نیست.',
+	'The latest release has no package for this router.': 'آخرین انتشار پکیجی برای این روتر ندارد.',
+	'The latest release is incomplete.': 'آخرین انتشار ناقص است.',
+	'Download failed.': 'دانلود ناموفق بود.',
+	'A downloaded file does not match the release\'s checksum - nothing was installed.':
+		'فایل دانلودشده با چک‌سام انتشار جور نیست - چیزی نصب نشد.',
+	'The package manager refused the new version. The Log page has the details.':
+		'مدیر پکیج نسخه جدید را نپذیرفت. جزئیات در صفحه لاگ است.',
+	'Updating Passwall+': 'در حال به‌روزرسانی Passwall+',
+	'Checking for new versions': 'در حال بررسی نسخه‌های جدید',
+	'Checking which servers answer': 'در حال بررسی سرورهایی که جواب می‌دهند',
+	'Downloading routing data': 'در حال دانلود داده‌های مسیریابی',
+	'Installing dependencies': 'در حال نصب پیش‌نیازها',
+	'Reading the subscriptions': 'در حال خواندن اشتراک‌ها',
+	'Installing %s': 'در حال نصب %s',
 	'The full files are about 17 MB and 8 MB. If they will not fit, the same project publishes geoip-lite.dat (38 KB) and geosite-lite.dat (2 MB), which carry the Iranian categories and nothing else — put those addresses in the boxes below. A download that will not fit is refused rather than half written.':
 		'فایل‌های کامل حدود ۱۷ و ۸ مگابایت هستند. اگر جا نمی‌شوند، همان پروژه ‎geoip-lite.dat‎ (۳۸ کیلوبایت) و ‎geosite-lite.dat‎ (۲ مگابایت) را هم منتشر می‌کند که فقط دسته‌های ایرانی را دارند — آدرس آن‌ها را در کادرهای پایین بگذارید. دانلودی که جا نشود رد می‌شود، نه اینکه نصفه نوشته شود.',
 	'App Path': 'مسیر برنامه‌ها',

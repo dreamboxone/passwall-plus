@@ -8,6 +8,7 @@
 #
 #   pwplus-cores list
 #   pwplus-cores install xray|sing-box|hysteria
+#   pwplus-cores install passwall-plus       (this program, from its latest release)
 #   pwplus-cores remove  sing-box|hysteria
 #
 # Xray is the engine. It is what the configuration generator writes for, what
@@ -406,6 +407,120 @@ cmd_list() {
 	return 0
 }
 
+# ---------------------------------------------------------- this program
+
+# The newest release of this program, put in the way it was put in the first
+# time: its two packages, handed to the router's own package manager. Only
+# the package manager can replace a package cleanly - it knows which files
+# are whose, keeps the settings file, and runs the steps that go with an
+# upgrade - so this does no more than fetch the right two files for this
+# router, check them against the release's own list of checksums, and ask it.
+#
+# How it went is left in SELF_RESULT for the page: "ok <version>" or
+# "error <why>". The page cannot be told any other way, because the install
+# restarts the very service it would be asking.
+SELF_REPO=dreamboxone/passwall-plus
+SELF_RESULT="$PWPLUS_RUN/self-update"
+SELF_DIR=/tmp/passwall-plus-update
+
+self_fail() {
+	printf 'error %s\n' "$1" > "$SELF_RESULT"
+	warn "update: $1"
+	rm -rf "$SELF_DIR"
+	return 1
+}
+
+install_self() {
+	rm -f "$SELF_RESULT"
+	_arch="$(openwrt_arch)"
+	[ -n "$_arch" ] || { self_fail "This router does not say what processor it has."; return 1; }
+	if command -v apk >/dev/null 2>&1; then
+		_pm=apk
+	elif command -v opkg >/dev/null 2>&1; then
+		_pm=opkg
+	else
+		self_fail "No package manager found on this router."
+		return 1
+	fi
+
+	# Every download address in the release, one per line. The answer may
+	# come on one line or many, so it is split on commas first.
+	_urls="$(curl -fsSL --connect-timeout 15 --max-time 45 \
+		"https://api.github.com/repos/$SELF_REPO/releases/latest" 2>/dev/null |
+		tr ',' '\n' |
+		sed -n 's/.*"browser_download_url"[ \t]*:[ \t]*"\([^"]*\)".*/\1/p')"
+	[ -n "$_urls" ] || { self_fail "GitHub could not be reached."; return 1; }
+
+	if [ "$_pm" = "apk" ]; then
+		_main="$(printf '%s\n' "$_urls" | grep "/passwall-plus-[^/]*\.$_arch\.apk\$" | head -1)"
+		_luci="$(printf '%s\n' "$_urls" | grep '/luci-app-passwall-plus-[^/]*\.apk$' | head -1)"
+	else
+		_main="$(printf '%s\n' "$_urls" | grep "/passwall-plus_[^/]*_$_arch\.ipk\$" | head -1)"
+		_luci="$(printf '%s\n' "$_urls" | grep '/luci-app-passwall-plus_[^/]*_all\.ipk$' | head -1)"
+	fi
+	_sums="$(printf '%s\n' "$_urls" | grep '/SHA256SUMS$' | head -1)"
+	[ -n "$_main" ] || { log "update: no package for $_arch in the latest release"; self_fail "The latest release has no package for this router."; return 1; }
+	[ -n "$_luci" ] && [ -n "$_sums" ] || { self_fail "The latest release is incomplete."; return 1; }
+
+	rm -rf "$SELF_DIR"
+	mkdir -p "$SELF_DIR"
+	log "update: downloading $(basename "$_main")"
+	download_checked "$_main" "$SELF_DIR/$(basename "$_main")" || { self_fail "Download failed."; return 1; }
+	download_checked "$_luci" "$SELF_DIR/$(basename "$_luci")" || { self_fail "Download failed."; return 1; }
+	# Far smaller than download_checked's floor for a real file, so fetched
+	# plainly.
+	curl -fsSL --connect-timeout 15 --max-time 60 -o "$SELF_DIR/SHA256SUMS" "$_sums" 2>/dev/null ||
+		{ self_fail "Download failed."; return 1; }
+
+	for _f in "$SELF_DIR/$(basename "$_main")" "$SELF_DIR/$(basename "$_luci")"; do
+		_n="$(basename "$_f")"
+		_want="$(awk -v n="$_n" '$2 == n || $2 == "*" n { print $1; exit }' "$SELF_DIR/SHA256SUMS")"
+		_got="$(sha256sum "$_f" 2>/dev/null | awk '{ print $1 }')"
+		if [ -z "$_want" ] || [ "$_want" != "$_got" ]; then
+			log "update: $_n does not match SHA256SUMS"; self_fail "A downloaded file does not match the release's checksum - nothing was installed."
+			return 1
+		fi
+	done
+
+	log "update: installing with $_pm"
+	# The release is not signed with a key this router knows, so apk has to
+	# be told to take it; the checksums above are what vouch for it. The
+	# `|| _rc=$?` because under set -e a bare failure would end the script
+	# before it could say why.
+	_rc=0
+	if [ "$_pm" = "apk" ]; then
+		apk add --allow-untrusted "$SELF_DIR/$(basename "$_main")" "$SELF_DIR/$(basename "$_luci")" \
+			>"$SELF_DIR/log" 2>&1 || _rc=$?
+	else
+		opkg install "$SELF_DIR/$(basename "$_main")" "$SELF_DIR/$(basename "$_luci")" \
+			>"$SELF_DIR/log" 2>&1 || _rc=$?
+	fi
+	if [ "$_rc" != "0" ]; then
+		log "update: $_pm said: $(tail -n 3 "$SELF_DIR/log" | tr '\n' ' ')"
+		self_fail "The package manager refused the new version. The Log page has the details."
+		return 1
+	fi
+
+	# The version file lives in /etc, and a package manager leaves a file
+	# there that has changed since it was installed and puts the new one
+	# beside it. It is not a setting; the new one is the true one.
+	for _v in "$PWPLUS_ETC/version.apk-new" "$PWPLUS_ETC/version-opkg"; do
+		if [ -f "$_v" ]; then
+			mv -f "$_v" "$PWPLUS_ETC/version"
+		fi
+	done
+
+	# An upgrade may stop the tunnel on its way through. The main switch
+	# decides whether it comes back, as it does at boot.
+	/etc/init.d/passwall-plus enable >/dev/null 2>&1 || true
+	/etc/init.d/passwall-plus restart >/dev/null 2>&1 || true
+	rm -rf "$SELF_DIR"
+	_now="$(pwplus_version)"
+	printf 'ok %s\n' "${_now%-r*}" > "$SELF_RESULT"
+	log "update: now version $_now"
+	return 0
+}
+
 cmd_remove() {
 	case "$1" in
 		sing-box|hysteria|geoview)
@@ -440,7 +555,10 @@ case "${1:-list}" in
 			sing-box) install_singbox ;;
 			hysteria) install_hysteria ;;
 			geoview)  install_geoview ;;
-			*) echo "usage: $0 install xray|sing-box|hysteria|geoview" >&2; exit 1 ;;
+			# This file is among those the install replaces, so nothing
+			# after it may be read from here: it ends the script outright.
+			passwall-plus) install_self; exit $? ;;
+			*) echo "usage: $0 install xray|sing-box|hysteria|geoview|passwall-plus" >&2; exit 1 ;;
 		esac
 		;;
 	remove) clear_message; cmd_remove "${2:-}" ;;

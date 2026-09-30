@@ -348,12 +348,13 @@ method_system() {
 		[ -n "$_deps" ] && printf '%s\n' "$_deps" > "$_dc" 2>/dev/null
 	fi
 
-	printf '{"geo":%s,"cores":%s,"deps":%s,"interfaces":%s,"job":"%s"}\n' \
+	printf '{"geo":%s,"cores":%s,"deps":%s,"interfaces":%s,"job":"%s","self":"%s"}\n' \
 		"$("$GEO" status 2>/dev/null || echo '{}')" \
 		"$("$CORES" list 2>/dev/null || echo '{}')" \
 		"${_deps:-{\}}" \
 		"$(interfaces_json)" \
-		"$(cat "$JOB" 2>/dev/null)"
+		"$(cat "$JOB" 2>/dev/null)" \
+		"$(json_escape "$(cat "$PWPLUS_RUN/self-update" 2>/dev/null)")"
 }
 
 # -------------------------------------------------------------------- action
@@ -510,6 +511,13 @@ method_action() {
 				xray|sing-box|hysteria|geoview) run_job "Installing $arg" "$CORES install $arg" ;;
 				*) fail "unknown core"; return ;;
 			esac
+			;;
+		app_update)
+			# This program itself, from its latest release. Detached like any
+			# long job, and more so than most: the install restarts rpcd and
+			# the web server, which are what would otherwise be waiting on it.
+			rm -f "$PWPLUS_RUN/self-update"
+			run_job "Updating Passwall+" "$CORES install passwall-plus"
 			;;
 		core_remove)
 			case "$arg" in

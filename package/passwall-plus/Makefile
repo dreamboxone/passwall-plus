@@ -72,6 +72,11 @@ mkdir -p /etc/passwall-plus /etc/passwall-plus/geo /var/run/passwall-plus
 # went on sitting on the front page after the release that stopped
 # saying it. Nothing here is worth carrying across an install.
 rm -f /var/run/passwall-plus/message
+# The version file is not a setting, but it lives in /etc, and a package
+# manager keeps a changed file there and puts the new one beside it.
+for v in /etc/passwall-plus/version.apk-new /etc/passwall-plus/version-opkg; do
+	[ -f "$$v" ] && mv -f "$$v" /etc/passwall-plus/version
+done
 # The rebind exceptions that ship on the Traffic Rules page. A configuration
 # kept from an older version has no such list; it gets one once, and a list
 # the reader has since trimmed is never filled back in.
