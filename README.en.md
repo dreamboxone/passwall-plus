@@ -1,6 +1,6 @@
 # Passwall+ — a router-wide tunnel for OpenWrt
 
-**Version 1.2.1** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
+**Version 1.2.2** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
 🇮🇷 **[راهنمای فارسی: README.md](README.md)**
 
 Install it on the router, turn on the **Main switch**, and from that moment
@@ -434,9 +434,9 @@ be made.
 
 | Card | What it shows |
 |---|---|
-| **App Update** | This program's version and whether a newer one is published. It is updated by installing the new package, like the first time |
+| **App Update** | This program's version and whether a newer one is published. **Update to …** downloads the new version from GitHub, checks it against that release's checksums and installs it with the router's own package manager (apk or opkg); the settings are kept, the tunnel comes back if it was on, and the page reloads by itself |
 | **Cores** | Xray, sing-box, hysteria and Geoview: what is installed, what each project has published, **Check update**, **Install / Update to …**, **Remove**. sing-box and hysteria are only for configs that speak hysteria2 or tuic, which Xray does not; Geoview only for the Geo View page |
-| **Does this router have what it needs?** | Questions put to the running system — transparent proxy, policy routing, HTTPS, the firewall in use, missing packages — and **Install them** |
+| **Router requirements** | One line: everything is ready, or how many things are missing. **Details** opens the questions put to the running system — transparent proxy, policy routing, HTTPS, the firewall in use, missing packages — with **Install them**. They open by themselves when something is missing |
 
 **App Path**
 

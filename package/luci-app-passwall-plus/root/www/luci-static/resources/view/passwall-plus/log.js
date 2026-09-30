@@ -71,7 +71,7 @@ return view.extend({
 			pui.card(_('Runtime Logs'), 'book', '#1e88e5', E('div', {}, [
 				E('div', { 'class': 'mk-row', 'style': 'margin-bottom:10px;justify-content:space-between' }, [
 					E('span', { 'style': 'font-size:13px;color:var(--muted)' },
-						_('What this program did, step by step. It refreshes every five seconds and lives in memory, so it is empty again after a restart.')),
+						_('What Passwall+ does is shown here, refreshed every 5 seconds. It is emptied when the router reboots.')),
 					pui.btn(_('Clear logs'), 'danger mk-small', function() {
 						return callAction('clear_log', '').then(function() {
 							return callLog().then(draw);
@@ -81,8 +81,15 @@ return view.extend({
 				runtime
 			])),
 			pui.card(_('Node log'), 'cpu', '#8b5cf6', E('div', {}, [
-				E('p', { 'style': 'font-size:13px;color:var(--muted);margin:0 0 10px' },
-					_('What Xray itself said. When a node is refused or a connection fails, the reason is usually here.')),
+				E('div', { 'class': 'mk-row', 'style': 'margin-bottom:10px;justify-content:space-between' }, [
+					E('span', { 'style': 'font-size:13px;color:var(--muted)' },
+						_('The Xray core’s messages are shown here.')),
+					pui.btn(_('Clear logs'), 'danger mk-small', function() {
+						return callAction('clear_core_log', '').then(function() {
+							return callLog().then(draw);
+						});
+					}, 'trash')
+				]),
 				core
 			]))
 		]);

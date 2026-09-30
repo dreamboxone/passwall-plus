@@ -501,12 +501,12 @@ var FA = {
 	'Runtime Logs': 'لاگ‌های اجرا',
 	'The node log is switched off in Settings → Log.': 'لاگ کانفیگ در تنظیمات ← لاگ خاموش است.',
 	'The core has not said anything yet.': 'هسته هنوز چیزی نگفته.',
-	'What this program did, step by step. It refreshes every five seconds and lives in memory, so it is empty again after a restart.':
-		'کارهایی که این برنامه انجام داده، قدم به قدم. هر پنج ثانیه تازه می‌شود و در حافظه موقت است، پس بعد از ریستارت دوباره خالی است.',
+	'What Passwall+ does is shown here, refreshed every 5 seconds. It is emptied when the router reboots.':
+		'اقدامات برنامه پسوال پلاس در این بخش نمایش داده می‌شود که هر 5 ثانیه به‌روز می‌شود. پس از ریبوت روتر پاک می‌شود.',
 	'Clear logs': 'پاک کردن لاگ‌ها',
 	'Node log': 'لاگ کانفیگ',
-	'What Xray itself said. When a node is refused or a connection fails, the reason is usually here.':
-		'چیزهایی که خود Xray گفته. وقتی کانفیگی رد می‌شود یا اتصالی برقرار نمی‌شود، معمولا دلیلش اینجاست.',
+	'The Xray core’s messages are shown here.':
+		'پیام‌های هسته Xray در این بخش نمایش داده می‌شود.',
 
 	/* ------------------------------------------------------- chain proxy */
 	'Chain Proxy': 'پروکسی زنجیره‌ای',

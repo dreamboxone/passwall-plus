@@ -218,15 +218,42 @@ method_log() {
 	# The runtime log, PassWall2's way: this program's own file, a date on
 	# every line, emptied by the button on the page. Before this release
 	# there was no file, so the system log stands in until there is one.
-	if [ -s "$PWPLUS_LOG" ]; then
+	# The file's being there is what counts, not its having something in it:
+	# an emptied one is a log that was cleared, and reading the system log in
+	# its place brought every cleared line straight back.
+	if [ -e "$PWPLUS_LOG" ]; then
 		json_add_string "text" "$(tail -n 400 "$PWPLUS_LOG" 2>/dev/null)"
 	else
 		json_add_string "text" "$(logread -e passwall-plus 2>/dev/null | tail -300)"
 	fi
 	# And what the cores themselves said. procd hands their output to the
 	# system log under the program's own name.
-	json_add_string "core" "$(logread 2>/dev/null | grep -E ' (xray|sing-box|hysteria)\[[0-9]+\]:' | tail -300)"
+	json_add_string "core" "$(core_log | tail -300)"
 	json_dump
+}
+
+# The cores' lines in the system log, from after the last one there was when
+# the page's button cleared them. The system log itself cannot be emptied,
+# so clearing remembers the line it stopped at. Once that line has rotated
+# out of the log, so has everything older than it, and all of it is new.
+CORE_LOG_MARK="$PWPLUS_RUN/core-log.mark"
+
+core_log_all() {
+	logread 2>/dev/null | grep -E ' (xray|sing-box|hysteria)\[[0-9]+\]:'
+	return 0
+}
+
+core_log() {
+	M="$(cat "$CORE_LOG_MARK" 2>/dev/null)" core_log_all_marked
+	return 0
+}
+
+core_log_all_marked() {
+	core_log_all | awk 'BEGIN { m = ENVIRON["M"] }
+		m != "" && $0 == m { c = NR; next }
+		{ a[NR] = $0 }
+		END { for (i = c + 1; i <= NR; i++) if (i in a) print a[i] }'
+	return 0
 }
 
 # PassWall2's connection check: one request to a well-known site, timed.
@@ -570,6 +597,10 @@ method_action() {
 			# PassWall2's "Clear logs". Only the runtime log: the core's
 			# own lines are the system log's, not this program's to empty.
 			: > "$PWPLUS_LOG" 2>/dev/null || true
+			;;
+		clear_core_log)
+			# The node log: see core_log.
+			core_log_all | tail -n 1 > "$CORE_LOG_MARK" 2>/dev/null || true
 			;;
 		clear_message)
 			# The reader has read it. A message that cannot be put away
