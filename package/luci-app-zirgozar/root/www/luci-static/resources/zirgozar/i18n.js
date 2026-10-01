@@ -623,7 +623,7 @@ var FA = {
 
 	/* ------------------------------------------ Node List, Node Subscribe */
 	'Node List': 'فهرست کانفیگ‌ها',
-	'Node Subscribe': 'اشتراک کانفیگ‌ها',
+	'Node Subscribe': 'اشتراک‌ها',
 	'Automatic detection delay': 'بررسی خودکار تاخیر',
 	'When this page opens, each node added by hand is measured this way, and the answer put in its column.':
 		'با باز شدن این صفحه، هر کانفیگ دستی با این روش اندازه‌گیری می‌شود و نتیجه در ستون خودش نشان داده می‌شود.',

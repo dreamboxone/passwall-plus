@@ -7,7 +7,7 @@
 # packages.inc.sh - what goes into a package, shared by the .apk and .ipk
 # builders so the two formats can never drift apart.
 
-VERSION=2.0.7
+VERSION=2.0.8
 RELEASE=1
 PKGVER="$VERSION-r$RELEASE"
 LICENSE="AGPL-3.0-or-later"
@@ -228,8 +228,8 @@ stage_luci() {
 	install -m 0644 "$l/www/luci-static/resources/zirgozar/logo-light.png" \
 		"$i/www/luci-static/resources/zirgozar/logo-light.png"
 	# The moving one on that banner.
-	install -m 0644 "$l/www/luci-static/resources/zirgozar/logo-anim.webp" \
-		"$i/www/luci-static/resources/zirgozar/logo-anim.webp"
+	install -m 0644 "$l/www/luci-static/resources/zirgozar/logoanim.js" \
+		"$i/www/luci-static/resources/zirgozar/logoanim.js"
 	install -d "$i/www/luci-static/resources/zirgozar/fonts"
 	install -m 0644 "$l/www/luci-static/resources/zirgozar/fonts/Vazirmatn.woff2" \
 		"$i/www/luci-static/resources/zirgozar/fonts/Vazirmatn.woff2"
