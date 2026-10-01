@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+# Part of Zirgozar - https://github.com/dreamboxone/zirgozar
 #
 # Everything, in the order of how much it needs to run.
 #

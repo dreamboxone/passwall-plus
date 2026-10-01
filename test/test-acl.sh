@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+# Part of Zirgozar - https://github.com/dreamboxone/zirgozar
 #
 # The Traffic Rules and Access Control pages, as the firewall and the core
 # receive them.
@@ -29,11 +29,11 @@ TAB="$(printf '\t')"
 
 # id iface macs ips ipsets mode port tcp_no udp_no tcp_redir udp_redir
 acl() {
-	printf '%s\n' "$*" | tr ' ' "$TAB" >> "$PWPLUS_RUN/acl.tsv"
+	printf '%s\n' "$*" | tr ' ' "$TAB" >> "$ZGZ_RUN/acl.tsv"
 }
 
 dump() {
-	sh "$RIG/lib/pwplus-rules" dump > "$WORK/rules.nft" 2>"$WORK/rules.err"
+	sh "$RIG/lib/zgz-rules" dump > "$WORK/rules.nft" 2>"$WORK/rules.err"
 	if command -v nft >/dev/null 2>&1; then
 		if nft --check --file "$WORK/rules.nft" >"$WORK/nft.err" 2>&1; then
 			ok "$1: nft accepts it"
@@ -56,7 +56,7 @@ chain() {
 }
 
 echo "== nothing set: nothing extra"
-: > "$PWPLUS_RUN/acl.tsv"
+: > "$ZGZ_RUN/acl.tsv"
 dump "no rules"
 hasnt "no direct set" "set direct"
 hasnt "no access control chain" "chain acl_"
@@ -79,7 +79,7 @@ rig_set direct_ip ""
 echo "== access control"
 rig_set ipv6 block
 rig_set block_quic 1
-: > "$PWPLUS_RUN/acl.tsv"
+: > "$ZGZ_RUN/acl.tsv"
 acl "cfg01 - 00:11:22:33:44:55 192.168.1.50-192.168.1.60,192.168.1.7 - 0 0 - - 1:65535 1:65535"
 acl "cfg02 br-lan - 192.168.1.0/24 - 2 0 - 1:65535 80:443,8443 1:65535"
 acl "cfg03 - - 192.168.1.9 - 1 1183 - - 1:65535 1:65535"
@@ -138,10 +138,10 @@ else
 fi
 
 echo "== the core"
-: > "$PWPLUS_RUN/acl.tsv"
-echo '{"protocol":"freedom","settings":{}}' > "$PWPLUS_ETC/best.json"
+: > "$ZGZ_RUN/acl.tsv"
+echo '{"protocol":"freedom","settings":{}}' > "$ZGZ_ETC/best.json"
 rig_set direct_domain "example.com full:a.example.org .b.example.net"
-if sh "$RIG/lib/pwplus-mkconfig" > "$WORK/config.json" 2>"$WORK/mk.err"; then
+if sh "$RIG/lib/zgz-mkconfig" > "$WORK/config.json" 2>"$WORK/mk.err"; then
 	ok "the configuration is written"
 else
 	bad "the configuration is written: $(cat "$WORK/mk.err")"

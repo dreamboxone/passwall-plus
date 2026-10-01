@@ -1,0 +1,100 @@
+{
+	"admin/services/zirgozar": {
+		"title": "Zirgozar",
+		"order": 40,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": [ "luci-app-zirgozar" ]
+		}
+	},
+
+	"admin/services/zirgozar/settings": {
+		"title": "Basic Settings",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "zirgozar/settings"
+		}
+	},
+
+	"admin/services/zirgozar/nodes": {
+		"title": "Node List",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "zirgozar/nodes"
+		}
+	},
+
+	"admin/services/zirgozar/subscribe": {
+		"title": "Node Subscribe",
+		"order": 30,
+		"action": {
+			"type": "view",
+			"path": "zirgozar/subscribe"
+		}
+	},
+
+	"admin/services/zirgozar/other": {
+		"title": "Other Settings",
+		"order": 40,
+		"action": {
+			"type": "view",
+			"path": "zirgozar/other"
+		}
+	},
+
+	"admin/services/zirgozar/update": {
+		"title": "App Update",
+		"order": 50,
+		"action": {
+			"type": "view",
+			"path": "zirgozar/update"
+		}
+	},
+
+	"admin/services/zirgozar/traffic": {
+		"title": "Rule Manage",
+		"order": 60,
+		"action": {
+			"type": "view",
+			"path": "zirgozar/traffic"
+		}
+	},
+
+	"admin/services/zirgozar/geoview": {
+		"title": "Geo View",
+		"order": 70,
+		"action": {
+			"type": "view",
+			"path": "zirgozar/geoview"
+		}
+	},
+
+	"admin/services/zirgozar/acl": {
+		"title": "Access Control",
+		"order": 80,
+		"action": {
+			"type": "view",
+			"path": "zirgozar/acl"
+		}
+	},
+
+	"admin/services/zirgozar/log": {
+		"title": "Runtime Logs",
+		"order": 90,
+		"action": {
+			"type": "view",
+			"path": "zirgozar/log"
+		}
+	},
+
+	"admin/services/zirgozar/overview": {
+		"action": {
+			"type": "alias",
+			"path": "admin/services/zirgozar/settings"
+		}
+	}
+}

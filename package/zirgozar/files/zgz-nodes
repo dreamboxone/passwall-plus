@@ -1,0 +1,1002 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Zirgozar - https://github.com/dreamboxone/zirgozar
+#
+# zgz-nodes - where the servers come from.
+#
+#   zgz-nodes fetch [all|<section>]   re-read the subscriptions that are
+#                                        due, all of them, or the one named
+#   zgz-nodes build                   turn what we have into candidates
+#   zgz-nodes update [all|<section>]  both
+#   zgz-nodes forget [<section>]      drop what a subscription brought
+#   zgz-nodes status   one line per subscription, for the web interface
+#   zgz-nodes inuse    which hand-added section is the node in use
+#
+# Subscriptions and hand-added nodes both live in /etc/config/zirgozar, as
+# `config subscription` and `config node` sections. Adding either is a UCI
+# edit and nothing more, which is what lets the web interface offer it
+# without this script needing to know the web interface exists.
+
+set -e
+
+. "${ZGZ_LIB:-/usr/libexec}/zgz-common.sh"
+. /lib/functions.sh
+
+PARSE="${ZGZ_LIB:-/usr/libexec}/zgz-parse"
+SUBS_STATUS="$ZGZ_RUN/subs.status"
+# Hand-added nodes with a chain of their own, already made into records.
+CHAIN_TSV="$ZGZ_RUN/chain.tsv"
+
+# ---------------------------------------------------------------- fetching
+#
+# Each subscription is kept on its own, under $SUBS_DIR, as <section>.links
+# (a list of share links) or <section>.tsv (a configuration, already read into
+# records), with <section>.status beside it. That is what lets one of them be
+# read again, or have its nodes deleted, without touching the others - which
+# is how PassWall2's Node Subscribe page works, button for button. The files
+# the rest of the program reads are then put together from these.
+
+SUBS_DIR="$ZGZ_RUN/subs"
+# The same subscriptions' lists on flash - see sub_restore.
+SUBS_KEEP="$ZGZ_ETC/subs"
+# The nodes a subscription's landing chain goes through - see sub_records.
+CHAINS="$ZGZ_RUN/chains.tsv"
+
+# The User-Agent PassWall2 sends unless told otherwise. Some providers answer
+# a client they do not recognise with a page instead of the list.
+SUB_UA_DEFAULT="v2rayN/9.99"
+
+_fl_add() {
+	FL_OUT="${FL_OUT}$1
+"
+}
+
+# A list option as one keyword a line - keywords may have spaces in them.
+sub_list() {
+	FL_OUT=""
+	config_list_foreach "$1" "$2" _fl_add
+	printf '%s' "$FL_OUT"
+	return 0
+}
+
+# PassWall2's keyword filter: a subscription's own mode and lists, or with
+# "Use global config" - which is what a new one has - the global ones.
+sub_filter() {
+	local mode
+	config_get mode "$1" filter_keyword_mode 5
+	case "$mode" in
+		0|1|2|3|4)
+			SUB_FMODE="$mode"
+			ZGZ_FDISCARD="$(sub_list "$1" filter_discard_list)"
+			ZGZ_FKEEP="$(sub_list "$1" filter_keep_list)"
+			;;
+		*)
+			config_get SUB_FMODE config filter_keyword_mode 0
+			ZGZ_FDISCARD="$(sub_list config filter_discard_list)"
+			ZGZ_FKEEP="$(sub_list config filter_keep_list)"
+			;;
+	esac
+	export ZGZ_FDISCARD ZGZ_FKEEP
+	return 0
+}
+
+# One address, one way: "proxy" through the tunnel's own SOCKS port, "direct"
+# with the name looked up by the direct resolver - never through a tunnel
+# that may be the very thing that is down - and "plain" as the router would.
+# PassWall2's three, and its names for them.
+#
+#   sub_curl <url> <out> <connect-timeout> <max-time> <retries> <way>
+proxy_ready() {
+	[ -n "$(cfg node_socks_port '')" ] || return 1
+	tunnel_running
+}
+
+sub_curl() {
+	_sc_u="$1"; _sc_o="$2"; _sc_c="$3"; _sc_m="$4"; _sc_r="$5"
+	set --
+	case "$6" in
+		proxy)
+			set -- -x "socks5h://127.0.0.1:$(cfg node_socks_port '')"
+			;;
+		direct)
+			_sc_h="${_sc_u#*://}"; _sc_h="${_sc_h%%/*}"; _sc_h="${_sc_h%%\?*}"; _sc_h="${_sc_h##*@}"
+			case "$_sc_u" in https://*) _sc_p=443 ;; *) _sc_p=80 ;; esac
+			case "$_sc_h" in
+				\[*) _sc_h="" ;;
+				*:*) _sc_p="${_sc_h##*:}"; _sc_h="${_sc_h%:*}" ;;
+			esac
+			if [ -n "$_sc_h" ]; then
+				_sc_ip="$(resolve_direct "$_sc_h")"
+				[ -n "$_sc_ip" ] && set -- --resolve "$_sc_h:$_sc_p:$_sc_ip"
+			fi
+			;;
+	esac
+	if [ -n "$SUB_UA" ] && [ "$SUB_UA" != "curl" ]; then
+		set -- "$@" -A "$SUB_UA"
+	fi
+	curl -fsSL --connect-timeout "$_sc_c" --max-time "$_sc_m" --retry "$_sc_r" \
+		-H 'Accept: */*' -D "$SUB_HDR" -o "$_sc_o" "$@" "$_sc_u" 2>/dev/null
+}
+
+# What is left of the allowance and when it runs out, from the
+# subscription-userinfo header most panels send: "upload=..; download=..;
+# total=..; expire=..". Printed as remaining<TAB>expiry, -1 for not known.
+sub_info() {
+	tr -d '\r' < "$SUB_HDR" 2>/dev/null | awk '
+		{ l = tolower($0) }
+		index(l, "subscription-userinfo:") == 1 { v = substr($0, 23) }
+		END {
+			n = split(v, a, ";")
+			for (i = 1; i <= n; i++) {
+				gsub(/[ \t]/, "", a[i])
+				p = index(a[i], "=")
+				if (p) x[substr(a[i], 1, p - 1)] = substr(a[i], p + 1) + 0
+			}
+			rem = -1
+			if (x["total"] > 0) {
+				rem = x["total"] - x["upload"] - x["download"]
+				if (rem < 0) rem = 0
+			}
+			printf "%.0f\t%.0f\n", rem, (x["expire"] > 0 ? x["expire"] : -1)
+		}'
+	return 0
+}
+
+# What this subscription still has on the router, whatever became of the last
+# attempt to read it.
+sub_count() {
+	if [ -s "$SUBS_DIR/$1.tsv" ]; then
+		wc -l < "$SUBS_DIR/$1.tsv"
+	elif [ -s "$SUBS_DIR/$1.links" ]; then
+		grep -c '://' "$SUBS_DIR/$1.links" 2>/dev/null || true
+	else
+		echo 0
+	fi
+	return 0
+}
+
+# name url count when error section remaining expiry
+sub_status() {
+	_ss_when="$(cat "$SUBS_DIR/$_sec.when" 2>/dev/null)"
+	_ss_info="$(cat "$SUBS_DIR/$_sec.info" 2>/dev/null)"
+	[ -n "$_ss_info" ] || _ss_info="$(printf '%s\t%s' -1 -1)"
+	printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "$url" "$(sub_count "$_sec")" \
+		"${_ss_when:-0}" "$1" "$_sec" "$_ss_info" > "$SUBS_DIR/$_sec.status"
+	return 0
+}
+
+sub_failed() {
+	rm -f "$SUB_HDR"
+	warn "subscription '$name': $1"
+	sub_status "$1"
+	return 0
+}
+
+fetch_one() {
+	_sec="$1"
+	local url name enabled content ua mode
+	config_get url "$_sec" url ""
+	config_get name "$_sec" name "$_sec"
+	config_get content "$_sec" content ""
+	config_get_bool enabled "$_sec" enabled 1
+	config_get ua "$_sec" user_agent "$SUB_UA_DEFAULT"
+	config_get mode "$_sec" access_mode ""
+
+	# One subscription asked for by name is read whether or not it is
+	# switched on: somebody pressed its button.
+	if [ -n "$ONLY" ]; then
+		[ "$ONLY" = "$_sec" ] || return 0
+	else
+		[ "$enabled" = "1" ] || return 0
+		if [ "$DUE_ONLY" = "1" ] && ! sub_due "$_sec"; then
+			return 0
+		fi
+	fi
+	[ -n "$url" ] || [ -n "$content" ] || return 0
+	[ -n "$url" ] || url="a file"
+
+	_tmp="$SUBS_DIR/$_sec.body"
+	SUB_HDR="$SUBS_DIR/$_sec.hdr"
+	SUB_UA="$ua"
+	: > "$SUB_HDR"
+
+	# A source the reader handed over as a file rather than as an address.
+	# There is nothing to fetch and nothing that can fail, so the body is
+	# simply put where a download would have put it and everything below
+	# runs exactly as it does for a fetched one - which already knows an
+	# Xray, sing-box or Clash configuration whole, a base64 block, and a
+	# plain list of links. A file therefore yields the same nodes it would
+	# have if it had been published at a URL, and nothing else in this
+	# program had to learn that files exist.
+	if [ -n "$content" ]; then
+		printf '%s\n' "$content" > "$_tmp"
+	else
+		# Which ways, in which order. Auto is PassWall2's: with the router's
+		# own traffic already going through the tunnel, as the router would;
+		# otherwise through the tunnel if it is up, and straight out if not.
+		case "$mode" in
+			proxy)  _ways="proxy" ;;
+			direct) _ways="direct" ;;
+			*)
+				if [ "$(cfg_bool localhost_proxy 1)" = "1" ]; then
+					_ways="plain"
+				else
+					_ways="proxy direct"
+				fi
+				;;
+		esac
+		log "subscription '$name': reading $url [${mode:-auto}]"
+
+		# The address as written, then the mirrors of it, because the default list
+		# is on a host that is blocked from precisely the connections this program
+		# exists to fix. The mirrors are given a shorter leash than the address the
+		# user actually asked for: this runs every quarter of an hour, and three
+		# long timeouts in a row is a quarter of an hour spent waiting.
+		_got=0
+		_first=1
+		_tried=0
+		for _way in $_ways; do
+			# Through the tunnel only when there is one to go through.
+			if [ "$_way" = "proxy" ] && ! proxy_ready; then
+				continue
+			fi
+			_tried=1
+			for _try in "$url" $(mirrors_for "$url"); do
+				if [ "$_first" = "1" ]; then
+					_ct=8; _mt=30; _rt=1
+				else
+					_ct=6; _mt=20; _rt=0
+				fi
+				_first=0
+				# A blocked address does not refuse, it hangs, so the whole point of
+				# these numbers is the worst case: three sources at the old timeouts
+				# was four minutes of a fifteen-minute schedule spent waiting. The
+				# list is a few kilobytes; twenty seconds is not a tight budget for it.
+				if sub_curl "$_try" "$_tmp" "$_ct" "$_mt" "$_rt" "$_way"; then
+					_got=1
+					[ "$_try" = "$url" ] || log "subscription '$name': unreachable, read from $_try instead"
+					break 2
+				fi
+				rm -f "$_tmp"
+			done
+		done
+		if [ "$_got" != "1" ]; then
+			rm -f "$_tmp" "$SUB_HDR"
+			if [ "$_tried" = "0" ]; then
+				sub_failed "the tunnel is not running, and this is read only through it"
+			else
+				sub_failed "download failed"
+			fi
+			return 0
+		fi
+	fi
+
+	# A subscription that answers with an error page, a login form or half a
+	# file must never replace what we already have. A file that was handed
+	# over rather than fetched cannot have been truncated on the way, and a
+	# short one is a short one on purpose - a single link is forty bytes.
+	if [ -z "$content" ] && [ "$(wc -c < "$_tmp")" -lt 64 ]; then
+		rm -f "$_tmp"
+		sub_failed "answer too short"
+		return 0
+	fi
+
+	sub_filter "$_sec"
+
+	# A configuration rather than a list: Xray, sing-box, Clash, hysteria,
+	# a WireGuard .conf, or an array of nodes. It is read here, on its own,
+	# and not added to the pile of links - a configuration has to be parsed
+	# whole. What decides it is the first line with anything on it that is
+	# not a comment, the same line the parser itself decides on.
+	_head="$(awk '
+		{ l = $0; gsub(/\r/, "", l); sub(/^[ \t]+/, "", l) }
+		l == "" || l ~ /^[#;]/ { next }
+		{ print l; exit }' "$_tmp" 2>/dev/null)"
+	_doc=0
+	case "$_head" in
+		'{'*|'['*|'- '*) _doc=1 ;;
+		*://*) : ;;
+		*)
+			if printf '%s\n' "$_head" | grep -q '^[A-Za-z_][A-Za-z0-9_.-]*:'; then
+				_doc=1
+			fi
+			;;
+	esac
+
+	if [ "$_doc" = "1" ]; then
+		LC_ALL=C awk -v LIMIT="$(cfg max_nodes 300)" -v FMODE="$SUB_FMODE" \
+			-f "$PARSE" < "$_tmp" > "$SUBS_DIR/$_sec.tsv.new" 2>/dev/null || true
+		rm -f "$_tmp"
+		if [ ! -s "$SUBS_DIR/$_sec.tsv.new" ]; then
+			rm -f "$SUBS_DIR/$_sec.tsv.new"
+			sub_failed "no servers in that configuration"
+			return 0
+		fi
+		mv -f "$SUBS_DIR/$_sec.tsv.new" "$SUBS_DIR/$_sec.tsv"
+		rm -f "$SUBS_DIR/$_sec.links"
+	else
+		# Most providers hand back one base64 blob rather than a list of links.
+		if ! grep -q '://' "$_tmp" 2>/dev/null; then
+			if LC_ALL=C awk -v DECODE=1 -f "$PARSE" < "$_tmp" > "$_tmp.dec" 2>/dev/null &&
+			   grep -q '://' "$_tmp.dec" 2>/dev/null; then
+				mv -f "$_tmp.dec" "$_tmp"
+			else
+				rm -f "$_tmp.dec" "$_tmp"
+				sub_failed "nothing that looks like a server link"
+				return 0
+			fi
+		fi
+		# The keyword filter, on the names, leaving the links as they came.
+		if [ "${SUB_FMODE:-0}" != "0" ]; then
+			LC_ALL=C awk -v KEEPLINE=1 -v LIMIT=100000 -v FMODE="$SUB_FMODE" \
+				-f "$PARSE" < "$_tmp" > "$_tmp.kept" 2>/dev/null || true
+			mv -f "$_tmp.kept" "$_tmp"
+		fi
+		mv -f "$_tmp" "$SUBS_DIR/$_sec.links"
+		rm -f "$SUBS_DIR/$_sec.tsv"
+	fi
+
+	date +%s > "$SUBS_DIR/$_sec.when"
+	sub_info > "$SUBS_DIR/$_sec.info"
+	rm -f "$SUB_HDR"
+	sub_keep "$_sec"
+	sub_status ""
+	log "subscription '$name': $(sub_count "$_sec") nodes"
+	return 0
+}
+
+# What a subscription has on the router: a list of links, or records read
+# from a configuration.
+sub_has() {
+	[ -s "$SUBS_DIR/$1.links" ] || [ -s "$SUBS_DIR/$1.tsv" ]
+}
+
+# Memory is cleared by a reboot and flash is not. A subscription read on a
+# schedule of its own - weekly, say - has to still have its nodes the morning
+# after a reboot, so what it brought is kept on flash as well, and put back
+# into memory from there when memory has nothing.
+sub_restore() {
+	if sub_has "$1"; then
+		return 0
+	fi
+	for _e in links tsv when info; do
+		if [ -s "$SUBS_KEEP/$1.$_e" ]; then
+			cp -f "$SUBS_KEEP/$1.$_e" "$SUBS_DIR/$1.$_e" 2>/dev/null || true
+		fi
+	done
+	return 0
+}
+
+# Written to flash only when the list itself changed. The default list is read
+# every quarter of an hour, and an unconditional copy would be thirty-five
+# thousand writes a year of a file that is usually identical to the one there.
+sub_keep() {
+	mkdir -p "$SUBS_KEEP" 2>/dev/null || return 0
+	_kc=0
+	for _e in links tsv; do
+		if [ -s "$SUBS_DIR/$1.$_e" ]; then
+			if write_if_changed "$SUBS_DIR/$1.$_e" "$SUBS_KEEP/$1.$_e"; then
+				_kc=1
+			fi
+		elif [ -e "$SUBS_KEEP/$1.$_e" ]; then
+			rm -f "$SUBS_KEEP/$1.$_e"
+			_kc=1
+		fi
+	done
+	if [ "$_kc" = "1" ]; then
+		cp -f "$SUBS_DIR/$1.when" "$SUBS_KEEP/$1.when" 2>/dev/null || true
+		cp -f "$SUBS_DIR/$1.info" "$SUBS_KEEP/$1.info" 2>/dev/null || true
+		log "subscription '$name': the list changed - saved"
+	fi
+	return 0
+}
+
+# Whether the quarter-hourly read takes this subscription: one set to be read
+# with it - the default list is - one never read at all, and after a reboot,
+# once, one set to be read at boot. Every other one is read on its own
+# schedule from Node Subscribe, or when its button is pressed.
+sub_due() {
+	local sched boot
+	config_get sched "$1" update_week_mode ""
+	if [ "$sched" = "refresh" ]; then
+		return 0
+	fi
+	sub_restore "$1"
+	if ! sub_has "$1"; then
+		return 0
+	fi
+	config_get_bool boot "$1" boot_update 0
+	if [ "$boot" = "1" ] && [ ! -e "$SUBS_DIR/$1.booted" ]; then
+		: > "$SUBS_DIR/$1.booted"
+		return 0
+	fi
+	return 1
+}
+
+# The status line of every subscription that is switched on, for the page -
+# including one whose nodes came back from flash and has not been read since.
+status_one() {
+	_sec="$1"
+	local enabled name url content
+	config_get_bool enabled "$_sec" enabled 1
+	[ "$enabled" = "1" ] || return 0
+	sub_restore "$_sec"
+	if [ ! -s "$SUBS_DIR/$_sec.status" ]; then
+		config_get name "$_sec" name "$_sec"
+		config_get url "$_sec" url ""
+		config_get content "$_sec" content ""
+		[ -n "$url" ] || url="a file"
+		sub_status ""
+	fi
+	cat "$SUBS_DIR/$_sec.status" >> "$SUBS_STATUS"
+	if sub_has "$_sec"; then
+		SUBS_ANY=1
+	fi
+	return 0
+}
+
+# A subscription deleted from the page leaves its files behind; they go here.
+sweep() {
+	for _f in "$SUBS_DIR"/*.status "$SUBS_DIR"/*.links "$SUBS_DIR"/*.tsv \
+	          "$SUBS_KEEP"/*.links "$SUBS_KEEP"/*.tsv; do
+		[ -e "$_f" ] || continue
+		_s="${_f##*/}"; _s="${_s%.*}"
+		uci -q get "zirgozar.$_s" >/dev/null 2>&1 && continue
+		rm -f "$SUBS_DIR/$_s".* "$SUBS_KEEP/$_s".*
+	done
+	return 0
+}
+
+# Returns whether any subscription has anything at all.
+status_all() {
+	SUBS_ANY=0
+	: > "$SUBS_STATUS"
+	sweep
+	config_foreach status_one subscription
+	if [ "$SUBS_ANY" = "1" ]; then
+		return 0
+	fi
+	return 1
+}
+
+# zgz-nodes fetch            the quarter-hourly read: the subscriptions
+#                               that are due, and nothing when only nodes
+#                               added by hand are in use
+# zgz-nodes fetch all        every subscription that is switched on
+# zgz-nodes fetch <section>  that one only
+cmd_fetch() {
+	ONLY=""
+	DUE_ONLY=0
+	case "${1:-}" in
+		'')
+			# Nothing to fetch when the subscriptions are switched off. Worth
+			# saying out loud because it is not only tidiness: on a censored
+			# connection the list address hangs rather than refusing, so this
+			# is the difference between a refresh that takes a moment and one
+			# that spends a minute failing to read something nobody asked for.
+			if [ "$(cfg sources own)" = "own" ]; then
+				return 0
+			fi
+			DUE_ONLY=1
+			;;
+		all) : ;;
+		*) ONLY="$1" ;;
+	esac
+
+	mkdir -p "$SUBS_DIR"
+	config_load zirgozar
+	config_foreach fetch_one subscription
+
+	if ! status_all; then
+		# A router upgraded from a version that kept one list for all of
+		# them still has that list, and it is used until something is read.
+		if [ -s "$ZGZ_NODE_CACHE" ]; then
+			log "no subscription answered - keeping the list already on disk"
+			return 0
+		fi
+		# Deliberately no message on the front page here. Failing to read a
+		# subscription is only half a fact: a router with a server added by
+		# hand connects perfectly well without one, and telling that user
+		# their list is unreadable - before they have pressed anything - is
+		# alarming and wrong. Which source failed and why is on the Node
+		# Subscribe page, beside the source. The front page is told once, by
+		# cmd_build, and only when there is genuinely nothing left to connect
+		# through.
+		warn "no subscription answered and nothing saved"
+		return 1
+	fi
+	return 0
+}
+
+# PassWall2's "Delete the subscribed node" and "Delete All Subscribe Node":
+# what one subscription, or all of them, brought is dropped from the router.
+# The subscription itself stays, and is read again at the next refresh.
+cmd_forget() {
+	mkdir -p "$SUBS_DIR"
+	config_load zirgozar
+	if [ -n "${1:-}" ]; then
+		rm -f "$SUBS_DIR/$1".* "$SUBS_KEEP/$1".*
+		log "nodes of subscription '$1' deleted"
+	else
+		rm -f "$SUBS_DIR"/* "$SUBS_KEEP"/*
+		log "nodes of every subscription deleted"
+	fi
+	rm -f "$ZGZ_NODE_CACHE"
+	status_all || true
+	return 0
+}
+
+# ---------------------------------------------------------------- building
+
+add_node() {
+	_sec="$1"
+	local link name enabled
+	config_get link "$_sec" link ""
+	config_get name "$_sec" name ""
+	config_get_bool enabled "$_sec" enabled 1
+	[ "$enabled" = "1" ] || return 0
+	[ -n "$link" ] || return 0
+
+	# A node with a chain of its own - a pre-proxy, or a landing node - is a
+	# record already, built where both ends of the chain are known, rather than
+	# a link for the parser to meet with no idea of what it dials through.
+	local chain
+	config_get chain "$_sec" chain_proxy ""
+	case "$chain" in
+		1|2)
+			node_records "$_sec" "$(cfg max_nodes 300)" >> "$CHAIN_TSV" 2>/dev/null || true
+			return 0
+			;;
+	esac
+
+	# One section may hold several links pasted at once, separated by spaces
+	# or by newlines. Splitting on every space - which is what this did - cuts
+	# a name in half: a link ending "#سرور خانه" became "#سرور" plus a stray
+	# word that parses as nothing at all. Names with spaces in them are
+	# ordinary, so split only where a new link actually begins.
+	#
+	# A name typed into the web interface is the name the reader gave this
+	# server, and it should be the name they see in the list afterwards rather
+	# than whatever the channel that published the link called it. The parser
+	# reads names from after the #, so that is where it is put - and only when
+	# the link has none of its own, because a name that came with the link is
+	# not ours to overwrite.
+	printf '%s\n' "$link" | NAME="$name" LC_ALL=C awk '
+		{
+			gsub(/[ \t]+[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "\n&")
+			n = split($0, lines, "\n")
+			for (i = 1; i <= n; i++) {
+				l = lines[i]
+				gsub(/^[ \t]+|[ \t]+$/, "", l)
+				if (l == "") continue
+				if (ENVIRON["NAME"] != "" && index(l, "#") == 0)
+					l = l "#" ENVIRON["NAME"]
+				print l
+			}
+		}' >> "$ZGZ_RUN/manual.txt"
+	return 0
+}
+
+# The records one subscription brings, with its own chain - PassWall2's Chain
+# Proxy on a subscription, for every node in it:
+#
+#   chain_proxy 1, preproxy_node P   each node dials out through P
+#   chain_proxy 2, to_node L         traffic goes through each node and on to
+#                                    L, which is where it finally leaves from
+#
+# P and L are nodes added by hand: they are the only ones that stay put. A
+# landing chain needs the node it goes through as an outbound of its own; the
+# parser writes each one to the chains file, under the name the landing node
+# dials, and chain_outbound finds it there.
+sub_records() {
+	_sec="$1"
+	local enabled chain pre to
+	config_get_bool enabled "$_sec" enabled 1
+	[ "$enabled" = "1" ] || return 0
+	sub_restore "$_sec"
+	if [ -s "$SUBS_DIR/$_sec.tsv" ]; then
+		cat "$SUBS_DIR/$_sec.tsv" > "$ZGZ_RUN/sub.tsv"
+	elif [ -s "$SUBS_DIR/$_sec.links" ]; then
+		LC_ALL=C awk -v LIMIT="$_limit" -f "$PARSE" < "$SUBS_DIR/$_sec.links" > "$ZGZ_RUN/sub.tsv" 2>/dev/null || true
+	else
+		return 0
+	fi
+	[ -s "$ZGZ_RUN/sub.tsv" ] || return 0
+	SUB_HAD=1
+
+	config_get chain "$_sec" chain_proxy ""
+	case "$chain" in
+		1)
+			config_get pre "$_sec" preproxy_node ""
+			if [ -n "$pre" ] && uci -q get "zirgozar.$pre.link" >/dev/null 2>&1; then
+				set_dialer "chain-$pre" < "$ZGZ_RUN/sub.tsv" >> "$SUB_TSV"
+				return 0
+			fi
+			warn "subscription '$_sec': its pre-proxy node is gone - its nodes are used without it"
+			;;
+		2)
+			config_get to "$_sec" to_node ""
+			_land=""
+			if [ -n "$to" ]; then
+				_land="$(section_links "$to" 2>/dev/null | LC_ALL=C awk -v LIMIT=1 -f "$PARSE" 2>/dev/null | head -1)"
+			fi
+			case "$(printf '%s' "$_land" | cut -f3)" in
+				hysteria2|hysteria|tuic|'') _land="" ;;
+			esac
+			if [ -n "$_land" ]; then
+				LAND="$_land" LAND_ID="x${_sec}_" LAND_SIDE="$CHAINS.new" \
+					LC_ALL=C awk -v LANDING=1 -f "$PARSE" < "$ZGZ_RUN/sub.tsv" >> "$SUB_TSV" 2>/dev/null || true
+				return 0
+			fi
+			warn "subscription '$_sec': its landing node is gone or cannot be chained - its nodes are used without it"
+			;;
+	esac
+	cat "$ZGZ_RUN/sub.tsv" >> "$SUB_TSV"
+	return 0
+}
+
+cmd_build() {
+	# both / own / subs. Which servers are allowed into the running, before
+	# anything is measured. A server added by hand does not replace the list,
+	# it joins it.
+	_sources="$(cfg sources own)"
+	_limit="$(cfg max_nodes 300)"
+	config_load zirgozar
+
+	# Hand-added nodes go in ahead of the subscriptions. They were typed in on
+	# purpose, so when a limit has to bite it should bite the free list first.
+	# It is an order, not a preference: what is actually used is whichever
+	# server answers fastest, out of all of them.
+	: > "$ZGZ_RUN/manual.txt"
+	: > "$CHAIN_TSV"
+	if [ "$_sources" != "subs" ]; then
+		config_foreach add_node node
+	fi
+
+	# Whether there was anything at all to read decides which of two very
+	# different things went wrong, so it is worth knowing before the files go.
+	_had=0
+	if grep -q '://' "$ZGZ_RUN/manual.txt" 2>/dev/null || [ -s "$CHAIN_TSV" ]; then
+		_had=1
+	fi
+	LC_ALL=C awk -v LIMIT="$_limit" -f "$PARSE" < "$ZGZ_RUN/manual.txt" > "$ZGZ_RUN/links.tsv" 2>/dev/null || true
+	rm -f "$ZGZ_RUN/manual.txt"
+
+	# Then each subscription, with its own chain.
+	SUB_TSV="$ZGZ_RUN/subs.tsv"
+	: > "$SUB_TSV"
+	: > "$CHAINS.new"
+	SUB_HAD=0
+	if [ "$_sources" != "own" ]; then
+		mkdir -p "$SUBS_DIR"
+		# After a reboot the lists come back from flash before anything is
+		# read; the page is told what each one has, not nothing.
+		if [ ! -s "$SUBS_STATUS" ]; then
+			status_all >/dev/null 2>&1 || true
+		fi
+		config_foreach sub_records subscription
+		# The single list an earlier version kept, until anything is read.
+		if [ "$SUB_HAD" = "1" ]; then
+			rm -f "$ZGZ_NODE_CACHE"
+		elif [ -s "$ZGZ_NODE_CACHE" ]; then
+			LC_ALL=C awk -v LIMIT="$_limit" -f "$PARSE" < "$ZGZ_NODE_CACHE" >> "$SUB_TSV" 2>/dev/null || true
+			SUB_HAD=1
+		fi
+	fi
+	rm -f "$ZGZ_RUN/sub.tsv"
+	if [ "$SUB_HAD" = "1" ]; then
+		_had=1
+	fi
+
+	# Hand-added first, then the subscriptions. Separate parser runs cannot
+	# know about each other, so the tags they hand out collide and the same
+	# server can be in two lists: this renumbers and keeps the first of each.
+	cat "$CHAIN_TSV" "$ZGZ_RUN/links.tsv" "$SUB_TSV" > "$ZGZ_RUN/merge.tsv" 2>/dev/null || true
+	rm -f "$CHAIN_TSV" "$ZGZ_RUN/links.tsv" "$SUB_TSV"
+
+	LC_ALL=C awk -F'\t' -v LIMIT="$_limit" '
+		NF >= 6 {
+			key = $3 "|" $4 "|" $5 "|" $6
+			if (key in seen) next
+			seen[key] = 1
+			if (m >= LIMIT) next
+			printf "n%d\t%s\t%s\t%s\t%s\t%s\n", m, $2, $3, $4, $5, $6
+			m++
+		}' "$ZGZ_RUN/merge.tsv" > "$ZGZ_CANDIDATES.new" 2>/dev/null || true
+	rm -f "$ZGZ_RUN/merge.tsv"
+
+	if [ ! -s "$ZGZ_CANDIDATES.new" ]; then
+		rm -f "$ZGZ_CANDIDATES.new" "$CHAINS.new"
+		if [ "$_had" = "1" ]; then
+			say_message "Nothing in the list could be read as a node"
+		else
+			# The one case that genuinely stops the user from connecting, and
+			# the only one this page says anything about. It names the way out,
+			# because on a censored connection the list address is unreachable
+			# until the tunnel is up and the tunnel needs a server first - and
+			# one link pasted in by hand breaks that circle.
+			say_message "There is no node list yet: no subscription could be read and none has been saved before. Add one node by hand on the Node List page - a single share link is enough - or check the subscription address on Node Subscribe."
+		fi
+		warn "no usable servers in the list"
+		return 1
+	fi
+
+	mv -f "$ZGZ_CANDIDATES.new" "$ZGZ_CANDIDATES"
+	mv -f "$CHAINS.new" "$CHAINS"
+	log "$(wc -l < "$ZGZ_CANDIDATES") servers to choose from"
+	return 0
+}
+
+cmd_status() {
+	cat "$SUBS_STATUS" 2>/dev/null || true
+	return 0
+}
+
+# ------------------------------------------------------------------ in use
+
+# Which hand-added section, if any, is the node the tunnel is on.
+#
+# The candidate list does not carry where a node came from - it is one flat
+# file of everything, and the tag in it is a position in that file rather than
+# a name. So the question is answered the other way round: take the address
+# the tunnel actually settled on, and ask each hand-added section whether it
+# parses to that address.
+#
+# Not cheap enough to poll, and it is not polled. The web interface asks this
+# once, at the moment somebody presses Delete, because between opening the
+# page and pressing it the router may well have moved to a different node.
+inuse_one() {
+	_sec="$1"
+	local link
+	if [ -n "$INUSE_FOUND" ]; then
+		return 0
+	fi
+	config_get link "$_sec" link ""
+	[ -n "$link" ] || return 0
+	if printf '%s\n' "$link" | LC_ALL=C awk -f "$PARSE" 2>/dev/null |
+	   awk -F'\t' -v h="$INUSE_HOST" -v p="$INUSE_PORT" \
+	       '$4 == h && $5 + 0 == p + 0 { f = 1 } END { exit f ? 0 : 1 }'; then
+		INUSE_FOUND="$_sec"
+	fi
+	return 0
+}
+
+cmd_inuse() {
+	INUSE_HOST="$(sed -n 's/^host=//p' "$ZGZ_BEST_META" 2>/dev/null | tail -1)"
+	INUSE_PORT="$(sed -n 's/^port=//p' "$ZGZ_BEST_META" 2>/dev/null | tail -1)"
+	INUSE_FOUND=""
+	if [ -n "$INUSE_HOST" ] && [ -n "$INUSE_PORT" ]; then
+		config_load zirgozar
+		config_foreach inuse_one node
+	fi
+	# active, and not merely chosen. A node picked last week and disconnected
+	# since is not one anybody needs protecting from deleting.
+	printf '{"section":"%s","host":"%s","port":"%s","active":%s}\n' \
+		"$(json_escape "$INUSE_FOUND")" \
+		"$(json_escape "$INUSE_HOST")" \
+		"$(json_escape "$INUSE_PORT")" \
+		"$([ "$(cfg_bool enabled 0)" = "1" ] && echo true || echo false)"
+	return 0
+}
+
+# ------------------------------------------------------- names of their own
+
+# A section without a name of its own is known by its place in the file:
+# cfg02..., cfg03... - the number is its position, the rest is the same for
+# every section of its type. Add, move or delete one ahead of it and it is
+# known by another number from then on, and every setting that named it -
+# the node in Basic Settings, a pre-proxy, a rule's node - names whichever
+# section now stands where it stood. So nodes and subscriptions get a name
+# of their own, the way PassWall2 names its nodes, and keep it.
+
+# new_name <prefix>: a name no section has.
+new_name() {
+	_nc=0
+	while :; do
+		_nc=$((_nc + 1))
+		# hexdump is in every busybox this runs on; od is not.
+		_nn="$1$(hexdump -n3 -e '3/1 "%02x"' /dev/urandom 2>/dev/null)"
+		if [ "${#_nn}" -ne $((${#1} + 6)) ]; then
+			_nn="$1$(awk -v s="$$$(date +%s)$_nc" 'BEGIN { srand(s); printf "%06x", int(rand() * 16777215) }')"
+		fi
+		if ! uci -q get "zirgozar.$_nn" >/dev/null 2>&1 &&
+		   ! grep -q " $_nn\$" "$FIX_MAP" 2>/dev/null; then
+			echo "$_nn"
+			return 0
+		fi
+	done
+}
+
+# Every node and subscription known only by its place, renamed, and every
+# setting naming one pointing at its new name. The settings first and the
+# sections after: a setting is addressed by the name of the section it is
+# in, and that section may be one of those being renamed.
+cmd_fixnames() {
+	# Subscriptions got schedules of their own. The default list keeps the
+	# quarter-hourly read it has always had; every other one is read when
+	# its own schedule says. Once only - after that, what the page says.
+	if [ -z "$(uci -q get zirgozar.config.subs_scheduled)" ]; then
+		if [ "$(uci -q get zirgozar.default)" = "subscription" ] &&
+		   [ -z "$(uci -q get zirgozar.default.update_week_mode)" ]; then
+			uci -q set zirgozar.default.update_week_mode=refresh
+		fi
+		uci -q set zirgozar.config.subs_scheduled=1
+		uci -q commit zirgozar
+	fi
+
+	FIX_MAP="$ZGZ_RUN/names.map"
+	mkdir -p "$ZGZ_RUN"
+	_show="$(uci -q -X show zirgozar 2>/dev/null)"
+	# awk rather than sed: alternation is not something every sed on a
+	# router understands.
+	printf '%s\n' "$_show" | awk '
+		/^zirgozar\.cfg[0-9a-f]+=(node|subscription)$/ {
+			split($0, a, /[.=]/)
+			print a[2], a[3]
+		}' > "$FIX_MAP.list"
+	if [ ! -s "$FIX_MAP.list" ]; then
+		rm -f "$FIX_MAP.list"
+		return 0
+	fi
+	: > "$FIX_MAP"
+	while read -r _old _type; do
+		case "$_type" in node) _p=n ;; *) _p=s ;; esac
+		echo "$_old $(new_name "$_p")" >> "$FIX_MAP"
+	done < "$FIX_MAP.list"
+
+	while read -r _old _new; do
+		printf '%s\n' "$_show" |
+			sed -n "s/^\(zirgozar\.[A-Za-z0-9_]*\.[A-Za-z0-9_]*\)='$_old'\$/\1/p" |
+			while read -r _opt; do
+				uci -q set "$_opt=$_new"
+			done
+	done < "$FIX_MAP"
+	while read -r _old _new; do
+		uci -q rename "zirgozar.$_old=$_new"
+		# What a subscription brought is kept under its name.
+		for _f in "$SUBS_DIR/$_old".* "$SUBS_KEEP/$_old".*; do
+			[ -e "$_f" ] || continue
+			mv -f "$_f" "${_f%/*}/$_new.${_f##*.}" 2>/dev/null || true
+		done
+	done < "$FIX_MAP"
+	uci -q commit zirgozar
+	log "gave $(wc -l < "$FIX_MAP") nodes and subscriptions names of their own"
+	rm -f "$FIX_MAP" "$FIX_MAP.list"
+	return 0
+}
+
+# ------------------------------------------------ PassWall2's Node List
+
+# The buttons on PassWall2's Node List, done here rather than in the page so
+# that each is one step on the router: the page asks, and reloads.
+
+# A hand-added node's section, and only that.
+is_node() {
+	case "$1" in ''|*[!A-Za-z0-9_]*) return 1 ;; esac
+	[ "$(uci -q get "zirgozar.$1")" = "node" ]
+}
+
+# `uci -X show` throughout: without -X, uci names a section without a name of
+# its own by its place - @node[0] - rather than by its id, and it is the id
+# that everything else holds.
+
+# Every setting that names a node that is going: the node in Basic Settings,
+# the pre-proxy, a SOCKS port's, an access rule's, a shunt rule's - so that
+# nothing is left pointing at a node that is not there.
+forget_refs() {
+	uci -q -X show zirgozar 2>/dev/null |
+		sed -n "s/^\(zirgozar\.[^.]*\.[A-Za-z0-9_]*\)='$1'\$/\1/p" |
+		while read -r _opt; do
+			uci -q delete "$_opt" 2>/dev/null || true
+		done
+	return 0
+}
+
+# Share links on stdin, one per line: each becomes a node of its own, named
+# the way its link names it. Prints how many were added.
+cmd_addlinks() {
+	_n=0
+	while IFS= read -r _l; do
+		_l="$(printf '%s' "$_l" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+		case "$_l" in *://*) : ;; *) continue ;; esac
+		_rec="$(printf '%s\n' "$_l" | LC_ALL=C awk -v LIMIT=1 -f "$PARSE" 2>/dev/null | head -1)"
+		[ -n "$_rec" ] || continue
+		_name="$(printf '%s' "$_rec" | cut -f2 | sed -e 's/\\"/"/g' -e 's/\\\\/\\/g')"
+		_sid="$(new_name n)"
+		uci -q set "zirgozar.$_sid=node" || continue
+		uci -q set "zirgozar.$_sid.name=$_name"
+		uci -q set "zirgozar.$_sid.link=$_l"
+		uci -q set "zirgozar.$_sid.enabled=1"
+		_n=$((_n + 1))
+	done
+	[ "$_n" -gt 0 ] && uci -q commit zirgozar
+	echo "$_n"
+	return 0
+}
+
+cmd_delete() {
+	for _s in "$@"; do
+		is_node "$_s" || continue
+		forget_refs "$_s"
+		uci -q delete "zirgozar.$_s" || true
+	done
+	uci -q commit zirgozar
+	log "nodes deleted: $*"
+	return 0
+}
+
+cmd_clear() {
+	_all="$(uci -q -X show zirgozar | sed -n 's/^zirgozar\.\([A-Za-z0-9_]*\)=node$/\1/p')"
+	# shellcheck disable=SC2086
+	[ -n "$_all" ] && cmd_delete $_all
+	return 0
+}
+
+# A copy, placed right after the node it is a copy of.
+cmd_copy() {
+	is_node "$1" || return 1
+	_new="$(new_name n)"
+	uci -q set "zirgozar.$_new=node" || return 1
+	for _o in name link enabled group chain_proxy preproxy_node to_node; do
+		_v="$(uci -q get "zirgozar.$1.$_o")" || continue
+		uci -q set "zirgozar.$_new.$_o=$_v"
+	done
+	_nm="$(uci -q get "zirgozar.$1.name")"
+	[ -n "$_nm" ] && uci -q set "zirgozar.$_new.name=$_nm (2)"
+	_pos="$(section_index "$1")"
+	[ -n "$_pos" ] && uci -q reorder "zirgozar.$_new=$((_pos + 1))"
+	uci -q commit zirgozar
+	echo "$_new"
+	return 0
+}
+
+# Where a section is in the file, counting from 0.
+section_index() {
+	uci -q -X show zirgozar | sed -n "s/^zirgozar\.\([A-Za-z0-9_]*\)=[^']*\$/\1/p" |
+		awk -v s="$1" '$0 == s { print NR - 1; exit }'
+	return 0
+}
+
+# To the top of the list of hand-added nodes.
+cmd_top() {
+	is_node "$1" || return 1
+	_first="$(uci -q -X show zirgozar | sed -n 's/^zirgozar\.\([A-Za-z0-9_]*\)=node$/\1/p' | head -1)"
+	[ -n "$_first" ] && [ "$_first" != "$1" ] || return 0
+	uci -q reorder "zirgozar.$1=$(section_index "$_first")"
+	uci -q commit zirgozar
+	return 0
+}
+
+# PassWall2's Reassign Group: the group, then the nodes.
+cmd_group() {
+	_g="$1"; shift
+	for _s in "$@"; do
+		is_node "$_s" || continue
+		if [ -n "$_g" ]; then
+			uci -q set "zirgozar.$_s.group=$_g"
+		else
+			uci -q delete "zirgozar.$_s.group" || true
+		fi
+	done
+	uci -q commit zirgozar
+	return 0
+}
+
+case "${1:-update}" in
+	fetch)  cmd_fetch "${2:-}" ;;
+	build)  cmd_build ;;
+	update) cmd_fetch "${2:-}" || true; cmd_build ;;
+	forget) cmd_forget "${2:-}"; cmd_build || true ;;
+	status) cmd_status ;;
+	inuse)  cmd_inuse ;;
+	addlinks) cmd_addlinks ;;
+	fixnames) cmd_fixnames ;;
+	delete) shift; cmd_delete "$@"; cmd_build >/dev/null 2>&1 || true ;;
+	clear)  cmd_clear; cmd_build >/dev/null 2>&1 || true ;;
+	copy)   cmd_copy "${2:-}" ;;
+	top)    cmd_top "${2:-}" ;;
+	group)  shift; cmd_group "$@" ;;
+	*) echo "usage: $0 fetch|update [all|<section>]|forget [<section>]|build|status|inuse|addlinks|delete <node>...|clear|copy <node>|top <node>|group <group> <node>..." >&2; exit 1 ;;
+esac

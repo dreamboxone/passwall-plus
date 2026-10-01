@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+# Part of Zirgozar - https://github.com/dreamboxone/zirgozar
 #
 # What the parser and the configuration generator do, checked against a real
 # Xray rather than against my opinion of what Xray accepts.
@@ -49,7 +49,7 @@ LINKS
 fi
 
 echo "== parsing $(grep -c . "$LIST") lines"
-LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$LIST" > "$WORK/cand.tsv"
+LC_ALL=C awk -f "$RIG/lib/zgz-parse" < "$LIST" > "$WORK/cand.tsv"
 N=$(wc -l < "$WORK/cand.tsv" | tr -d ' ')
 echo "== $N servers parsed"
 
@@ -84,13 +84,13 @@ check "$AI" "0" "allowInsecure is never written"
 if command -v base64 >/dev/null 2>&1; then
 	IN='the quick brown fox jumps over the lazy dog, 0123456789'
 	ENC=$(printf '%s' "$IN" | base64 | tr -d '\n')
-	DEC=$(printf '%s' "$ENC" | LC_ALL=C awk -v DECODE=1 -f "$RIG/lib/pwplus-parse")
+	DEC=$(printf '%s' "$ENC" | LC_ALL=C awk -v DECODE=1 -f "$RIG/lib/zgz-parse")
 	check "$DEC" "$IN" "the built-in base64 decoder agrees with base64"
 fi
 
 # A subscription handed over as one base64 blob has to come back as links.
 BLOB=$(printf 'vless://11111111-2222-3333-4444-555555555555@b64.example.com:443?encryption=none&security=none#B64\n' | base64 | tr -d '\n')
-printf '%s' "$BLOB" | LC_ALL=C awk -v DECODE=1 -f "$RIG/lib/pwplus-parse" > "$WORK/dec.txt"
+printf '%s' "$BLOB" | LC_ALL=C awk -v DECODE=1 -f "$RIG/lib/zgz-parse" > "$WORK/dec.txt"
 if grep -q 'b64.example.com' "$WORK/dec.txt"; then
 	ok "a base64 subscription decodes to links"
 else
@@ -159,7 +159,7 @@ JSON
 
 : > "$WORK/json.tsv"
 for f in xray singbox clash links; do
-	LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$WORK/$f.json" >> "$WORK/json.tsv" 2>/dev/null || true
+	LC_ALL=C awk -f "$RIG/lib/zgz-parse" < "$WORK/$f.json" >> "$WORK/json.tsv" 2>/dev/null || true
 done
 
 for want in "JSON VLESS" "JSON WG" "SB Trojan" "SB WARP" "CL VMess" "CL SS" \
@@ -241,7 +241,7 @@ if [ -x "$RIG/core/xray" ]; then
 	head -1 "$WORK/cand.tsv" | cut -f6 > "$RIG/etc/best.json"
 
 	rig_clear
-	sh "$RIG/lib/pwplus-mkconfig" > "$WORK/cfg.json" 2>"$WORK/cfg.err" || bad "mkconfig failed: $(cat "$WORK/cfg.err")"
+	sh "$RIG/lib/zgz-mkconfig" > "$WORK/cfg.json" 2>"$WORK/cfg.err" || bad "mkconfig failed: $(cat "$WORK/cfg.err")"
 	if "$RIG/core/xray" run -test -config "$WORK/cfg.json" >"$WORK/t.err" 2>&1; then
 		ok "the generated configuration is accepted with the split off"
 	else
@@ -263,7 +263,7 @@ if [ -x "$RIG/core/xray" ]; then
 	# Xray refuses to start when asked for a geoip file that is not there, so
 	# writing them anyway turns a missing optional download into no internet.
 	#
-	# PWPLUS_GEO_SEARCH is emptied because "missing" has to mean missing. A
+	# ZGZ_GEO_SEARCH is emptied because "missing" has to mean missing. A
 	# router that already runs another front-end has that project's geoip.dat
 	# and geosite.dat in /usr/share, geo_dir finds them there on purpose - it
 	# is twenty-five megabytes not worth downloading twice - and this test
@@ -271,7 +271,7 @@ if [ -x "$RIG/core/xray" ]; then
 	# means to describe.
 	rig_set route_ir 1
 	rig_set geo_dir "$RIG/etc/nowhere"
-	PWPLUS_GEO_SEARCH="" sh "$RIG/lib/pwplus-mkconfig" > "$WORK/cfg_nogeo.json" 2>/dev/null
+	ZGZ_GEO_SEARCH="" sh "$RIG/lib/zgz-mkconfig" > "$WORK/cfg_nogeo.json" 2>/dev/null
 	if grep -q 'geoip:ir' "$WORK/cfg_nogeo.json"; then
 		bad "the split stays out when the geo files are missing"
 	else
@@ -285,22 +285,22 @@ if [ -x "$RIG/core/xray" ]; then
 
 	# With the files actually present, the rules must appear and the core
 	# must accept them.
-	if [ -s "$PWPLUS_GEO_DIR/geoip.dat" ] && [ -s "$PWPLUS_GEO_DIR/geosite.dat" ]; then
-		rig_set geo_dir "$PWPLUS_GEO_DIR"
-		sh "$RIG/lib/pwplus-mkconfig" > "$WORK/cfg_geo.json" 2>/dev/null
+	if [ -s "$ZGZ_GEO_DIR/geoip.dat" ] && [ -s "$ZGZ_GEO_DIR/geosite.dat" ]; then
+		rig_set geo_dir "$ZGZ_GEO_DIR"
+		sh "$RIG/lib/zgz-mkconfig" > "$WORK/cfg_geo.json" 2>/dev/null
 		if grep -q 'geoip:ir' "$WORK/cfg_geo.json" && grep -q 'geosite:ir' "$WORK/cfg_geo.json"; then
 			ok "the split is written when the geo files are present"
 		else
 			bad "the split is written when the geo files are present"
 		fi
-		if XRAY_LOCATION_ASSET="$PWPLUS_GEO_DIR" "$RIG/core/xray" run -test -config "$WORK/cfg_geo.json" >"$WORK/g.err" 2>&1; then
+		if XRAY_LOCATION_ASSET="$ZGZ_GEO_DIR" "$RIG/core/xray" run -test -config "$WORK/cfg_geo.json" >"$WORK/g.err" 2>&1; then
 			ok "the core reads geoip:ir and geosite:ir from the downloaded files"
 		else
 			bad "the core reads geoip:ir and geosite:ir from the downloaded files"
 			grep -o 'common/errors:.*\|failed to.*' "$WORK/g.err" | tail -2
 		fi
 	else
-		echo "  skip - no geo files to test the split against (set PWPLUS_GEO_DIR)"
+		echo "  skip - no geo files to test the split against (set ZGZ_GEO_DIR)"
 	fi
 	rig_clear
 
@@ -316,7 +316,7 @@ if [ -x "$RIG/core/xray" ]; then
 	} > "$WORK/batch.tsv"
 	before=$(wc -l < "$WORK/batch.tsv" | tr -d ' ')
 	: > "$RIG/run/rejected"
-	sh "$RIG/lib/pwplus-probe" prune "$WORK/batch.tsv" >/dev/null 2>&1 || true
+	sh "$RIG/lib/zgz-probe" prune "$WORK/batch.tsv" >/dev/null 2>&1 || true
 	after=$(wc -l < "$WORK/batch.tsv" | tr -d ' ')
 	check "$after" "$((before - 2))" "a batch survives the two servers the core cannot use"
 	if grep -qx bad1 "$RIG/run/rejected" && grep -qx bad2 "$RIG/run/rejected"; then
@@ -358,7 +358,7 @@ Endpoint = 188.114.97.3:2408
 PersistentKeepalive = 25
 CONF
 
-WGOUT="$(LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$WG")"
+WGOUT="$(LC_ALL=C awk -f "$RIG/lib/zgz-parse" < "$WG")"
 
 check "$(printf '%s\n' "$WGOUT" | wc -l | tr -d ' ')" "1" \
 	"one node comes out of it"
@@ -395,7 +395,7 @@ fi
 
 # Half a file is not half a node.
 printf '[Interface]\nPrivateKey = abc\n' > "$WG"
-if [ -z "$(LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$WG")" ]; then
+if [ -z "$(LC_ALL=C awk -f "$RIG/lib/zgz-parse" < "$WG")" ]; then
 	ok "a .conf with no peer produces nothing"
 else
 	bad "a .conf with no peer produces nothing"
@@ -441,7 +441,7 @@ rules:
   - MATCH,DIRECT
 YAML
 
-CY="$(LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$Y")"
+CY="$(LC_ALL=C awk -f "$RIG/lib/zgz-parse" < "$Y")"
 check "$(printf '%s\n' "$CY" | wc -l | tr -d ' ')" "3" "three proxies come out of it"
 check "$(printf '%s\n' "$CY" | sed -n '1p' | cut -f2)" "سرور خانه" "a Persian name survives"
 check "$(printf '%s\n' "$CY" | sed -n '1p' | cut -f3)" "vmess" "block style is read"
@@ -485,7 +485,7 @@ bandwidth:
   up: 20 mbps
   down: 100 mbps
 YAML
-HY="$(LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$Y")"
+HY="$(LC_ALL=C awk -f "$RIG/lib/zgz-parse" < "$Y")"
 check "$(printf '%s' "$HY" | cut -f3)" "hysteria2" "it is read as one hysteria2 node"
 check "$(printf '%s' "$HY" | cut -f4)" "hy.example.com" "the host"
 check "$(printf '%s' "$HY" | cut -f5)" "8443" "and the port"
@@ -501,7 +501,7 @@ done
 # A bare host means 443 to hysteria, and a password of "no" is a password and
 # not the boolean false.
 printf 'server: hy.example.com\nauth: "no"\n' > "$Y"
-HY2="$(LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$Y")"
+HY2="$(LC_ALL=C awk -f "$RIG/lib/zgz-parse" < "$Y")"
 check "$(printf '%s' "$HY2" | cut -f5)" "443" "a bare host means port 443"
 if printf '%s' "$HY2" | grep -q '"password":"no"'; then
 	ok "and a password of \"no\" stays a password"
@@ -522,7 +522,7 @@ cat > "$Y" <<'JSON'
       "private_key": "k", "peer_public_key": "p", "address": ["10.0.0.2/32"],
       "jc": 10, "s1": 20 } ] }
 JSON
-LX="$(LC_ALL=C awk -f "$RIG/lib/pwplus-parse" < "$Y")"
+LX="$(LC_ALL=C awk -f "$RIG/lib/zgz-parse" < "$Y")"
 check "$(printf '%s\n' "$LX" | wc -l | tr -d ' ')" "2" "the two nodes a core here can run"
 if printf '%s' "$LX" | grep -q '"mode":"packet-up"'; then
 	ok "xhttp keeps its mode, which decides whether it works at all"
@@ -558,7 +558,7 @@ rig_set cfgmain.to_node cfgland
 
 # A landing node: the record keeps the first hop's address, and carries the
 # landing node's outbound, dialling out through the first hop.
-REC="$(sh -c '. "$PWPLUS_LIB/pwplus-common.sh"; node_records cfgmain')"
+REC="$(sh -c '. "$ZGZ_LIB/zgz-common.sh"; node_records cfgmain')"
 check "$(printf '%s' "$REC" | cut -f4)" "main.example.com" "a landing chain is knocked on at its first hop"
 check "$(printf '%s' "$REC" | cut -f3)" "trojan" "and speaks the landing node's protocol"
 if printf '%s' "$REC" | cut -f6- | grep -q '"dialerProxy":"chain-cfgmain"'; then
@@ -568,7 +568,7 @@ else
 fi
 
 # The tunnel's own node, with the pre-proxy under it and every mask on.
-printf '%s\n' "$MAIN" | LC_ALL=C awk -f "$RIG/lib/pwplus-parse" | head -1 | cut -f6 > "$RIG/etc/best.json"
+printf '%s\n' "$MAIN" | LC_ALL=C awk -f "$RIG/lib/zgz-parse" | head -1 | cut -f6 > "$RIG/etc/best.json"
 printf 'tag=n0\nlabel=MAIN\nprotocol=vless\nhost=main.example.com\nport=443\n' > "$RIG/etc/best.meta"
 rig_set preproxy_enabled 1
 rig_set preproxy_node cfgpre
@@ -581,7 +581,7 @@ rig_set remote_dns_protocol doh
 rig_set remote_dns_doh 'https://dns.example.net/dns-query,9.9.9.9'
 rig_set remote_dns_client_ip 5.1.2.3
 rig_set dns_hosts 'router.lan 192.168.1.1'
-sh "$RIG/lib/pwplus-mkconfig" > "$WORK/xtab.json" 2>"$WORK/xtab.err" || bad "mkconfig failed: $(cat "$WORK/xtab.err")"
+sh "$RIG/lib/zgz-mkconfig" > "$WORK/xtab.json" 2>"$WORK/xtab.err" || bad "mkconfig failed: $(cat "$WORK/xtab.err")"
 
 for want in \
 	'"tag":"proxy"' \
@@ -619,14 +619,14 @@ fi
 # FakeDNS is refused in front of dnsmasq, where it would make the router's own
 # lookups fake too, and written with lookups sent straight to the tunnel.
 rig_set remote_fakedns 1
-sh "$RIG/lib/pwplus-mkconfig" 2>/dev/null | grep -q '"fakedns"' && bad "FakeDNS is refused with dnsmasq in front" || ok "FakeDNS is refused with dnsmasq in front"
+sh "$RIG/lib/zgz-mkconfig" 2>/dev/null | grep -q '"fakedns"' && bad "FakeDNS is refused with dnsmasq in front" || ok "FakeDNS is refused with dnsmasq in front"
 rig_set dns_mode direct
-if sh "$RIG/lib/pwplus-mkconfig" 2>/dev/null | grep -q '"address":"fakedns"'; then
+if sh "$RIG/lib/zgz-mkconfig" 2>/dev/null | grep -q '"address":"fakedns"'; then
 	ok "and used with lookups sent straight to the tunnel"
 else
 	bad "and used with lookups sent straight to the tunnel"
 fi
-sh "$RIG/lib/pwplus-mkconfig" > "$WORK/xtab-fake.json" 2>/dev/null || true
+sh "$RIG/lib/zgz-mkconfig" > "$WORK/xtab-fake.json" 2>/dev/null || true
 
 # Basic and Other Settings: the router's SOCKS port, REDIRECT for TCP, the
 # name used for routing only, and a buffer size.
@@ -637,7 +637,7 @@ rig_set node_socks_bind_local 0
 rig_set tcp_proxy_way redirect
 rig_set sniffing_override_dest 0
 rig_set buffer_size 512
-sh "$RIG/lib/pwplus-mkconfig" > "$WORK/other.json" 2>"$WORK/other.err" || bad "mkconfig failed: $(cat "$WORK/other.err")"
+sh "$RIG/lib/zgz-mkconfig" > "$WORK/other.json" 2>"$WORK/other.err" || bad "mkconfig failed: $(cat "$WORK/other.err")"
 OTHER="$(tr -d '\n' < "$WORK/other.json")"
 for want in \
 	'"tag": "socks-in", "listen": "0.0.0.0", "port": 1070' \

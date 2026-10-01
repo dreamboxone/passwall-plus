@@ -1,27 +1,48 @@
-# Passwall+ — a router-wide tunnel for OpenWrt
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="package/luci-app-zirgozar/root/www/luci-static/resources/zirgozar/logo-light.png">
+    <img alt="Zirgozar" src="package/luci-app-zirgozar/root/www/luci-static/resources/zirgozar/logo.png" width="340">
+  </picture>
+</p>
 
-**Version 1.2.2** · support / contact: [t.me/routekernel1](https://t.me/routekernel1)
-🇮🇷 **[راهنمای فارسی: README.md](README.md)**
+<h3 align="center">A router-wide tunnel for OpenWrt</h3>
 
-Install it on the router, turn on the **Main switch**, and from that moment
-every device on your network — phone, laptop, TV, console — goes through the
-tunnel. You install nothing on any of them and paste no config anywhere.
+<p align="center">
+  <a href="https://github.com/dreamboxone/zirgozar/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/dreamboxone/zirgozar?style=for-the-badge&color=0b3d91&label=release"></a>
+  <a href="https://github.com/dreamboxone/zirgozar/releases"><img alt="downloads" src="https://img.shields.io/github/downloads/dreamboxone/zirgozar/total?style=for-the-badge&color=0ea5e9"></a>
+  <img alt="OpenWrt" src="https://img.shields.io/badge/OpenWrt-23.05%20%7C%2024.10%20%7C%2025.12-00B5E2?style=for-the-badge&logo=openwrt&logoColor=white">
+  <img alt="Xray" src="https://img.shields.io/badge/core-Xray-7c3aed?style=for-the-badge">
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-AGPL--3.0-16a34a?style=for-the-badge"></a>
+  <a href="https://t.me/routekernel1"><img alt="Telegram" src="https://img.shields.io/badge/Telegram-routekernel1-26A5E4?style=for-the-badge&logo=telegram&logoColor=white"></a>
+</p>
 
-The router keeps the config list itself, reads the default free list every
-quarter of an hour, and finds a config that actually works. If you want it to,
-Iranian traffic skips the tunnel and goes straight out. And it shows you what
-you have used: today, the last seven days, this month.
+<p align="center">
+  <a href="https://github.com/dreamboxone/zirgozar/releases/latest">⬇️ <b>Download the latest release</b></a> ·
+  <a href="README.md">🇮🇷 <b>فارسی</b></a> ·
+  <a href="https://t.me/routekernel1">💬 <b>Support on Telegram</b></a>
+</p>
 
-It runs on [Xray](https://github.com/XTLS/Xray-core). It does not need
-PassWall2 or any other package and does not touch their settings. If the router
-already has an Xray core, it uses that one rather than downloading a second
-copy. Its pages are laid out the way PassWall2's are, with the same names for
-the same things, so someone who knows PassWall2 finds everything where they
-expect it.
+> [!NOTE]
+> **Zirgozar is Passwall+ under a new name.** If Passwall+ is installed on your
+> router, just install Zirgozar: the settings, configs, subscriptions, routing
+> data and traffic history move across by themselves and Passwall+ is switched
+> off. Then remove the old package: `apk del luci-app-passwall-plus passwall-plus`
+
+## ✨ Features
+
+- 🌐 **Every device on the network** — phone, laptop, TV, console — goes through the tunnel with nothing installed on it
+- ⚡ **Picks the fastest working config** by itself, and moves to the next one when a config stops working
+- 🔗 **Subscriptions** on schedules of their own; the default free list is refreshed every quarter of an hour
+- 🇮🇷 **Iranian traffic direct** — Iranian sites skip the tunnel and cost the config nothing
+- 🧭 **Shunt rules** as in PassWall2: any site or service through a config of your choice, direct, or blocked
+- 📊 **Traffic used** today, this week and this month
+- 🔄 **One-button update**, from the program's own page
+- 💾 **Saving without dropping connections** — a change the tunnel does not use does not restart it
+- 🧩 Runs on [Xray](https://github.com/XTLS/Xray-core); does not need PassWall2, and its pages have PassWall2's layout and names
 
 ---
 
-## 1. Before you install: has your router got room?
+## 💾 1. Before you install: has your router got room?
 
 | | Minimum | Comfortable |
 |---|---|---|
@@ -31,12 +52,13 @@ expect it.
 
 **Flash.** The package itself is about **13 MB**, because it carries the Xray
 core. If the router already has `xray-core` — because PassWall2 pulled it in —
-Passwall+ uses that one and downloads nothing. The Iranian routing data is
+Zirgozar uses that one and downloads nothing. The Iranian routing data is
 optional and counted separately: 25 MB for the full pair, about 2 MB for the
 `-lite` pair.
 
-Routers with **32 MB of flash**, which is most older models, do not have room,
-unless you add USB storage.
+> [!CAUTION]
+> Routers with **32 MB of flash**, which is most older models, do not have room,
+> unless you add USB storage.
 
 **RAM.** The running core takes 40–80 MB. It works on a 128 MB router, but if
 you use a hundred-config subscription, turn **Checked at once** on the **Node
@@ -51,18 +73,18 @@ the same work, more slowly.
 
 ---
 
-## 2. Install
+## 📦 2. Install
 
 Every release carries both package formats, because OpenWrt changed package
 manager in 25.12. Take the pair that matches your router:
 
 | Your OpenWrt | Package manager | The two files you need |
 |---|---|---|
-| 25.12 and later | `apk` | `passwall-plus-<version>.<arch>.apk` and `luci-app-passwall-plus-<version>.apk` |
-| 24.10, 23.05 | `opkg` | `passwall-plus_<version>_<arch>.ipk` and `luci-app-passwall-plus_<version>_all.ipk` |
+| 25.12 and later | `apk` | `zirgozar-<version>.<arch>.apk` and `luci-app-zirgozar-<version>.apk` |
+| 24.10, 23.05 | `opkg` | `zirgozar_<version>_<arch>.ipk` and `luci-app-zirgozar_<version>_all.ipk` |
 
 Your architecture is on the `DISTRIB_ARCH` line of `/etc/openwrt_release`. The
-`luci-app-passwall-plus` package has no architecture and fits every router.
+`luci-app-zirgozar` package has no architecture and fits every router.
 
 ### The easy way: from LuCI itself
 
@@ -77,37 +99,37 @@ FileZilla, or through **System → Software → Upload Package…** in LuCI. The
 in, and on 25.12 or later:
 
 ```sh
-apk add --allow-untrusted /tmp/passwall-plus-*.apk /tmp/luci-app-passwall-plus-*.apk
+apk add --allow-untrusted /tmp/zirgozar-*.apk /tmp/luci-app-zirgozar-*.apk
 ```
 
 On 24.10 and 23.05:
 
 ```sh
-opkg install /tmp/passwall-plus_*.ipk /tmp/luci-app-passwall-plus_*.ipk
+opkg install /tmp/zirgozar_*.ipk /tmp/luci-app-zirgozar_*.ipk
 ```
 
-### The router needs working internet while you install
-
-Several things Passwall+ relies on are not in a stock OpenWrt image —
-`kmod-nft-tproxy`, `curl`, `ip-full` — and the package manager fetches them as
-it installs. So do this on a connection that works, **before** you need the
-tunnel.
+> [!IMPORTANT]
+> **The router needs working internet while you install.** Several things
+> Zirgozar relies on are not in a stock OpenWrt image — `kmod-nft-tproxy`,
+> `curl`, `ip-full` — and the package manager fetches them as it installs. So do
+> this on a connection that works, **before** you need the tunnel.
 
 If that step went wrong, or you installed the file by hand, open the **App
-Update** page and look at **Does this router have what it needs?**. It puts
+Update** page and look at **Router requirements**. It puts
 three questions to the running system — can it redirect traffic, can it do
 policy routing, can it fetch over HTTPS — and installs whatever is missing at
 the press of a button. It never touches `xray-core`, so a router that has
 PassWall2 is left alone.
 
-Nothing runs by itself after installation. The tunnel stays off until you turn
-the Main switch on.
+> [!TIP]
+> Nothing runs by itself after installation. The tunnel stays off until you turn
+> the **Main switch** on.
 
 ---
 
-## 3. Your first connection
+## 🚀 3. Your first connection
 
-1. In LuCI go to **Services → Passwall+**. The first page is **Basic
+1. In LuCI go to **Services → Zirgozar**. The first page is **Basic
    Settings**.
 2. As the page opens, the router starts measuring configs straight away; the
    status card shows how far it has got.
@@ -117,20 +139,21 @@ That is all. If there is no list to choose from — the default subscription
 cannot be read, and you have no config of your own — go to **Node List**, press
 **Add the node via the link**, paste one of your own configs, and come back.
 
-**If PassWall2 is running on the same router, turn it off first.** Two
-transparent proxies fight over the same packets and the loser is your
-connection. If Passwall+ sees PassWall2 redirecting traffic, it says so in the
+> [!WARNING]
+> **If PassWall2 is running on the same router, turn it off first.** Two
+> transparent proxies fight over the same packets and the loser is your
+> connection. If Zirgozar sees PassWall2 redirecting traffic, it says so in the
 status card.
 
 ---
 
-## 4. The pages, and every option on them
+## 🧭 4. The pages, and every option on them
 
 The tabs across the top are PassWall2's, in PassWall2's order: **Basic
 Settings, Node List, Node Subscribe, Other Settings, App Update, Rule Manage,
 Geo View, Access Control, Runtime Logs**.
 
-Every option is also a line in `/etc/config/passwall-plus`, an ordinary UCI
+Every option is also a line in `/etc/config/zirgozar`, an ordinary UCI
 file; the name in backticks is its name there. Anything a page does can be done
 by editing the file, and the other way round.
 
@@ -142,7 +165,7 @@ Two things hold on every page:
 - **Messages appear beside what they are about.** A warning is red and stays
   until the next press; anything else fades after a few seconds.
 
-### 4.1 Basic Settings
+### ⚙️ 4.1 Basic Settings
 
 At the top, PassWall2's row of tiles:
 
@@ -263,7 +286,7 @@ the last fortnight as bars, plus how much went straight out this month. The
 figures are read from the core every five minutes and added up in memory; how
 often they reach flash is set on Other Settings.
 
-### 4.2 Node List
+### 📋 4.2 Node List
 
 PassWall2's Node List: which configs are used and how they are measured, the
 configs you add by hand, and every config the router has.
@@ -319,7 +342,7 @@ Beside **Edit** and **Delete** on each row: **To Top** moves it to the top,
 
 **WireGuard.** `PrivateKey`, `Address`, `MTU`, `Reserved`, `PublicKey`,
 `PresharedKey`, `Endpoint` and `PersistentKeepalive` are read. `AllowedIPs` and
-`DNS` are deliberately ignored: routing and name lookups are Passwall+'s own
+`DNS` are deliberately ignored: routing and name lookups are Zirgozar's own
 settings.
 
 **The list at the bottom** — every config the router knows about, measured
@@ -329,7 +352,7 @@ empty by design. **Check every node** runs the handshake for the whole list
 without disturbing a tunnel that is carrying traffic; **Use** beside a row
 connects through that config.
 
-### 4.3 Node Subscribe
+### 🔗 4.3 Node Subscribe
 
 PassWall2's Node Subscribe. First, for all subscriptions:
 
@@ -376,7 +399,7 @@ Each subscription's edit window:
 What a subscription brought is kept on flash as well — written only when it
 changed — so a reboot does not lose a list that is read once a week.
 
-### 4.4 Other Settings
+### 🧰 4.4 Other Settings
 
 PassWall2's Other Settings, section by section.
 
@@ -446,7 +469,7 @@ switch is on.
 If the router clock is wrong, secure connections and tunnel connections cannot
 be made.
 
-### 4.5 App Update
+### ⬆️ 4.5 App Update
 
 | Card | What it shows |
 |---|---|
@@ -458,7 +481,7 @@ be made.
 
 | Option | In the file | Default | What it does |
 |---|---|---|---|
-| **Folder for downloaded cores** | `core_dir` | `/usr/libexec/passwall-plus` | Point it at USB storage on a router short of flash. A core another package installed is used where it is and never moved |
+| **Folder for downloaded cores** | `core_dir` | `/usr/libexec/zirgozar` | Point it at USB storage on a router short of flash. A core another package installed is used where it is and never moved |
 | **Xray App Path** | `core_xray` | — | Empty means whichever Xray on this router accepts the configuration, preferring one already installed |
 | **Sing-Box App Path** | `core_singbox` | — | The file sing-box is installed, updated and run from. Empty is this program's own copy in the folder above |
 | **Hysteria App Path** | `core_hysteria` | — | The same for hysteria |
@@ -467,7 +490,7 @@ be made.
 To run a core from memory, give a path beginning with `/tmp`, save and apply,
 and press Install beside it; it has to be installed again after every reboot.
 
-### 4.6 Rule Manage
+### 🗺️ 4.6 Rule Manage
 
 PassWall2's Rule Manage: the routing data and the shunt rules — then this
 program's own Iran split, blocks, rebind list and direct names.
@@ -478,7 +501,7 @@ program's own Iran split, blocks, rebind list and direct names.
 |---|---|---|---|
 | **GeoIP Update URL** | `geoip_url` | Chocolate4U (IR) | Where `geoip.dat` comes from. The Iranian project first, its lite file, Loyalsoldier, MetaCubeX, runetfreedom |
 | **Geosite Update URL** | `geosite_url` | Chocolate4U (IR) | The same for `geosite.dat` |
-| **Location of Geo rule files** | `geo_dir` | `/etc/passwall-plus/geo` | Where the two files are kept. The full files are about 17 MB and 8 MB; on a router short of flash, point this at USB storage or choose the lite files |
+| **Location of Geo rule files** | `geo_dir` | `/etc/zirgozar/geo` | Where the two files are kept. The full files are about 17 MB and 8 MB; on a router short of flash, point this at USB storage or choose the lite files |
 | **Auto Update Mode** | `geo_update_week_mode` | Disable | The ticked files are downloaded again every day, one day of the week, or every so many hours, and the tunnel, if running, restarted to read them |
 | **Update Time** | `geo_update_time_mode` | 0:00 | The time |
 | **Update Interval(hour)** | `geo_update_interval_mode` | 2 | The hours, for Loop Mode |
@@ -504,7 +527,7 @@ The shunt rules are in the **Shunt Rule** tab of Basic Settings.
 | **Sites with a rebind weakness** | `rebind_domain` | Iranian banks and services | Some sites answer with a private address — Iranian banks and government services among them. The router's rebind protection refuses those answers and the site does not open; every name here is excused, with everything under it |
 | **Direct domains** | `direct_domain` | — | Sites that always go straight out. A name covers everything under it; `full:`, `regexp:`, `keyword:` are accepted as written |
 
-### 4.7 Geo View
+### 🔍 4.7 Geo View
 
 PassWall2's Geo View, with its tool Geoview (install it with the button on the
 page, or on App Update).
@@ -514,7 +537,7 @@ page, or on App Update).
 | **Domain/IP Query** | Which geoip or geosite lists hold a name or an address — and which shunt rules name one of those lists, or it |
 | **GeoIP/Geosite Query** | What one list holds: `geosite:ir`, `geoip:ir`, `geosite:google`… The first five thousand lines are shown |
 
-### 4.8 Access Control
+### 🛡️ 4.8 Access Control
 
 PassWall2's Access control: devices with their own way out.
 
@@ -534,7 +557,7 @@ A `config acl_rule` section per row:
 | Main | **Node** | `node` | For Proxy through one config: one of your configs. A hysteria2 or tuic one cannot have a rule of its own; such a rule uses the tunnel's config |
 | Proxy | **TCP / UDP No Redir Ports**, **TCP / UDP Redir Ports** | `tcp_no_redir_ports` … `udp_redir_ports` | The same as Forwarding Settings, for these devices only |
 
-### 4.9 Runtime Logs
+### 📜 4.9 Runtime Logs
 
 PassWall2's Runtime Logs: this program's own log — each start and stop step by
 step, which config was chosen and why, what failed — with **Clear logs**, and
@@ -543,7 +566,7 @@ seconds. The lines are never translated: it is the router's own log.
 
 ---
 
-## 5. How a config is chosen
+## 🎯 5. How a config is chosen
 
 You do not need to know this, but if you are curious: choosing happens in **two
 passes**, which is why it takes seconds rather than half a minute.
@@ -567,7 +590,7 @@ the next one down the list rather than starting again.
 
 ---
 
-## 6. In the file only
+## 📝 6. In the file only
 
 These are not on any page, because changing them is rare and getting them
 wrong is quiet.
@@ -594,7 +617,7 @@ names the right one.
 
 ---
 
-## 7. If it does not work
+## 🛠️ 7. If it does not work
 
 **It says there is no node list yet.** No subscription could be read and you
 have no config of your own. Check the subscription on Node Subscribe or — more
@@ -631,7 +654,7 @@ design.
 downloaded, the Status card says *Iran split is on, but the routing data is
 missing* and until then everything goes through the tunnel. Download them on
 Rule Manage. If the router has geo files left by another program and they do not
-carry the Iranian categories, Passwall+ brings the tunnel up **without** the
+carry the Iranian categories, Zirgozar brings the tunnel up **without** the
 split and says so.
 
 **The traffic figures are stuck at zero.** The core is not answering its
@@ -672,9 +695,9 @@ happens again.
 **I want to see what is actually happening:**
 
 ```sh
-logread -e passwall-plus
-cat /tmp/log/passwall-plus.log
-/usr/libexec/pwplus-rules status
+logread -e zirgozar
+cat /tmp/log/zirgozar.log
+/usr/libexec/zgz-rules status
 ```
 
 The last one says whether the firewall rules really loaded and how much traffic
@@ -684,11 +707,11 @@ Support and contact: [t.me/routekernel1](https://t.me/routekernel1)
 
 ---
 
-## 8. Uninstall
+## 🗑️ 8. Uninstall
 
 ```sh
-/etc/init.d/passwall-plus stop
-apk del luci-app-passwall-plus passwall-plus
+/etc/init.d/zirgozar stop
+apk del luci-app-zirgozar zirgozar
 ```
 
 On 24.10 and 23.05 write `opkg remove` instead of `apk del`.
@@ -699,7 +722,7 @@ To erase those too, including the routing data, the kept subscriptions and the
 traffic history:
 
 ```sh
-rm -rf /etc/config/passwall-plus /etc/passwall-plus
+rm -rf /etc/config/zirgozar /etc/zirgozar
 ```
 
 Nothing else is touched: no firewall zone, no other package's configuration.
@@ -713,7 +736,7 @@ each thing was confirmed — and what is still not covered by a test — see
 
 ---
 
-## 9. Licence
+## ⚖️ 9. Licence
 
 GNU AGPL, version 3 or any later version (AGPL-3.0-or-later) — the full text is in [LICENSE](LICENSE). Xray-core is licensed by its own authors under MPL-2.0.
 
@@ -721,7 +744,7 @@ If you run a modified version on a router whose web page other people use over t
 
 ---
 
-## 10. Thanks
+## 🙏 10. Thanks
 
 The default config list is the **TOP 100** collection published by
 [@Raydikalx](https://t.me/raydikalx), gathered and kept current as free, public

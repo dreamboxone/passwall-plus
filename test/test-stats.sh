@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+# Part of Zirgozar - https://github.com/dreamboxone/zirgozar
 #
 # The traffic accounting, checked against arithmetic that can be done by hand.
 #
@@ -17,7 +17,7 @@
 
 rig_setup
 
-STATS="$RIG/lib/pwplus-stats"
+STATS="$RIG/lib/zgz-stats"
 DB="$RIG/etc/usage.db"
 
 # A port nothing is listening on, so that "there is no core to ask" means it.
@@ -87,7 +87,10 @@ check "$(printf '%s' "$J" | sed -n 's/.*"week":{"up":\([0-9]*\).*/\1/p')" \
 	"the last seven days cross the end of a month correctly"
 
 # This calendar month: however many stored days fall in it, plus today.
-DAYS_IN_MONTH=$(cut -f1 "$DB" | grep -c "^$MONTH" || echo 0)
+# grep -c prints its 0 and fails as well when nothing matches - on the first
+# of a month - so the failure is swallowed rather than answered with a
+# second 0.
+DAYS_IN_MONTH=$(cut -f1 "$DB" | grep -c "^$MONTH" || true)
 check "$(printf '%s' "$J" | sed -n 's/.*"month":{"up":\([0-9]*\).*/\1/p')" \
 	"$((DAYS_IN_MONTH * 102400 + 5000))" \
 	"this month counts exactly the days in this calendar month"

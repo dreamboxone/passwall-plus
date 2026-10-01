@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+# Part of Zirgozar - https://github.com/dreamboxone/zirgozar
 #
 # The checks that catch a thing being written down in two places and only
 # changed in one.
@@ -21,9 +21,9 @@ PASS=0
 FAIL=0
 
 echo "== every shell script parses"
-for f in "$ROOT"/package/passwall-plus/files/pwplus-* "$ROOT"/package/passwall-plus/files/passwall-plus.init \
-         "$ROOT"/package/passwall-plus/files/luci.passwall-plus "$ROOT"/build/*.sh "$ROOT"/test/*.sh; do
-	case "$f" in *pwplus-parse) continue ;; esac
+for f in "$ROOT"/package/zirgozar/files/zgz-* "$ROOT"/package/zirgozar/files/zirgozar.init \
+         "$ROOT"/package/zirgozar/files/luci.zirgozar "$ROOT"/build/*.sh "$ROOT"/test/*.sh; do
+	case "$f" in *zgz-parse) continue ;; esac
 	if sh -n "$f" 2>/dev/null; then
 		ok "$(basename "$f")"
 	else
@@ -32,19 +32,19 @@ for f in "$ROOT"/package/passwall-plus/files/pwplus-* "$ROOT"/package/passwall-p
 done
 
 echo "== the awk parser compiles"
-if echo '' | awk -f "$ROOT/package/passwall-plus/files/pwplus-parse" >/dev/null 2>&1; then
-	ok "pwplus-parse"
+if echo '' | awk -f "$ROOT/package/zirgozar/files/zgz-parse" >/dev/null 2>&1; then
+	ok "zgz-parse"
 else
-	bad "pwplus-parse does not compile"
+	bad "zgz-parse does not compile"
 fi
 
 echo "== the two packaging paths ship the same helpers"
-MK=$(sed -n 's/^PWPLUS_SCRIPTS:=//p' "$ROOT/package/passwall-plus/Makefile" | tr ' ' '\n' | grep . | sort)
-INC=$(sed -n 's/^PWPLUS_SCRIPTS="//p' "$ROOT/build/packages.inc.sh" | tr -d '"' | tr ' ' '\n' | grep . | sort)
+MK=$(sed -n 's/^ZGZ_SCRIPTS:=//p' "$ROOT/package/zirgozar/Makefile" | tr ' ' '\n' | grep . | sort)
+INC=$(sed -n 's/^ZGZ_SCRIPTS="//p' "$ROOT/build/packages.inc.sh" | tr -d '"' | tr ' ' '\n' | grep . | sort)
 if [ "$MK" = "$INC" ]; then
-	ok "package/passwall-plus/Makefile and build/packages.inc.sh agree"
+	ok "package/zirgozar/Makefile and build/packages.inc.sh agree"
 else
-	bad "package/passwall-plus/Makefile and build/packages.inc.sh disagree"
+	bad "package/zirgozar/Makefile and build/packages.inc.sh disagree"
 	printf '%s\n' "$MK" > "$RIG/mk.list"
 	printf '%s\n' "$INC" > "$RIG/inc.list"
 	diff "$RIG/mk.list" "$RIG/inc.list" || true
@@ -52,7 +52,7 @@ fi
 
 echo "== every helper named actually exists"
 for s in $MK; do
-	if [ -f "$ROOT/package/passwall-plus/files/$s" ]; then
+	if [ -f "$ROOT/package/zirgozar/files/$s" ]; then
 		ok "$s"
 	else
 		bad "$s is named by the packaging but is not in the tree"
@@ -61,9 +61,9 @@ done
 
 echo "== every helper in the tree is packaged"
 MK_LINE=" $(printf '%s ' $MK)"
-for f in "$ROOT"/package/passwall-plus/files/pwplus-*; do
+for f in "$ROOT"/package/zirgozar/files/zgz-*; do
 	b=$(basename "$f")
-	case "$b" in pwplus-common.sh) continue ;; esac
+	case "$b" in zgz-common.sh) continue ;; esac
 	case "$MK_LINE" in
 		*" $b "*) ok "$b is packaged" ;;
 		*) bad "$b is in the tree but no packaging installs it" ;;
@@ -71,10 +71,10 @@ for f in "$ROOT"/package/passwall-plus/files/pwplus-*; do
 done
 
 echo "== the web interface can call what the backend implements"
-ACL=$(tr -d ' \t\n' < "$ROOT/package/luci-app-passwall-plus/root/usr/share/rpcd/acl.d/luci-app-passwall-plus.json" |
-	sed 's/"luci\.passwall-plus":\[/\n/g' | sed -n '2,$p' | sed 's/\].*//' |
+ACL=$(tr -d ' \t\n' < "$ROOT/package/luci-app-zirgozar/root/usr/share/rpcd/acl.d/luci-app-zirgozar.json" |
+	sed 's/"luci\.zirgozar":\[/\n/g' | sed -n '2,$p' | sed 's/\].*//' |
 	grep -o '"[a-z_]*"' | tr -d '"' | sort -u | tr '\n' ' ')
-IMPL=$(sed -n '/^	call)/,/esac/p' "$ROOT/package/passwall-plus/files/luci.passwall-plus" |
+IMPL=$(sed -n '/^	call)/,/esac/p' "$ROOT/package/zirgozar/files/luci.zirgozar" |
 	sed -n 's/^\t\t\t\([a-z_]*\)).*/\1/p' | sort -u | tr '\n' ' ')
 if [ "$ACL" = "$IMPL" ]; then
 	ok "the ACL lists exactly the methods rpcd implements ($IMPL)"
@@ -83,7 +83,7 @@ else
 fi
 
 echo "== every method the views call is in the ACL"
-for m in $(grep -ho "method: *'[a-z_]*'" "$ROOT"/package/luci-app-passwall-plus/root/www/luci-static/resources/view/passwall-plus/*.js |
+for m in $(grep -ho "method: *'[a-z_]*'" "$ROOT"/package/luci-app-zirgozar/root/www/luci-static/resources/view/zirgozar/*.js |
            sed "s/.*'\\([a-z_]*\\)'.*/\\1/" | sort -u); do
 	case " $ACL " in
 		*" $m "*) ok "$m" ;;
@@ -92,7 +92,7 @@ for m in $(grep -ho "method: *'[a-z_]*'" "$ROOT"/package/luci-app-passwall-plus/
 done
 
 echo "== the menu names views that are shipped"
-MENU="$ROOT/package/luci-app-passwall-plus/root/usr/share/luci/menu.d/luci-app-passwall-plus.json"
+MENU="$ROOT/package/luci-app-zirgozar/root/usr/share/luci/menu.d/luci-app-zirgozar.json"
 for v in $(grep -o '"path": *"[^"]*"' "$MENU" | cut -d'"' -f4); do
 	# An alias - the old address of a page that has moved - names a menu
 	# entry, not a view.
@@ -102,7 +102,7 @@ for v in $(grep -o '"path": *"[^"]*"' "$MENU" | cut -d'"' -f4); do
 			continue
 			;;
 	esac
-	if [ -s "$ROOT/package/luci-app-passwall-plus/root/www/luci-static/resources/view/$v.js" ]; then
+	if [ -s "$ROOT/package/luci-app-zirgozar/root/www/luci-static/resources/view/$v.js" ]; then
 		ok "$v.js"
 	else
 		bad "the menu points at $v.js, which is not in the tree"
@@ -110,8 +110,8 @@ for v in $(grep -o '"path": *"[^"]*"' "$MENU" | cut -d'"' -f4); do
 done
 
 echo "== every view file is reachable from the menu"
-for f in "$ROOT"/package/luci-app-passwall-plus/root/www/luci-static/resources/view/passwall-plus/*.js; do
-	b="passwall-plus/$(basename "$f" .js)"
+for f in "$ROOT"/package/luci-app-zirgozar/root/www/luci-static/resources/view/zirgozar/*.js; do
+	b="zirgozar/$(basename "$f" .js)"
 	if grep -q "\"$b\"" "$MENU"; then
 		ok "$b"
 	else
@@ -122,7 +122,7 @@ done
 echo "== the versions agree"
 V_INC=$(sed -n 's/^VERSION=//p' "$ROOT/build/packages.inc.sh")
 R_INC=$(sed -n 's/^RELEASE=//p' "$ROOT/build/packages.inc.sh")
-for mk in package/passwall-plus/Makefile package/luci-app-passwall-plus/Makefile; do
+for mk in package/zirgozar/Makefile package/luci-app-zirgozar/Makefile; do
 	V=$(sed -n 's/^PKG_VERSION:=//p' "$ROOT/$mk")
 	R=$(sed -n 's/^PKG_RELEASE:=//p' "$ROOT/$mk")
 	if [ "$V" = "$V_INC" ] && [ "$R" = "$R_INC" ]; then
@@ -133,17 +133,17 @@ for mk in package/passwall-plus/Makefile package/luci-app-passwall-plus/Makefile
 done
 
 echo "== settings the scripts read all have a default in the shipped config"
-CONF="$ROOT/package/passwall-plus/files/passwall-plus.config"
+CONF="$ROOT/package/zirgozar/files/zirgozar.config"
 # Capitals too: PassWall2 names some of its options that way - fragment_maxSplit -
 # and a name cut short at its first capital is a name that is never found.
-for k in $(grep -ho 'cfg\(_bool\)\? [a-zA-Z_0-9]*' "$ROOT"/package/passwall-plus/files/* |
+for k in $(grep -ho 'cfg\(_bool\)\? [a-zA-Z_0-9]*' "$ROOT"/package/zirgozar/files/* |
            awk '{print $2}' | sort -u); do
 	case "$k" in enabled) continue ;; esac
 	# a commented default counts: it documents the setting and its value
 	if grep -Eq "(option|list) $k " "$CONF"; then
 		:
 	else
-		bad "the scripts read '$k' but /etc/config/passwall-plus ships no default for it"
+		bad "the scripts read '$k' but /etc/config/zirgozar ships no default for it"
 	fi
 done
 ok "checked every setting the scripts read"
@@ -156,7 +156,7 @@ FOUND=$(awk '
 	/^[a-z_0-9]+\(\) \{/ { fn = $1; last = "" }
 	/^\}/ { if (fn != "" && last ~ /^\[.*\][ \t]*&&/) print FILENAME ": " fn; fn = "" }
 	{ if ($0 !~ /^[[:space:]]*(#|$)/) { last = $0; sub(/^[[:space:]]+/, "", last) } }
-' "$ROOT"/package/passwall-plus/files/* 2>/dev/null)
+' "$ROOT"/package/zirgozar/files/* 2>/dev/null)
 if [ -z "$FOUND" ]; then
 	ok "none"
 else
@@ -169,21 +169,21 @@ fi
 # and nothing said so, because the shell builders - which the releases use -
 # ship all three.
 echo "== every file the web interface needs is in both packaging paths"
-LUCI_FILES="www/luci-static/resources/view/passwall-plus/subscribe.js
-www/luci-static/resources/view/passwall-plus/geoview.js
-www/luci-static/resources/view/passwall-plus/nodes.js
-www/luci-static/resources/view/passwall-plus/traffic.js
-www/luci-static/resources/view/passwall-plus/acl.js
-www/luci-static/resources/view/passwall-plus/settings.js
-www/luci-static/resources/view/passwall-plus/log.js
-www/luci-static/resources/passwall-plus/i18n.js
-www/luci-static/resources/passwall-plus/status.js
-usr/share/luci/menu.d/luci-app-passwall-plus.json
-usr/share/rpcd/acl.d/luci-app-passwall-plus.json"
+LUCI_FILES="www/luci-static/resources/view/zirgozar/subscribe.js
+www/luci-static/resources/view/zirgozar/geoview.js
+www/luci-static/resources/view/zirgozar/nodes.js
+www/luci-static/resources/view/zirgozar/traffic.js
+www/luci-static/resources/view/zirgozar/acl.js
+www/luci-static/resources/view/zirgozar/settings.js
+www/luci-static/resources/view/zirgozar/log.js
+www/luci-static/resources/zirgozar/i18n.js
+www/luci-static/resources/zirgozar/status.js
+usr/share/luci/menu.d/luci-app-zirgozar.json
+usr/share/rpcd/acl.d/luci-app-zirgozar.json"
 MISSING=""
 for f in $LUCI_FILES; do
-	[ -f "$ROOT/package/luci-app-passwall-plus/root/$f" ] || MISSING="$MISSING $f(not in the tree)"
-	grep -q "$(basename "$f")" "$ROOT/package/luci-app-passwall-plus/Makefile" || MISSING="$MISSING $f(Makefile)"
+	[ -f "$ROOT/package/luci-app-zirgozar/root/$f" ] || MISSING="$MISSING $f(not in the tree)"
+	grep -q "$(basename "$f")" "$ROOT/package/luci-app-zirgozar/Makefile" || MISSING="$MISSING $f(Makefile)"
 	# Without the extension: the shell builder installs the three views from a
 	# loop over their names, so the file name never appears in it whole.
 	grep -q "$(basename "$f" .js)" "$ROOT/build/packages.inc.sh" || MISSING="$MISSING $f(packages.inc.sh)"
@@ -215,7 +215,7 @@ write_caller() {
 	# only on a machine where some other suite has already run. That is why
 	# this passed on a development router and failed on a clean runner.
 	cat > "$RIG/work/caller.sh" <<CALLER
-. "$ROOT/package/passwall-plus/files/pwplus-common.sh"
+. "$ROOT/package/zirgozar/files/zgz-common.sh"
 _tmp="$RIG/work/dest.bin"
 _url="$1"
 download_checked "\$_url" "\$_tmp" 8192 >/dev/null 2>&1
@@ -224,7 +224,7 @@ CALLER
 }
 
 run_caller() {
-	PWPLUS_RUN="$RIG/run" PWPLUS_ETC="$RIG/etc" \
+	ZGZ_RUN="$RIG/run" ZGZ_ETC="$RIG/etc" \
 		sh "$RIG/work/caller.sh" 2>"$RIG/work/caller.err"
 	echo "$?" > "$RIG/work/caller.rc"
 }
@@ -279,9 +279,9 @@ fi
 # back in English, on a page the reader has set to Persian, next to Persian.
 # Which is the same thing as an untranslated interface and nothing says so.
 echo "== every string in the views is in the Persian dictionary"
-I18N="$ROOT/package/luci-app-passwall-plus/root/www/luci-static/resources/passwall-plus/i18n.js"
+I18N="$ROOT/package/luci-app-zirgozar/root/www/luci-static/resources/zirgozar/i18n.js"
 sed -n "s/^	'\(.*\)':.*/\1/p" "$I18N" | sort -u > "$RIG/keys.txt"
-grep -ho "_('[^']*')" "$ROOT"/package/luci-app-passwall-plus/root/www/luci-static/resources/view/passwall-plus/*.js |
+grep -ho "_('[^']*')" "$ROOT"/package/luci-app-zirgozar/root/www/luci-static/resources/view/zirgozar/*.js |
 	sed "s/^_('//; s/')$//" | sort -u > "$RIG/used.txt"
 UNTRANSLATED="$(comm -23 "$RIG/used.txt" "$RIG/keys.txt")"
 if [ -z "$UNTRANSLATED" ]; then
@@ -315,7 +315,7 @@ fi
 # this 46 pixels tall, so a picture bigger than the whole web interface is a
 # mistake worth catching before it is released rather than after.
 echo "== the artwork is a size a router can afford"
-LOGO="$ROOT/package/luci-app-passwall-plus/root/www/luci-static/resources/passwall-plus/logo.png"
+LOGO="$ROOT/package/luci-app-zirgozar/root/www/luci-static/resources/zirgozar/logo.png"
 if [ -f "$LOGO" ]; then
 	BYTES=$(wc -c < "$LOGO" | tr -d ' ')
 	if [ "$BYTES" -le 65536 ]; then
@@ -324,7 +324,7 @@ if [ -f "$LOGO" ]; then
 		bad "logo.png is $BYTES bytes - it goes into the flash of every router this is installed on"
 	fi
 	MISS=""
-	grep -q 'logo.png' "$ROOT/package/luci-app-passwall-plus/Makefile" || MISS="$MISS Makefile"
+	grep -q 'logo.png' "$ROOT/package/luci-app-zirgozar/Makefile" || MISS="$MISS Makefile"
 	grep -q 'logo.png' "$ROOT/build/packages.inc.sh" || MISS="$MISS packages.inc.sh"
 	if [ -z "$MISS" ]; then
 		ok "and both packaging paths install it"
@@ -341,14 +341,14 @@ fi
 # tunnel, and a node that completes a TCP handshake and then carries nothing
 # satisfies both of those for ever - so the network stayed pointed into a dead
 # tunnel, the whole house lost the internet, and the page said everything was
-# fine. The healer asks pwplus-test whether a request actually gets through
+# fine. The healer asks zgz-test whether a request actually gets through
 # now, and the first thing that has to be true of that question is that it
 # answers safely when there is nothing chosen at all.
 echo "== asking whether the tunnel carries traffic is safe with nothing chosen"
 mkdir -p "$RIG/hc/etc" "$RIG/hc/run"
-OUT="$(PWPLUS_ETC="$RIG/hc/etc" PWPLUS_RUN="$RIG/hc/run" \
-       PWPLUS_LIB="$ROOT/package/passwall-plus/files" \
-       sh "$ROOT/package/passwall-plus/files/pwplus-test" current 2>/dev/null)"
+OUT="$(ZGZ_ETC="$RIG/hc/etc" ZGZ_RUN="$RIG/hc/run" \
+       ZGZ_LIB="$ROOT/package/zirgozar/files" \
+       sh "$ROOT/package/zirgozar/files/zgz-test" current 2>/dev/null)"
 RC=$?
 if [ "$RC" != "0" ]; then
 	ok "it fails rather than claiming a tunnel that does not exist works"
@@ -364,14 +364,14 @@ check "$OUT" "0" "and says nothing got through"
 # interface, which is a page where every button does nothing and nothing says
 # why. That happened.
 echo "== the postinst the builder writes is valid shell"
-sed -n '/passwall-plus.postinst" <<EOF/,/^EOF$/p' "$ROOT/build/packages.inc.sh" |
+sed -n '/zirgozar.postinst" <<EOF/,/^EOF$/p' "$ROOT/build/packages.inc.sh" |
 	sed '1d;$d' > "$RIG/postinst.sh"
 if [ -s "$RIG/postinst.sh" ] && sh -n "$RIG/postinst.sh" 2>/dev/null; then
 	ok "it parses"
 else
 	bad "the generated postinst does not parse"
 fi
-if grep -q 'luci.passwall-plus' "$RIG/postinst.sh"; then
+if grep -q 'luci.zirgozar' "$RIG/postinst.sh"; then
 	ok "and it checks rpcd really registered the object rather than assuming"
 else
 	bad "the postinst reloads rpcd without checking it took"
@@ -394,7 +394,7 @@ fi
 echo "== nothing calls timeout, which a stock OpenWrt does not have"
 BARE=$(grep -rnE '(^|[[:space:]])timeout[[:space:]]+[0-9]' \
 	"$ROOT/package" "$ROOT/build" 2>/dev/null |
-	grep -v 'command -v timeout' || true)
+	grep -v -e 'command -v timeout' -e 'timeout 5 true' || true)
 if [ -z "$BARE" ]; then
 	ok "none"
 else
@@ -406,9 +406,9 @@ fi
 # the one it replaces.
 echo "== bounded returns what the command returned, and cuts a hang short"
 cat > "$RIG/bt.sh" <<BT
-PWPLUS_RUN="$RIG/bt/run"; PWPLUS_ETC="$RIG/bt/etc"
-. "$ROOT/package/passwall-plus/files/pwplus-common.sh"
-PWPLUS_HAVE_TIMEOUT=0
+ZGZ_RUN="$RIG/bt/run"; ZGZ_ETC="$RIG/bt/etc"
+. "$ROOT/package/zirgozar/files/zgz-common.sh"
+ZGZ_HAVE_TIMEOUT=0
 bounded 5 true; echo "true=\$?"
 bounded 5 sh -c 'exit 7'; echo "seven=\$?"
 _t0=\$(date +%s)
@@ -440,11 +440,11 @@ FAKE
 chmod 755 "$RIG/bt/bin/timeout"
 cat > "$RIG/bt2.sh" <<BT
 PATH="$RIG/bt/bin:\$PATH"
-PWPLUS_RUN="$RIG/bt/run"; PWPLUS_ETC="$RIG/bt/etc"
-. "$ROOT/package/passwall-plus/files/pwplus-common.sh"
+ZGZ_RUN="$RIG/bt/run"; ZGZ_ETC="$RIG/bt/etc"
+. "$ROOT/package/zirgozar/files/zgz-common.sh"
 bounded 5 true; echo "true=\$?"
 bounded 5 sh -c 'exit 7'; echo "seven=\$?"
-echo "have=\$PWPLUS_HAVE_TIMEOUT"
+echo "have=\$ZGZ_HAVE_TIMEOUT"
 BT
 BT2_OUT="$(sh "$RIG/bt2.sh" 2>/dev/null)"
 check "$(printf '%s\n' "$BT2_OUT" | sed -n 's/^true=//p')" "0" "the command still runs, through the watchdog"

@@ -1,0 +1,672 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Zirgozar - https://github.com/dreamboxone/zirgozar
+#
+# rpcd backend for luci-app-zirgozar (ubus object: luci.zirgozar)
+#
+# Every method here answers immediately. Anything that takes real time -
+# downloading twenty-five megabytes of routing data, installing a core,
+# choosing a server - is started in the background and watched through a job
+# file, because rpcd reads this script's stdout until every writer has closed
+# it: a child that keeps it open holds the browser's request open too, however
+# quickly this script itself finishes.
+
+ZGZ_LIB=/usr/libexec
+. "$ZGZ_LIB/zgz-common.sh"
+. /usr/share/libubox/jshn.sh
+
+CONNECT="$ZGZ_LIB/zgz-connect"
+PROBE="$ZGZ_LIB/zgz-probe"
+NODES="$ZGZ_LIB/zgz-nodes"
+GEO="$ZGZ_LIB/zgz-geo"
+CORES="$ZGZ_LIB/zgz-cores"
+DEPS="$ZGZ_LIB/zgz-deps"
+STATS="$ZGZ_LIB/zgz-stats"
+TEST="$ZGZ_LIB/zgz-test"
+RULES="$ZGZ_LIB/zgz-rules"
+ROUTER="$ZGZ_LIB/zgz-router"
+
+JOB="$ZGZ_RUN/job"
+
+meta_get() { sed -n "s/^$1=//p" "$ZGZ_BEST_META" 2>/dev/null | tail -1; }
+prog_get() { sed -n "s/^$1=//p" "$ZGZ_PROGRESS" 2>/dev/null | tail -1; }
+
+num() {
+	case "$1" in
+		''|*[!0-9]*) echo 0 ;;
+		*) echo "$1" ;;
+	esac
+}
+
+# Run something without holding this request open. rpcd reads our stdout until
+# every writer closes it, so a child that keeps it would hang the browser call
+# however fast we answer.
+detach() {
+	if command -v setsid >/dev/null 2>&1; then
+		setsid "$@" </dev/null >/dev/null 2>&1 &
+	else
+		( "$@" </dev/null >/dev/null 2>&1 & ) &
+	fi
+	return 0
+}
+
+# A long job, with a name the page can show while it runs.
+run_job() {
+	_name="$1"; shift
+	detach /bin/sh -c "echo '$_name' > '$JOB'; $* >/dev/null 2>&1; rm -f '$JOB'"
+	return 0
+}
+
+# --------------------------------------------------------------------- state
+
+method_state() {
+	local running=0 connected=0 enabled autostart rules backend
+
+	tunnel_running && running=1
+
+	# Asked once. This runs every few seconds while the page is open, and each
+	# call is a process and a trip into the kernel's ruleset.
+	rules="$("$RULES" status 2>/dev/null)"
+	backend="$(printf '%s\n' "$rules" | sed -n 's/^backend:[ \t]*//p' | head -1)"
+
+	# Connected has to mean traffic is going through the tunnel, not merely
+	# that a process is alive. The core can be running perfectly with no rules
+	# in front of it, and then every byte leaves exactly as it did before while
+	# the page reports a connection - which is the most misleading thing this
+	# page could possibly do.
+	if [ "$running" = "1" ] && [ -s "$ZGZ_BEST" ] &&
+	   printf '%s\n' "$rules" | grep -q '^active:[ \t]*yes'; then
+		connected=1
+	fi
+
+	enabled="$(cfg enabled 0)"
+	[ "$enabled" = "1" ] && enabled=1 || enabled=0
+
+	# what `/etc/init.d/zirgozar enabled` tests, done inline so that a busy procd
+	# can never hold this request open
+	autostart=0
+	for l in /etc/rc.d/S??zirgozar; do
+		[ -L "$l" ] && autostart=1
+	done
+
+	json_init
+	json_add_string "version" "$(zgz_version)"
+	json_add_boolean "running" "$running"
+	json_add_boolean "connected" "$connected"
+	json_add_boolean "enabled" "$enabled"
+	json_add_boolean "autostart" "$autostart"
+	json_add_string "status" "$(cat "$ZGZ_STATUS" 2>/dev/null)"
+	json_add_string "message" "$(cat "$ZGZ_MESSAGE" 2>/dev/null)"
+	json_add_string "job" "$(cat "$JOB" 2>/dev/null)"
+
+	# The chosen server. Shown as soon as there is one, not only once it is
+	# carrying traffic: the measurement runs when the page opens precisely so
+	# the reader can see what they are about to connect to.
+	json_add_string "server" "$(meta_get label)"
+	json_add_string "protocol" "$(meta_get protocol)"
+	json_add_string "host" "$(meta_get host)"
+	json_add_int "latency_ms" "$(num "$(meta_get latency_ms)")"
+
+	# Live progress, so the page can show what is actually happening rather
+	# than a timer that guesses.
+	json_add_string "phase" "$(prog_get phase)"
+	json_add_int "total" "$(num "$(prog_get total)")"
+	json_add_int "done" "$(num "$(prog_get done)")"
+	json_add_int "alive" "$(num "$(prog_get alive)")"
+	json_add_int "tested" "$(num "$(prog_get tested)")"
+
+	# The core, as PassWall2 shows it at the top of its page: which one, which
+	# version, and whether it is running. Read from what the service wrote
+	# when it started it rather than by asking the binary, which would mean
+	# starting a core every few seconds to learn its version number.
+	_ci="$ZGZ_RUN/core.info"
+	_cpath="$(sed -n 's/^path=//p' "$_ci" 2>/dev/null | tail -1)"
+	if [ -z "$_cpath" ]; then
+		for _x in $(cfg core_xray '') $(xray_paths); do
+			[ -x "$_x" ] && { _cpath="$_x"; break; }
+		done
+	fi
+	json_add_string "core_path" "$_cpath"
+	# Which core it is, as the start wrote it down; Xray until one has run.
+	_cname="$(sed -n 's/^name=//p' "$_ci" 2>/dev/null | tail -1)"
+	json_add_string "core_name" "${_cname:-xray}"
+	json_add_string "core_version" "$(sed -n 's/^version=//p' "$_ci" 2>/dev/null | tail -1)"
+	json_add_boolean "core_running" "$running"
+	_bbin="$(sed -n 's/^bridge=//p' "$_ci" 2>/dev/null | tail -1)"
+	json_add_string "bridge" "$(basename "${_bbin:-}" 2>/dev/null)"
+	json_add_string "bridge_version" "$(sed -n 's/^bridge_version=//p' "$_ci" 2>/dev/null | tail -1)"
+	json_add_boolean "bridge_running" "$([ -n "$_bbin" ] && pgrep -f "$ZGZ_BRIDGE_JSON" >/dev/null 2>&1 && echo 1 || echo 0)"
+
+	json_add_string "backend" "$backend"
+	json_add_boolean "route_ir" "$(cfg_bool route_ir 0)"
+	json_add_boolean "geo_ready" "$(geo_dir >/dev/null 2>&1 && echo 1 || echo 0)"
+	json_add_boolean "passwall" "$(passwall_running && echo 1 || echo 0)"
+	json_add_int "now" "$(date +%s)"
+	json_dump
+}
+
+# ------------------------------------------------------------------- traffic
+
+method_traffic() {
+	_t="$("$STATS" json 2>/dev/null)"
+	[ -n "$_t" ] || _t='{"today":{"up":0,"down":0,"direct_up":0,"direct_down":0},"week":{"up":0,"down":0,"direct_up":0,"direct_down":0},"month":{"up":0,"down":0,"direct_up":0,"direct_down":0},"days":[]}'
+	echo "$_t"
+}
+
+# --------------------------------------------------------------------- nodes
+
+# Every server we know about, with whatever has been measured for it. The
+# ranked file has the ones that completed a request; the reachable file has
+# handshake times for the rest.
+method_nodes() {
+	_cur="$(meta_get tag)"
+	awk -F'\t' -v cur="$_cur" \
+		-v ranked="$ZGZ_RANKED" -v alive="$ZGZ_RUN/alive.tsv" '
+		BEGIN {
+			while ((getline line < ranked) > 0) {
+				split(line, r, "\t")
+				ms[r[2]] = r[1]
+			}
+			close(ranked)
+			while ((getline line < alive) > 0) {
+				split(line, a, "\t")
+				hs[a[2]] = a[1] + 0
+			}
+			close(alive)
+			printf "{\"nodes\":["
+			n = 0
+		}
+		{
+			if (n++ > 0) printf ","
+			lab = $2
+			gsub(/\\/, "\\\\", lab)
+			gsub(/"/, "\\\"", lab)
+			printf "{\"tag\":\"%s\",\"label\":\"%s\",\"protocol\":\"%s\",\"host\":\"%s\",\"port\":%d,\"ms\":%d,\"handshake\":%d,\"current\":%s}",
+				$1, lab, $3, $4, $5,
+				(($1 in ms) ? ms[$1] : 0),
+				(($1 in hs) ? hs[$1] : 0),
+				($1 == cur ? "true" : "false")
+		}
+		END { printf "],\"count\":%d}\n", n }
+	' "$ZGZ_CANDIDATES" 2>/dev/null || echo '{"nodes":[],"count":0}'
+}
+
+# What the three per-node buttons have measured so far. Keys are
+# "<id>.<kind>"; the numbers are milliseconds, with -1 for still running and
+# -2 for a test that cannot be run on that node at all.
+method_tests() {
+	"$TEST" json 2>/dev/null || echo '{"tests":{}}'
+}
+
+# Which hand-added section is the node the tunnel is on, so that the web
+# interface can refuse to delete it. Asked only when somebody presses Delete -
+# it walks the sections and parses each link, which is not polling work.
+method_inuse() {
+	"$NODES" inuse 2>/dev/null || echo '{"section":"","host":"","port":"","active":false}'
+}
+
+# What this program has told the system log.
+#
+# All of it was already there; what was missing was any way to read it without
+# an SSH session and knowing the incantation. Bounded to the last few hundred
+# lines, because the whole of a router's log is not something to hand to a
+# browser every five seconds.
+method_log() {
+	json_init
+	# The runtime log, PassWall2's way: this program's own file, a date on
+	# every line, emptied by the button on the page. Before this release
+	# there was no file, so the system log stands in until there is one.
+	# The file's being there is what counts, not its having something in it:
+	# an emptied one is a log that was cleared, and reading the system log in
+	# its place brought every cleared line straight back.
+	if [ -e "$ZGZ_LOG" ]; then
+		json_add_string "text" "$(tail -n 400 "$ZGZ_LOG" 2>/dev/null)"
+	else
+		json_add_string "text" "$(logread -e zirgozar 2>/dev/null | tail -300)"
+	fi
+	# And what the cores themselves said. procd hands their output to the
+	# system log under the program's own name.
+	json_add_string "core" "$(core_log | tail -300)"
+	json_dump
+}
+
+# The cores' lines in the system log, from after the last one there was when
+# the page's button cleared them. The system log itself cannot be emptied,
+# so clearing remembers the line it stopped at. Once that line has rotated
+# out of the log, so has everything older than it, and all of it is new.
+CORE_LOG_MARK="$ZGZ_RUN/core-log.mark"
+
+core_log_all() {
+	logread 2>/dev/null | grep -E ' (xray|sing-box|hysteria)\[[0-9]+\]:'
+	return 0
+}
+
+core_log() {
+	M="$(cat "$CORE_LOG_MARK" 2>/dev/null)" core_log_all_marked
+	return 0
+}
+
+core_log_all_marked() {
+	core_log_all | awk 'BEGIN { m = ENVIRON["M"] }
+		m != "" && $0 == m { c = NR; next }
+		{ a[NR] = $0 }
+		END { for (i = c + 1; i <= NR; i++) if (i in a) print a[i] }'
+	return 0
+}
+
+# PassWall2's connection check: one request to a well-known site, timed.
+# From the router, so what it measures is the router's own way out - which
+# for a site the tunnel carries is the tunnel, once the router's own lookups
+# go through it.
+method_check() {
+	local input url code t
+	read -r input
+	[ -n "$input" ] || input='{}'
+	json_load "$input" 2>/dev/null
+	json_get_var url url
+	case "$url" in
+		https://*|http://*) : ;;
+		*) json_init; json_add_int "ms" 0; json_dump; return ;;
+	esac
+	t="$(curl -o /dev/null -I -sk --connect-timeout 3 --max-time 6 \
+		-w '%{http_code} %{time_appconnect} %{time_connect}' "$url" 2>/dev/null)" || t=""
+	code="${t%% *}"
+	json_init
+	if [ -n "$code" ] && [ "$code" != "000" ]; then
+		json_add_int "ms" "$(printf '%s' "$t" | awk '{ v = ($2 > 0) ? $2 : $3; m = int(v * 1000 + 0.5); if (m < 1) m = 1; print m }')"
+	else
+		json_add_int "ms" 0
+	fi
+	json_dump
+}
+
+# What the Access Control page needs to offer choices rather than ask for
+# names: the LAN interfaces, and the nodes added by hand, which are the only
+# ones that stay put long enough for a rule to name one.
+method_lan() {
+	printf '{"interfaces":%s}
+' "$(interfaces_json)"
+}
+
+# The Geo View page's two questions, answered by zgz-geo with Geoview.
+method_geoview() {
+	local input action value out
+	read -r input
+	json_load "$input" 2>/dev/null || true
+	json_get_var action action
+	json_get_var value value
+	case "$action" in lookup|extract) : ;; *) action=lookup ;; esac
+	out="$("$GEO" view "$action" "$value" 2>/dev/null)"
+	json_init
+	case "$out" in
+		@nogeoview*) json_add_string "error" "nogeoview" ;;
+		@nogeo*)     json_add_string "error" "nogeo" ;;
+		@bad*)       json_add_string "error" "bad" ;;
+		*)
+			json_add_string "result" "$(printf '%s\n' "$out" | sed '/^--rules--$/,$d')"
+			json_add_string "rules" "$(printf '%s\n' "$out" | sed '1,/^--rules--$/d')"
+			;;
+	esac
+	json_dump
+}
+
+method_subs() {
+	awk -F'\t' 'BEGIN { printf "{\"subs\":["; n = 0 }
+		{
+			if (n++ > 0) printf ","
+			for (i = 1; i <= NF; i++) { gsub(/\\/, "\\\\", $i); gsub(/"/, "\\\"", $i) }
+			printf "{\"name\":\"%s\",\"url\":\"%s\",\"count\":%d,\"when\":%d,\"error\":\"%s\",\"section\":\"%s\",\"rem\":%.0f,\"expire\":%.0f}",
+				$1, $2, $3, $4, $5, $6, ($7 == "" ? -1 : $7), ($8 == "" ? -1 : $8)
+		}
+		END { printf "],\"count\":%d}\n", n }' \
+		"$ZGZ_RUN/subs.status" 2>/dev/null || echo '{"subs":[],"count":0}'
+}
+
+# ------------------------------------------------------------------- system
+
+# Every network on this router with a device behind it, for the settings page
+# to offer instead of asking the reader to know a device name and type it
+# correctly.
+#
+# Answered here rather than from LuCI's own network model, which is the
+# thorough way to ask and takes seconds on a router this size - three or four
+# of them between pressing Settings and the page appearing. This is one ubus
+# list and one call per interface, and the page already asks for this object.
+interfaces_json() {
+	_out=""
+	if [ -r /lib/functions/network.sh ]; then
+		. /lib/functions/network.sh
+		for _iface in $(ubus list 'network.interface.*' 2>/dev/null | sed 's/network\.interface\.//'); do
+			case "$_iface" in
+				loopback|wan|wan6|wwan|wan_*) continue ;;
+			esac
+			_dev=""
+			network_get_device _dev "$_iface" 2>/dev/null || _dev=""
+			if [ -n "$_dev" ] && [ "$_dev" != "lo" ]; then
+				if [ -n "$_out" ]; then _out="$_out,"; fi
+				_out="$_out{\"net\":\"$(json_escape "$_iface")\",\"dev\":\"$(json_escape "$_dev")\"}"
+			fi
+		done
+	fi
+	echo "[$_out]"
+	return 0
+}
+
+method_system() {
+	# What each project has published is read from a file here and refreshed
+	# in the background, so that a page polling every five seconds never waits
+	# on GitHub. The refresh itself does nothing when the file is fresh.
+	detach "$CORES" latest
+
+	# The dependency check loads a test ruleset into the kernel and fetches a
+	# file over HTTPS - a second and more, and a request to GitHub on every
+	# poll of a page left open. What it finds changes when something is
+	# installed, so it is kept for ten minutes and thrown away by an install.
+	_dc="$ZGZ_RUN/deps.json"
+	_deps=""
+	if [ -s "$_dc" ]; then
+		_age=$(( $(date +%s) - $(date -r "$_dc" +%s 2>/dev/null || echo 0) ))
+		[ "$_age" -ge 0 ] && [ "$_age" -lt 600 ] && _deps="$(cat "$_dc" 2>/dev/null)"
+	fi
+	if [ -z "$_deps" ]; then
+		_deps="$("$DEPS" check 2>/dev/null)" || _deps=""
+		[ -n "$_deps" ] && printf '%s\n' "$_deps" > "$_dc" 2>/dev/null
+	fi
+
+	printf '{"geo":%s,"cores":%s,"deps":%s,"interfaces":%s,"job":"%s","self":"%s"}\n' \
+		"$("$GEO" status 2>/dev/null || echo '{}')" \
+		"$("$CORES" list 2>/dev/null || echo '{}')" \
+		"${_deps:-{\}}" \
+		"$(interfaces_json)" \
+		"$(cat "$JOB" 2>/dev/null)" \
+		"$(json_escape "$(cat "$ZGZ_RUN/self-update" 2>/dev/null)")"
+}
+
+# -------------------------------------------------------------------- action
+
+method_action() {
+	local name arg input
+
+	read -r input
+	[ -n "$input" ] || input='{}'
+	json_load "$input" 2>/dev/null
+	json_get_var name name
+	json_get_var arg arg
+
+	case "$name" in
+		connect)
+			uci -q set zirgozar.config.enabled='1' && uci -q commit zirgozar
+			# The switch turned on by hand outranks a scheduled stop.
+			rm -f "$ZGZ_RUN/schedule.stopped"
+			# Said here and not in the detached script: between forking and
+			# that script's first write there is a gap, and through the whole
+			# gap the page would still show whatever the last attempt ended
+			# as - which reads as a button that did nothing.
+			say_status selecting
+			clear_message
+			detach "$CONNECT"
+			;;
+		prepare)
+			# The page was opened. Measure now so that pressing Connect is
+			# instant, but only when there is nothing to use yet - opening a
+			# page must never disturb a tunnel that is already running.
+			if [ ! -s "$ZGZ_BEST" ]; then
+				say_status selecting
+				detach "$CONNECT" prepare
+			fi
+			;;
+		reselect)
+			say_status selecting
+			clear_message
+			detach "$CONNECT" force
+			;;
+		disconnect)
+			uci -q set zirgozar.config.enabled='0' && uci -q commit zirgozar
+			say_status idle
+			# bounded is a function in the helper, so the detached shell has to
+			# source it before it can use one.
+			detach /bin/sh -c ". $ZGZ_LIB/zgz-common.sh; bounded 60 /etc/init.d/zirgozar stop"
+			;;
+		pick)
+			# A server chosen by hand rather than by measurement.
+			[ -n "$arg" ] || { fail "no server given"; return; }
+			if "$PROBE" pick "$arg" >/dev/null 2>&1; then
+				uci -q set zirgozar.config.enabled='1' && uci -q commit zirgozar
+				say_status starting
+				detach "$CONNECT" next
+			else
+				fail "that server is not in the list any more"
+				return
+			fi
+			;;
+		refresh_nodes)
+			# Every subscription, or the one named - PassWall2's "Manual
+			# subscription All" and "Manual subscription".
+			case "$arg" in
+				'') arg=all ;;
+				*[!A-Za-z0-9_]*) fail "unknown subscription"; return ;;
+			esac
+			# A subscription only just added in the page is not in the file
+			# until it is saved and applied, and there is nothing to read.
+			if [ "$arg" != "all" ] && ! uci -q get "zirgozar.$arg" >/dev/null 2>&1; then
+				fail "Save and apply this subscription first"
+				return
+			fi
+			run_job "Reading the subscriptions" "$NODES update $arg"
+			;;
+		forget_nodes)
+			# What one subscription brought, or all of them, deleted.
+			case "$arg" in
+				*[!A-Za-z0-9_]*) fail "unknown subscription"; return ;;
+			esac
+			"$NODES" forget $arg >/dev/null 2>&1
+			;;
+		add_links)
+			# PassWall2's "Add the node via the link": one node per link.
+			_n="$(printf '%s\n' "$arg" | "$NODES" addlinks 2>/dev/null)" || _n=0
+			detach "$NODES" build
+			json_init
+			json_add_boolean "ok" 1
+			json_add_int "added" "${_n:-0}"
+			json_dump
+			return
+			;;
+		delete_nodes|clear_nodes|copy_node|top_node|group_nodes|use_node)
+			# The rest of its Node List. Node ids only, and a group name
+			# without anything a shell or uci would read as more than a name.
+			_ids="${arg#*;}"
+			_grp=""
+			[ "$name" = "group_nodes" ] && _grp="${arg%%;*}"
+			if [ -n "$(printf '%s' "$_ids" | tr -d 'A-Za-z0-9_ ')" ] ||
+			   [ -n "$(printf '%s' "$_grp" | tr -d 'A-Za-z0-9_ .-')" ]; then
+				fail "unknown node"
+				return
+			fi
+			"$NODES" fixnames >/dev/null 2>&1 || true
+			case "$name" in
+				delete_nodes) "$NODES" delete $_ids >/dev/null 2>&1 ;;
+				clear_nodes)  "$NODES" clear >/dev/null 2>&1 ;;
+				copy_node)    "$NODES" copy "$_ids" >/dev/null 2>&1 && detach "$NODES" build ;;
+				top_node)     "$NODES" top "$_ids" >/dev/null 2>&1 ;;
+				group_nodes)  "$NODES" group "$_grp" $_ids >/dev/null 2>&1 ;;
+				use_node)
+					# PassWall2's Use: the node in Basic Settings, applied.
+					[ "$(uci -q get "zirgozar.$_ids")" = "node" ] || { fail "unknown node"; return; }
+					uci -q set zirgozar.config.node="$_ids" && uci -q commit zirgozar
+					if [ "$(cfg_bool enabled 0)" = "1" ]; then
+						say_status starting
+						detach /bin/sh -c ". $ZGZ_LIB/zgz-common.sh; bounded 90 /etc/init.d/zirgozar restart"
+					fi
+					;;
+			esac
+			;;
+		rebuild_nodes)
+			# The list rebuilt from what has already been fetched. No
+			# subscription is re-read, so this costs no network and is
+			# over before the page has finished saving - which is what
+			# makes it usable as "the file changed, catch up".
+			detach "$NODES" build
+			;;
+		measure_all)
+			# The first pass on its own: one handshake to every server on the
+			# list, and nothing else. It fills in the Reachable column for a
+			# list that has just grown without disturbing a tunnel that is
+			# carrying traffic, which choosing again would.
+			run_job "Checking which servers answer" "$PROBE sift"
+			;;
+		cores_latest)
+			run_job "Checking for new versions" "$CORES latest force"
+			;;
+		geo_update)
+			case "$arg" in geoip|geosite|all) : ;; *) arg=all ;; esac
+			run_job "Downloading routing data" "$GEO update $arg"
+			;;
+		geo_remove)
+			"$GEO" remove >/dev/null 2>&1
+			;;
+		geo_rollback)
+			case "$arg" in geoip|geosite) : ;; *) fail "unknown file"; return ;; esac
+			if ! "$GEO" rollback "$arg" >/dev/null 2>&1; then
+				fail "That file could not be put back."
+				return
+			fi
+			;;
+		core_install)
+			case "$arg" in
+				xray|sing-box|hysteria|geoview) run_job "Installing $arg" "$CORES install $arg" ;;
+				*) fail "unknown core"; return ;;
+			esac
+			;;
+		app_update)
+			# This program itself, from its latest release. Detached like any
+			# long job, and more so than most: the install restarts rpcd and
+			# the web server, which are what would otherwise be waiting on it.
+			rm -f "$ZGZ_RUN/self-update"
+			run_job "Updating Zirgozar" "$CORES install zirgozar"
+			;;
+		core_remove)
+			case "$arg" in
+				sing-box|hysteria|geoview) "$CORES" remove "$arg" >/dev/null 2>&1 ;;
+				*) fail "unknown core"; return ;;
+			esac
+			;;
+		deps_install)
+			# What was missing is about to change; the next look asks again.
+			rm -f "$ZGZ_RUN/deps.json"
+			run_job "Installing dependencies" "$DEPS install; rm -f '$ZGZ_RUN/deps.json'"
+			;;
+		stats_reset)
+			"$STATS" reset >/dev/null 2>&1
+			;;
+		node_test)
+			# "<kind>:<id>". Detached, because a real request through a
+			# node takes seconds and rpcd holds the browser open for as
+			# long as anything it started is still writing. The page reads
+			# the answer back through the tests method.
+			_kind="${arg%%:*}"; _id="${arg#*:}"
+			case "$_kind" in
+				ping|tcp|url) : ;;
+				*) fail "unknown test"; return ;;
+			esac
+			[ -n "$_id" ] && [ "$_id" != "$arg" ] || { fail "no node given"; return; }
+			detach "$TEST" "$_kind" "$_id"
+			;;
+		rebind_apply)
+			"$ROUTER" rebind >/dev/null 2>&1
+			;;
+		set_clock)
+			# Answered here rather than as "ok": pressing it a second time
+			# has to be able to say it was already done.
+			_r="$("$ROUTER" clock 2>/dev/null)"
+			json_init
+			json_add_boolean "ok" 1
+			json_add_boolean "already" "$([ "$_r" = "already" ] && echo 1 || echo 0)"
+			json_dump
+			return
+			;;
+		set_lang)
+			# The language button in the page header. A plain uci commit
+			# rather than a LuCI save, which would restart the tunnel for
+			# the sake of a word on a button.
+			case "$arg" in fa|en) : ;; *) fail "unknown language"; return ;; esac
+			uci -q set zirgozar.config.lang="$arg" && uci -q commit zirgozar
+			;;
+		clear_log)
+			# PassWall2's "Clear logs". Only the runtime log: the core's
+			# own lines are the system log's, not this program's to empty.
+			: > "$ZGZ_LOG" 2>/dev/null || true
+			;;
+		clear_core_log)
+			# The node log: see core_log.
+			core_log_all | tail -n 1 > "$CORE_LOG_MARK" 2>/dev/null || true
+			;;
+		clear_message)
+			# The reader has read it. A message that cannot be put away
+			# sits on the front page for the rest of the boot saying a
+			# thing that stopped being true when it was acted on.
+			clear_message
+			;;
+		*)
+			fail "unknown action"
+			return
+			;;
+	esac
+
+	json_init
+	json_add_boolean "ok" 1
+	json_dump
+}
+
+fail() {
+	json_init
+	json_add_boolean "ok" 0
+	json_add_string "error" "$1"
+	json_dump
+}
+
+case "$1" in
+	list)
+		json_init
+		json_add_object "state";   json_close_object
+		json_add_object "traffic"; json_close_object
+		json_add_object "nodes";   json_close_object
+		json_add_object "subs";    json_close_object
+		json_add_object "tests";   json_close_object
+		json_add_object "inuse";   json_close_object
+		json_add_object "log";     json_close_object
+		json_add_object "lan";     json_close_object
+		json_add_object "check"
+			json_add_string "url" ""
+		json_close_object
+		json_add_object "system";  json_close_object
+		json_add_object "geo";     json_close_object
+		json_add_object "geoview"
+		json_add_string "action" "lookup"
+		json_add_string "value" ""
+		json_close_object
+		json_add_object "action"
+			json_add_string "name" ""
+			json_add_string "arg" ""
+		json_close_object
+		json_dump
+		;;
+	call)
+		case "$2" in
+			state)   method_state ;;
+			traffic) method_traffic ;;
+			nodes)   method_nodes ;;
+			subs)    method_subs ;;
+			tests)   method_tests ;;
+			inuse)   method_inuse ;;
+			log)     method_log ;;
+			lan)     method_lan ;;
+			check)   method_check ;;
+			system)  method_system ;;
+			geo)     "$GEO" status 2>/dev/null || echo '{}' ;;
+			geoview) method_geoview ;;
+			action)  method_action ;;
+		esac
+		;;
+esac

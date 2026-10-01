@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+# Part of Zirgozar - https://github.com/dreamboxone/zirgozar
 #
 # rig.sh - stand the router's scripts up somewhere that is not a router.
 #
@@ -14,13 +14,13 @@
 # that reimplements what it is testing proves only that two things agree.
 
 RIG_SRC="$(cd "$(dirname "$0")/.." && pwd)"
-RIG="${RIG_ROOT:-${TMPDIR:-/tmp}/pwplus-rig}"
+RIG="${RIG_ROOT:-${TMPDIR:-/tmp}/zgz-rig}"
 
 rig_setup() {
 	rm -rf "$RIG"
 	mkdir -p "$RIG/lib" "$RIG/etc" "$RIG/run" "$RIG/bin" "$RIG/core" "$RIG/var/etc"
 
-	for f in "$RIG_SRC"/package/passwall-plus/files/pwplus-*; do
+	for f in "$RIG_SRC"/package/zirgozar/files/zgz-*; do
 		cp "$f" "$RIG/lib/$(basename "$f")"
 	done
 	chmod +x "$RIG"/lib/* 2>/dev/null || true
@@ -39,12 +39,12 @@ _get=""; _key=""
 for a in "$@"; do
 	case "$a" in
 		get) _get=1 ;;
-		passwall-plus.config.*) _key="${a#passwall-plus.config.}" ;;
-		passwall-plus.*.*) _key="${a#passwall-plus.}" ;;
+		zirgozar.config.*) _key="${a#zirgozar.config.}" ;;
+		zirgozar.*.*) _key="${a#zirgozar.}" ;;
 	esac
 done
 if [ -n "$_get" ] && [ -n "$_key" ]; then
-	_v="$(awk -v k="$_key" 'index($0, k "=") == 1 { print substr($0, length(k) + 2); exit }' "${PWPLUS_TEST_UCI:-/dev/null}" 2>/dev/null)"
+	_v="$(awk -v k="$_key" 'index($0, k "=") == 1 { print substr($0, length(k) + 2); exit }' "${ZGZ_TEST_UCI:-/dev/null}" 2>/dev/null)"
 	[ -n "$_v" ] || exit 1
 	printf '%s\n' "$_v"
 fi
@@ -59,14 +59,14 @@ UCI
 		chmod +x "$RIG/core/xray"
 	fi
 
-	PWPLUS_LIB="$RIG/lib"
-	PWPLUS_ETC="$RIG/etc"
-	PWPLUS_RUN="$RIG/run"
-	PWPLUS_OWN_DIR="$RIG/core"
-	PWPLUS_CONFIG_JSON="$RIG/var/etc/passwall-plus.json"
-	PWPLUS_TEST_UCI="$RIG/uci.conf"
+	ZGZ_LIB="$RIG/lib"
+	ZGZ_ETC="$RIG/etc"
+	ZGZ_RUN="$RIG/run"
+	ZGZ_OWN_DIR="$RIG/core"
+	ZGZ_CONFIG_JSON="$RIG/var/etc/zirgozar.json"
+	ZGZ_TEST_UCI="$RIG/uci.conf"
 	PATH="$RIG/bin:$PATH"
-	export PWPLUS_LIB PWPLUS_ETC PWPLUS_RUN PWPLUS_OWN_DIR PWPLUS_CONFIG_JSON PWPLUS_TEST_UCI PATH
+	export ZGZ_LIB ZGZ_ETC ZGZ_RUN ZGZ_OWN_DIR ZGZ_CONFIG_JSON ZGZ_TEST_UCI PATH
 }
 
 # rig_set key value

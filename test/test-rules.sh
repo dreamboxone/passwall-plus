@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+# Part of Zirgozar - https://github.com/dreamboxone/zirgozar
 #
 # The firewall ruleset, put in front of a real nft rather than read carefully.
 #
@@ -30,7 +30,7 @@ mkdir -p "$WORK"
 
 check_ruleset() {
 	_what="$1"
-	sh "$RIG/lib/pwplus-rules" dump > "$WORK/rules.nft" 2>"$WORK/rules.err"
+	sh "$RIG/lib/zgz-rules" dump > "$WORK/rules.nft" 2>"$WORK/rules.err"
 	if [ ! -s "$WORK/rules.nft" ]; then
 		bad "$_what: nothing was generated ($(cat "$WORK/rules.err"))"
 		return
@@ -71,7 +71,7 @@ check_ruleset "one LAN interface"
 
 echo "== the pieces that have to be present"
 rig_set lan_zone "br-lan"
-sh "$RIG/lib/pwplus-rules" dump > "$WORK/rules.nft"
+sh "$RIG/lib/zgz-rules" dump > "$WORK/rules.nft"
 
 for want in 'tproxy ip to 127.0.0.1:1082' 'meta mark set 0x162' \
             'ct direction reply return' 'ip daddr @reserved return' \
@@ -112,7 +112,7 @@ esac
 # all. It passed every syntax check in this file the whole time it was doing
 # nothing, which is what this asserts instead.
 rig_set block_quic 1
-sh "$RIG/lib/pwplus-rules" dump > "$WORK/rules.nft"
+sh "$RIG/lib/zgz-rules" dump > "$WORK/rules.nft"
 pre=$(awk '/chain prerouting/, /^\t}/' "$WORK/rules.nft" | grep -v 'iifname "lo"')
 if printf '%s\n' "$pre" | grep -q 'dport 443'; then
 	ok "the QUIC rule is in the prerouting chain"
@@ -136,7 +136,7 @@ rig_set block_quic 0
 # A device that looked a blocked name up while the tunnel was off still has the
 # filtering address for it. That address is inside 10.0.0.0/8, so it has to be
 # sent to the tunnel before the reserved-address return, or it never is.
-sh "$RIG/lib/pwplus-rules" dump > "$WORK/rules.nft"
+sh "$RIG/lib/zgz-rules" dump > "$WORK/rules.nft"
 pre=$(awk '/chain prerouting/, /^	}/' "$WORK/rules.nft")
 p=$(printf '%s
 ' "$pre" | grep -n 'ip daddr 10.10.34.0/24 meta l4proto tcp .*tproxy ip to 127.0.0.1:1084' | head -1 | cut -d: -f1)
@@ -148,7 +148,7 @@ else
 	bad "the filtering addresses go to their own inbound, ahead of the reserved return"
 fi
 rig_set client_proxy 0
-sh "$RIG/lib/pwplus-rules" dump > "$WORK/rules.nft"
+sh "$RIG/lib/zgz-rules" dump > "$WORK/rules.nft"
 if grep -q '10.10.34.0/24' "$WORK/rules.nft"; then
 	bad "with Client Proxy off the filtering addresses are left alone"
 else

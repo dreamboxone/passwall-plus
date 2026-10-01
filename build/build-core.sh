@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
-# Part of Passwall+ - https://github.com/dreamboxone/passwall-plus
+# Part of Zirgozar - https://github.com/dreamboxone/zirgozar
 #
 # build-core.sh - fetch the Xray core for an OpenWrt target.
 #
@@ -44,7 +44,7 @@ esac
 command -v curl >/dev/null 2>&1 || { echo "curl not found in PATH"; exit 1; }
 command -v unzip >/dev/null 2>&1 || { echo "unzip not found in PATH"; exit 1; }
 
-WORK="${PWPLUS_WORK:-$ROOT/.build}/$OUTDIR"
+WORK="${ZGZ_WORK:-$ROOT/.build}/$OUTDIR"
 OUT="$ROOT/prebuilt/$OUTDIR/xray"
 
 echo ">>> target      : $TARGET"

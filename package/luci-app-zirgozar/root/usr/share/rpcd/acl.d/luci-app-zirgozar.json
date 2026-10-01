@@ -1,0 +1,18 @@
+{
+	"luci-app-zirgozar": {
+		"description": "Grant access to Zirgozar",
+		"read": {
+			"ubus": {
+				"luci.zirgozar": [ "state", "traffic", "nodes", "subs", "system", "tests", "inuse", "log", "lan", "check", "geo", "geoview" ],
+				"luci-rpc": [ "getHostHints" ]
+			},
+			"uci": [ "zirgozar" ]
+		},
+		"write": {
+			"ubus": {
+				"luci.zirgozar": [ "action" ]
+			},
+			"uci": [ "zirgozar" ]
+		}
+	}
+}

@@ -1,0 +1,1041 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Zirgozar - https://github.com/dreamboxone/zirgozar
+#
+# zgz-rules - send LAN traffic into the tunnel, and only LAN traffic.
+#
+#   zgz-rules up      install the rules
+#   zgz-rules down    remove them
+#   zgz-rules status  what is installed, and whether it is catching anything
+#
+# Two firewalls, one behaviour.
+#
+# OpenWrt has used nftables since 22.03, so a 23.05, 24.10 or 25.12 router is
+# nftables and the thing that changed in 25.12 is the package manager, not the
+# firewall. But a great many routers in the field run an older release or a
+# vendor build that still carries firewall3 and iptables, and on one of those
+# an nft-only client installs cleanly, starts cleanly, reports itself
+# connected, and carries not one packet. So both are written out here, the
+# right one is chosen at run time, and `firewall_backend` in the settings can
+# override the choice.
+#
+# What the firewall does NOT decide is where traffic goes. Iranian addresses,
+# advertising, private ranges - all of that is decided inside Xray, from
+# geoip.dat. Doing it here would mean writing the same list twice, once in
+# nftables syntax and once in iptables syntax, and keeping both in step with
+# a file that changes every week. The firewall's whole job is to hand Xray
+# the packets and stay out of the way.
+#
+# Deliberately hooks prerouting only. Nothing here touches the output hook, so
+# traffic the router itself creates - Xray reaching its server, the list
+# refresh, the measurements - always goes out directly. A tunnel whose own
+# packets are routed back into itself never connects, and that failure is
+# invisible: everything looks configured and nothing works.
+
+set -e
+
+. "${ZGZ_LIB:-/usr/libexec}/zgz-common.sh"
+
+TABLE=zirgozar
+MARK=0x162
+ROUTE_TABLE=100
+RULE_PRIO=100
+# The way for anything else on this router to opt out. 0xff is the value the
+# older transparent-proxy scripts settled on and it is honoured here for that
+# reason - not, as an earlier comment in this file claimed, because PassWall2
+# uses it. PassWall2's mark is 0x50535732, which is a different number and
+# does not collide with this one.
+BYPASS=0xff
+
+RESERVED_V4="0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16 224.0.0.0/4 240.0.0.0/4"
+
+tproxy_port="$(cfg tproxy_port 1082)"
+dns_port="$(cfg dns_port 1053)"
+ipv6_mode="$(cfg ipv6 block)"
+block_quic="$(cfg_bool block_quic 0)"
+dns_hijack="$(cfg_bool dns_hijack 1)"
+
+# PassWall2's Basic Settings and Forwarding Settings.
+#
+# Client Proxy off leaves the LAN alone except for the devices the Access
+# Control page names. Localhost Proxy sends the router's own traffic in too.
+# TCP Proxy Way redirect sends TCP to a REDIRECT port of its own instead of
+# TPROXY; UDP has no other way. Hijacking ICMP answers pings to tunnelled
+# addresses from the router, since a tunnel carries no ICMP.
+client_proxy="$(cfg_bool client_proxy 1)"
+localhost_proxy="$(cfg_bool localhost_proxy 1)"
+tcp_way="$(cfg tcp_proxy_way tproxy)"
+redir_port="$(cfg redir_port 1085)"
+accept_icmp="$(cfg_bool accept_icmp 0)"
+# Marks TCP that is to be redirected rather than handed to TPROXY. Not the
+# tunnel's mark, which the policy route would act on.
+REDIR_MARK=0x164
+LOCAL_TABLE=zirgozar-local
+# Measuring a node from the router has to reach it directly, so while one is
+# being chosen the router's own traffic is left out of the tunnel.
+LOCAL_PAUSE="$ZGZ_RUN/local.pause"
+
+# A port list as PassWall2 writes it - 80,443,1000:2000 - or "-" for none.
+port_list() {
+	_pl="$(printf '%s' "$1" | tr -d ' \t' | tr '-' ':')"
+	case "$_pl" in
+		''|*[!0-9:,]*) echo "-" ;;
+		*) echo "$_pl" ;;
+	esac
+	return 0
+}
+
+# The global ports, for everything the Access Control page does not decide.
+g_tcp_no="$(port_list "$(cfg tcp_no_redir_ports '')")"
+g_udp_no="$(port_list "$(cfg udp_no_redir_ports '')")"
+g_tcp_r="$(port_list "$(cfg tcp_redir_ports 1:65535)")"
+g_udp_r="$(port_list "$(cfg udp_redir_ports 1:65535)")"
+
+# Addresses the router reaches directly even with Localhost Proxy on: the
+# server of a node another core carries for us. Xray's own connections are
+# marked and pass by themselves; a bridge core's are not.
+local_exclusions() {
+	_lx_proto="$(sed -n 's/^protocol=//p' "$ZGZ_BEST_META" 2>/dev/null | tail -1)"
+	case "$_lx_proto" in
+		hysteria2|hysteria|tuic)
+			_lx_host="$(sed -n 's/^host=//p' "$ZGZ_BEST_META" 2>/dev/null | tail -1)"
+			resolve_direct "$_lx_host" 2>/dev/null || true
+			;;
+	esac
+	return 0
+}
+
+# Where a hijacked name lookup should land.
+#
+# dnsmasq, when there is one. It is already answering for this network, it
+# knows the DHCP names and whatever is in /etc/hosts, and zgz-dns has pointed
+# its upstream at the tunnel - so sending queries to it keeps local names
+# working and still gets every outside lookup answered through the tunnel.
+# Redirecting straight to Xray instead would resolve the outside world
+# perfectly and lose every name on the user's own network, which reads as
+# "the router broke my printer".
+dns_target() {
+	case "$(cfg dns_mode dnsmasq)" in
+		direct) echo "$dns_port"; return 0 ;;
+	esac
+	if pgrep -x dnsmasq >/dev/null 2>&1; then
+		echo 53
+	else
+		echo "$dns_port"
+	fi
+	return 0
+}
+
+# The addresses on the Traffic Rules page that never go into the tunnel.
+# IPv4 only, one address or range per entry.
+direct_ips() {
+	for _a in $(cfg direct_ip ''); do
+		case "$_a" in
+			*[!0-9./]*|'') continue ;;
+		esac
+		echo "$_a"
+	done
+	return 0
+}
+
+# The Access Control rules, as zgz-mkconfig resolved them when the core was
+# configured. Read from there rather than from the settings, because a rule
+# sending devices to a node of their own has to agree with the core about
+# which port that node is on, and only the file both of them read can promise
+# that. No file, or the page switched off, is no rules.
+ACL_TSV="$ZGZ_RUN/acl.tsv"
+acl_lines() {
+	[ -s "$ACL_TSV" ] || return 0
+	grep -v '^[[:space:]]*$' "$ACL_TSV" 2>/dev/null || true
+	return 0
+}
+
+# "80,443,1000:2000" as nftables wants it inside a set.
+nft_ports() {
+	printf '%s' "$1" | sed -e 's/:/-/g' -e 's/,/, /g'
+}
+
+# The same list the way the iptables side matches it: one multiport match
+# holds fifteen ports at most, so a longer list is several matches.
+ipt_port_groups() {
+	printf '%s\n' "$1" | tr ',' '\n' | awk 'NF { g = (n % 15 == 0) ? "" : g ","; g = g $0; n++; if (n % 15 == 0) print substr(g, 1) } END { if (n % 15) print g }' |
+		sed 's/^,//'
+}
+
+# ------------------------------------------------------------ policy routing
+
+# Anything we mark is handed to the local tproxy socket instead of being
+# forwarded. Both of these have to actually take: without them the rules below
+# still load and Xray still listens, so everything looks healthy from every
+# angle and not one packet arrives - which is the worst way for this to fail.
+# busybox's cut-down `ip` can do neither, which is why the package depends on
+# ip-full.
+routing_up() {
+	ip rule add fwmark "$MARK" lookup "$ROUTE_TABLE" priority "$RULE_PRIO" 2>/dev/null || true
+	ip route add local 0.0.0.0/0 dev lo table "$ROUTE_TABLE" 2>/dev/null || true
+
+	if ! ip rule list 2>/dev/null | grep -qi "$MARK"; then
+		echo "could not add the policy routing rule (is ip-full installed?)" >&2
+		return 1
+	fi
+	if ! ip route show table "$ROUTE_TABLE" 2>/dev/null | grep -q "^local"; then
+		echo "could not add the local route for table $ROUTE_TABLE" >&2
+		return 1
+	fi
+	return 0
+}
+
+routing_down() {
+	while ip rule list 2>/dev/null | grep -qi "fwmark $MARK"; do
+		ip rule del fwmark "$MARK" lookup "$ROUTE_TABLE" 2>/dev/null || break
+	done
+	ip route flush table "$ROUTE_TABLE" 2>/dev/null || true
+	return 0
+}
+
+# ------------------------------------------------------------------ nftables
+
+# Builds the ruleset and prints it. Kept separate from loading it so that
+# `zgz-rules dump` can show exactly what would be sent to the kernel - which
+# is both how the tests check the syntax without a router and the first thing
+# worth looking at when a router says the ruleset would not load.
+nft_ruleset() {
+	_devs="$1"
+	_iflist=""
+	for _d in $_devs; do
+		[ -n "$_iflist" ] && _iflist="$_iflist, "
+		_iflist="$_iflist\"$_d\""
+	done
+
+	_v4set=""
+	for _c in $RESERVED_V4; do
+		[ -n "$_v4set" ] && _v4set="$_v4set, "
+		_v4set="$_v4set$_c"
+	done
+
+	# Packets that already belong to an established transparent socket are
+	# handed straight to it. Without this every packet of every connection
+	# goes through the tproxy lookup again, which works but does far more per
+	# packet than it needs to. It needs kmod-nft-socket, which is not on every
+	# router, so it is asked for rather than assumed.
+	_divert=""
+	if nft_probe socket; then
+		_divert="		meta l4proto tcp socket transparent 1 meta mark set $MARK counter accept"
+	fi
+
+	# Refusing QUIC has to happen in prerouting, ahead of the tproxy rules,
+	# because a packet handed to the local socket there never reaches the
+	# forward hook at all - which is where this rule used to sit, doing
+	# nothing. Measured rather than reasoned about: with the setting switched
+	# on, a browser on the network still fetched twenty-two of YouTube's files
+	# over h3, which is QUIC, which is the thing the setting says it refuses.
+	#
+	# It was put on the forward hook because nftables has no reject in
+	# prerouting and an earlier attempt to reject there made the whole ruleset
+	# fail to load. drop is available there, and is what this needs: a browser
+	# races QUIC against TCP on a first connection, so a dropped attempt costs
+	# the race rather than the page.
+	#
+	# It goes after the reserved-address returns, so QUIC between two machines
+	# on this network is left alone. Only what would have gone into the tunnel
+	# is refused.
+	_quic=""
+	if [ "$block_quic" = "1" ]; then
+		_quic="		meta l4proto udp th dport 443 counter drop
+"
+	fi
+
+	# The filtering addresses a device may still remember from before the
+	# tunnel was on - see zgz-common.sh. Ahead of the reserved-address
+	# returns, which would otherwise send them straight out, and only when
+	# the LAN goes through the tunnel at all.
+	_poison=""
+	if [ "$client_proxy" = "1" ]; then
+		_pp="$(poison_port)"
+		if [ "$block_quic" = "1" ]; then
+			_poison="		ip daddr $ZGZ_POISON_V4 udp dport 443 counter drop
+"
+		fi
+		_poison="$_poison		ip daddr $ZGZ_POISON_V4 meta l4proto tcp counter tproxy ip to 127.0.0.1:$_pp meta mark set $MARK accept
+		ip daddr $ZGZ_POISON_V4 meta l4proto udp counter tproxy ip to 127.0.0.1:$_pp meta mark set $MARK accept
+"
+	fi
+
+	_v6=""
+	if [ "$ipv6_mode" != "off" ]; then
+		_v6="		ip6 daddr @reserved6 return
+		meta nfproto ipv6 counter reject"
+	fi
+
+
+	# Traffic Rules: addresses that always go straight out.
+	_direct=""
+	_directset=""
+	_dl="$(direct_ips | awk 'NF { printf "%s%s", (n++ ? ", " : ""), $0 }')"
+	if [ -n "$_dl" ]; then
+		_directset="	set direct {
+		type ipv4_addr
+		flags interval
+		auto-merge
+		elements = { $_dl }
+	}
+
+"
+		_direct="		ip daddr @direct return
+"
+	fi
+
+	# Access Control. Each rule is a chain of its own and a line or two in
+	# prerouting that jumps to it: one for the MAC addresses in it and one for
+	# the IP addresses, because a MAC and an address cannot share one match.
+	# The chain always ends in a verdict, so a device that matches a rule is
+	# decided by that rule and by nothing further down - which is also what
+	# makes the order of the rules on the page mean something.
+	_acljumps=""
+	_aclfwd=""
+	_aclchains=""
+	_n=0
+	while IFS='	' read -r _id _if _macs _ips _sets _mode _port _tno _uno _tr _ur; do
+		[ -n "$_id" ] || continue
+		_n=$((_n + 1))
+		_c="acl_$_n"
+		_ifm=""
+		[ "$_if" != "-" ] && _ifm="iifname \"$_if\" "
+		_m=""
+		if [ "$_macs" != "-" ]; then
+			_m="$_m		${_ifm}ether saddr { $(printf '%s' "$_macs" | sed 's/,/, /g') } jump $_c
+"
+		fi
+		if [ "$_ips" != "-" ]; then
+			_m="$_m		${_ifm}ip saddr { $(printf '%s' "$_ips" | sed 's/,/, /g') } jump $_c
+"
+		fi
+		if [ "$_sets" != "-" ]; then
+			# An ipset lives in fw4's table, and nftables will not look into
+			# another table's sets. Said once in the log rather than guessed at.
+			warn "access control rule $_id: ipset sources only work with iptables - ignored"
+		fi
+		if [ "$_macs" = "-" ] && [ "$_ips" = "-" ]; then
+			# Nothing to match on but the interface, or on nothing at all -
+			# which PassWall2 reads as everyone, and so does this. A rule whose
+			# only sources were ipsets is not that, and is left out.
+			[ "$_sets" = "-" ] && _m="		${_ifm}jump $_c
+"
+		fi
+		[ -n "$_m" ] || continue
+		_acljumps="$_acljumps$_m"
+
+		_body=""
+		if [ "$_mode" = "0" ]; then
+			_body="		accept
+"
+			# Not through the tunnel means IPv6 is not the tunnel's business
+			# either: refusing it would only break these devices.
+			_aclfwd="$_aclfwd$(printf '%s' "$_m" | grep -v 'ip saddr' | sed "s/jump $_c\$/return/")
+"
+		else
+			_tp="$tproxy_port"
+			[ "$_mode" = "1" ] && [ "$_port" != "0" ] && _tp="$_port"
+			[ "$_tno" != "-" ] && _body="$_body		tcp dport { $(nft_ports "$_tno") } accept
+"
+			[ "$_uno" != "-" ] && _body="$_body		udp dport { $(nft_ports "$_uno") } accept
+"
+			[ "$_tr" != "-" ] && [ "$_tr" != "1:65535" ] && _body="$_body		meta l4proto tcp tcp dport != { $(nft_ports "$_tr") } accept
+"
+			[ "$_ur" != "-" ] && [ "$_ur" != "1:65535" ] && _body="$_body		meta l4proto udp udp dport != { $(nft_ports "$_ur") } accept
+"
+			_body="$_body$_quic		meta l4proto tcp counter tproxy ip to 127.0.0.1:$_tp meta mark set $MARK accept
+		meta l4proto udp counter tproxy ip to 127.0.0.1:$_tp meta mark set $MARK accept
+		accept
+"
+		fi
+		_aclchains="$_aclchains	chain $_c {
+$_body	}
+
+"
+	done <<ACL
+$(acl_lines)
+ACL
+	_aclfwd="$(printf '%s' "$_aclfwd" | grep -v '^[[:space:]]*$' || true)"
+	[ -n "$_aclfwd" ] && _aclfwd="$_aclfwd
+"
+
+	# Everything the Access Control page did not decide: into the tunnel,
+	# unless Client Proxy is off - then it is left alone - or its port says
+	# otherwise. No-redir ports go straight out first, whatever else is set;
+	# with a redir list, only those ports go in.
+	_defaults=""
+	if [ "$client_proxy" = "1" ]; then
+		[ "$g_tcp_no" != "-" ] && _defaults="$_defaults		tcp dport { $(nft_ports "$g_tcp_no") } return
+"
+		[ "$g_udp_no" != "-" ] && _defaults="$_defaults		udp dport { $(nft_ports "$g_udp_no") } return
+"
+		[ "$g_tcp_r" != "-" ] && [ "$g_tcp_r" != "1:65535" ] && _defaults="$_defaults		meta l4proto tcp tcp dport != { $(nft_ports "$g_tcp_r") } return
+"
+		[ "$g_udp_r" != "-" ] && [ "$g_udp_r" != "1:65535" ] && _defaults="$_defaults		meta l4proto udp udp dport != { $(nft_ports "$g_udp_r") } return
+"
+		_defaults="$_defaults$_quic"
+		if [ "$tcp_way" = "redirect" ]; then
+			# Marked here and redirected in the nat chain below: REDIRECT is a
+			# nat statement and this chain is not a nat chain.
+			_defaults="$_defaults		meta l4proto tcp meta mark set $REDIR_MARK counter return
+"
+		else
+			_defaults="$_defaults		meta l4proto tcp counter tproxy ip to 127.0.0.1:$tproxy_port meta mark set $MARK accept
+"
+		fi
+		_defaults="$_defaults		meta l4proto udp counter tproxy ip to 127.0.0.1:$tproxy_port meta mark set $MARK accept
+"
+	fi
+
+	# The router's own traffic, when Localhost Proxy sends it in: marked on
+	# its way out by the output chain, routed back to this machine by the
+	# policy route, and arriving here on lo - where it is handed to the
+	# tunnel before the LAN-only check below would turn it away.
+	_lo=""
+	if [ "$localhost_proxy" = "1" ]; then
+		_lo="		iifname \"lo\" meta mark $MARK meta l4proto tcp counter tproxy ip to 127.0.0.1:$tproxy_port accept
+		iifname \"lo\" meta mark $MARK meta l4proto udp counter tproxy ip to 127.0.0.1:$tproxy_port accept
+"
+	fi
+
+	# REDIRECT for TCP, and pings answered by the router: both nat work.
+	_nat=""
+	if [ "$client_proxy" = "1" ]; then
+		_natrules=""
+		[ "$tcp_way" = "redirect" ] && _natrules="$_natrules		meta mark $REDIR_MARK meta l4proto tcp counter redirect to :$redir_port
+"
+		if [ "$accept_icmp" = "1" ]; then
+			_natrules="$_natrules		iifname != { $_iflist } return
+		meta mark $BYPASS return
+		ip daddr @reserved return
+"
+			[ -n "$_direct" ] && _natrules="$_natrules		ip daddr @direct return
+"
+			_natrules="$_natrules		ip protocol icmp icmp type echo-request counter redirect
+"
+		fi
+		if [ -n "$_natrules" ]; then
+			_nat="	chain proxy_nat {
+		type nat hook prerouting priority dstnat; policy accept;
+
+$_natrules	}
+"
+		fi
+	fi
+
+	_forward=""
+	if [ -n "$_v6" ]; then
+		_forward="	chain forward {
+		type filter hook forward priority filter; policy accept;
+
+		iifname != { $_iflist } return
+		meta mark $BYPASS return
+$_aclfwd$_v6
+	}
+"
+	fi
+
+	_dnschain=""
+	if [ "$dns_hijack" = "1" ]; then
+		# Ahead of the reserved-address check, because the address a client
+		# sends its query to is very often the router itself.
+		_dnschain="	chain dns {
+		type nat hook prerouting priority dstnat; policy accept;
+
+		iifname != { $_iflist } return
+		ct direction reply return
+		meta mark $BYPASS return
+		meta l4proto { tcp, udp } th dport 53 counter redirect to :$(dns_target)
+	}
+"
+	fi
+
+	cat <<NFT
+table inet $TABLE {
+	set reserved {
+		type ipv4_addr
+		flags interval
+		elements = { $_v4set }
+	}
+
+	set reserved6 {
+		type ipv6_addr
+		flags interval
+		elements = { ::1/128, fc00::/7, fe80::/10, ff00::/8 }
+	}
+
+$_directset$_aclchains	chain prerouting {
+		type filter hook prerouting priority mangle; policy accept;
+
+$_lo		iifname != { $_iflist } return
+		# A reply belongs to a connection that was already decided on its way
+		# out. Looking at it again only risks deciding differently.
+		ct direction reply return
+		meta mark $BYPASS return
+$_divert
+		# name lookups are the nat chain's business, not this one's
+		meta l4proto { tcp, udp } th dport 53 return
+$_poison		ip daddr @reserved return
+		ip6 daddr @reserved6 return
+$_direct$_acljumps$_defaults	}
+
+$_forward$_dnschain$_nat}
+NFT
+	return 0
+}
+
+# The router's own traffic, in a table of its own so that it can be taken
+# out and put back while a node is being measured without touching anything
+# the LAN depends on.
+nft_local_ruleset() {
+	_v4set=""
+	for _c in $RESERVED_V4; do
+		[ -n "$_v4set" ] && _v4set="$_v4set, "
+		_v4set="$_v4set$_c"
+	done
+	_ldl="$(direct_ips | awk 'NF { printf "%s%s", (n++ ? ", " : ""), $0 }')"
+	_lex="$(local_exclusions | awk 'NF { printf "%s%s", (n++ ? ", " : ""), $0 }')"
+	cat <<NFT
+table inet $LOCAL_TABLE {
+	set reserved {
+		type ipv4_addr
+		flags interval
+		elements = { $_v4set }
+	}
+$([ -n "$_ldl" ] && printf '\tset direct {\n\t\ttype ipv4_addr\n\t\tflags interval\n\t\tauto-merge\n\t\telements = { %s }\n\t}\n' "$_ldl")
+$([ -n "$_lex" ] && printf '\tset exclude {\n\t\ttype ipv4_addr\n\t\tflags interval\n\t\tauto-merge\n\t\telements = { %s }\n\t}\n' "$_lex")
+	chain output {
+		type route hook output priority mangle; policy accept;
+
+		meta mark $BYPASS return
+		ct direction reply return
+		meta l4proto { tcp, udp } th dport 53 return
+		ip daddr @reserved return
+$([ -n "$_ldl" ] && printf '\t\tip daddr @direct return\n')
+$([ -n "$_lex" ] && printf '\t\tip daddr @exclude return\n')
+		meta l4proto { tcp, udp } meta mark set $MARK
+	}
+}
+NFT
+	return 0
+}
+
+nft_up() {
+	nft_ruleset "$1" | nft -f -
+	return $?
+}
+
+nft_down() {
+	nft delete table inet $LOCAL_TABLE 2>/dev/null || true
+	nft delete table inet $TABLE 2>/dev/null || true
+	return 0
+}
+
+nft_local_up() {
+	nft delete table inet $LOCAL_TABLE 2>/dev/null || true
+	nft_local_ruleset | nft -f -
+	return $?
+}
+
+nft_local_down() {
+	nft delete table inet $LOCAL_TABLE 2>/dev/null || true
+	return 0
+}
+
+nft_status() {
+	echo "backend: nft"
+	if nft list table inet $TABLE >/dev/null 2>&1; then
+		echo "active:  yes"
+		# Anonymous counters, read back out of the chain listing. Named
+		# counters would read better but are not on every nftables an OpenWrt
+		# in the field might be carrying.
+		nft list chain inet $TABLE prerouting 2>/dev/null |
+			awk '/tproxy/ { for (i = 1; i <= NF; i++) { if ($i == "packets") p += $(i + 1); if ($i == "bytes") b += $(i + 1) } }
+			     END { printf "captured: %d packets, %d bytes\n", p + 0, b + 0 }'
+	else
+		echo "active:  no"
+	fi
+	return 0
+}
+
+# ------------------------------------------------------------------ iptables
+
+# Best effort. Creating a chain that is already there, or deleting one that is
+# not, must not take the whole script down under `set -e`, and several of the
+# matches below are optional kernel modules. So the ordinary form never fails,
+# and anything that genuinely has to work uses ipt_must and is checked.
+ipt() { iptables -w 2 "$@" >/dev/null 2>&1 || iptables "$@" >/dev/null 2>&1 || true; }
+ipt6() { ip6tables -w 2 "$@" >/dev/null 2>&1 || ip6tables "$@" >/dev/null 2>&1 || true; }
+ipt_must() {
+	iptables -w 2 "$@" >/dev/null 2>&1 && return 0
+	iptables "$@" >/dev/null 2>&1 && return 0
+	echo "iptables $* failed" >&2
+	return 1
+}
+
+ipt_up() {
+	_devs="$1"
+
+	ipt_down
+
+	ipt -t mangle -N ZGZ_DIVERT
+	ipt -t mangle -A ZGZ_DIVERT -j MARK --set-mark "$MARK"
+	ipt -t mangle -A ZGZ_DIVERT -j ACCEPT
+
+	ipt -t mangle -N ZGZ_PRE
+	ipt -t mangle -A ZGZ_PRE -m mark --mark "$BYPASS" -j RETURN
+	# Same reasoning as the nftables side: a reply was already decided on the
+	# way out. Neither -m conntrack nor -m socket is on every build, so
+	# neither is required - they make this faster, not correct.
+	ipt -t mangle -A ZGZ_PRE -m conntrack --ctdir REPLY -j RETURN
+	ipt -t mangle -A ZGZ_PRE -p tcp -m socket -j ZGZ_DIVERT
+	ipt -t mangle -A ZGZ_PRE -p tcp --dport 53 -j RETURN
+	ipt -t mangle -A ZGZ_PRE -p udp --dport 53 -j RETURN
+	# The filtering addresses - see the nftables side.
+	if [ "$client_proxy" = "1" ]; then
+		if [ "$block_quic" = "1" ]; then
+			ipt -t mangle -A ZGZ_PRE -d "$ZGZ_POISON_V4" -p udp --dport 443 -j DROP
+		fi
+		ipt_must -t mangle -A ZGZ_PRE -d "$ZGZ_POISON_V4" -p tcp -j TPROXY 			--on-ip 127.0.0.1 --on-port "$(poison_port)" --tproxy-mark "$MARK" || return 1
+		ipt_must -t mangle -A ZGZ_PRE -d "$ZGZ_POISON_V4" -p udp -j TPROXY 			--on-ip 127.0.0.1 --on-port "$(poison_port)" --tproxy-mark "$MARK" || return 1
+	fi
+	for _c in $RESERVED_V4; do
+		ipt -t mangle -A ZGZ_PRE -d "$_c" -j RETURN
+	done
+	for _c in $(direct_ips); do
+		ipt -t mangle -A ZGZ_PRE -d "$_c" -j RETURN
+	done
+	ipt_acl || return 1
+
+	# Everything the Access Control page did not decide - see the nftables
+	# side for the reasoning, which is the same.
+	if [ "$client_proxy" = "1" ]; then
+		if [ "$g_tcp_no" != "-" ]; then
+			for _g in $(ipt_port_groups "$g_tcp_no"); do
+				ipt -t mangle -A ZGZ_PRE -p tcp -m multiport --dports "$_g" -j RETURN
+			done
+		fi
+		if [ "$g_udp_no" != "-" ]; then
+			for _g in $(ipt_port_groups "$g_udp_no"); do
+				ipt -t mangle -A ZGZ_PRE -p udp -m multiport --dports "$_g" -j RETURN
+			done
+		fi
+		# "Only these ports": a sub-chain that hands back the listed ones and
+		# lets the rest through untouched.
+		if [ "$g_tcp_r" != "-" ] && [ "$g_tcp_r" != "1:65535" ]; then
+			ipt -t mangle -N ZGZ_GTR
+			for _g in $(ipt_port_groups "$g_tcp_r"); do
+				ipt -t mangle -A ZGZ_GTR -p tcp -m multiport --dports "$_g" -j RETURN
+			done
+			ipt -t mangle -A ZGZ_GTR -p tcp -j ACCEPT
+			ipt -t mangle -A ZGZ_PRE -p tcp -j ZGZ_GTR
+		fi
+		if [ "$g_udp_r" != "-" ] && [ "$g_udp_r" != "1:65535" ]; then
+			ipt -t mangle -N ZGZ_GUR
+			for _g in $(ipt_port_groups "$g_udp_r"); do
+				ipt -t mangle -A ZGZ_GUR -p udp -m multiport --dports "$_g" -j RETURN
+			done
+			ipt -t mangle -A ZGZ_GUR -p udp -j ACCEPT
+			ipt -t mangle -A ZGZ_PRE -p udp -j ZGZ_GUR
+		fi
+		# Ahead of TPROXY and not on the forward chain, for the reason written
+		# out on the nftables side: a packet handed to the local socket here
+		# never reaches forward, so a rule there refuses nothing. DROP because
+		# the mangle table has no REJECT either.
+		if [ "$block_quic" = "1" ]; then
+			ipt -t mangle -A ZGZ_PRE -p udp --dport 443 -j DROP
+		fi
+		# These are the rules everything else exists to reach, so unlike the
+		# ones above they are not allowed to fail quietly.
+		if [ "$tcp_way" = "redirect" ]; then
+			ipt_must -t mangle -A ZGZ_PRE -p tcp -j MARK --set-mark "$REDIR_MARK" || return 1
+			ipt -t mangle -A ZGZ_PRE -p tcp -j RETURN
+		else
+			ipt_must -t mangle -A ZGZ_PRE -p tcp -j TPROXY \
+				--on-ip 127.0.0.1 --on-port "$tproxy_port" --tproxy-mark "$MARK" || return 1
+		fi
+		ipt_must -t mangle -A ZGZ_PRE -p udp -j TPROXY \
+			--on-ip 127.0.0.1 --on-port "$tproxy_port" --tproxy-mark "$MARK" || return 1
+	fi
+
+	for _d in $_devs; do
+		ipt_must -t mangle -A PREROUTING -i "$_d" -j ZGZ_PRE || return 1
+	done
+
+	# REDIRECT for TCP, and pings answered by the router.
+	if [ "$client_proxy" = "1" ] && { [ "$tcp_way" = "redirect" ] || [ "$accept_icmp" = "1" ]; }; then
+		ipt -t nat -N ZGZ_NAT
+		if [ "$tcp_way" = "redirect" ]; then
+			ipt_must -t nat -A ZGZ_NAT -m mark --mark "$REDIR_MARK" -p tcp -j REDIRECT --to-ports "$redir_port" || return 1
+		fi
+		if [ "$accept_icmp" = "1" ]; then
+			ipt -t nat -A ZGZ_NAT -m mark --mark "$BYPASS" -j RETURN
+			for _c in $RESERVED_V4 $(direct_ips); do
+				ipt -t nat -A ZGZ_NAT -d "$_c" -j RETURN
+			done
+			ipt -t nat -A ZGZ_NAT -p icmp --icmp-type echo-request -j REDIRECT
+		fi
+		for _d in $_devs; do
+			ipt_must -t nat -A PREROUTING -i "$_d" -j ZGZ_NAT || return 1
+		done
+	fi
+
+	if [ "$dns_hijack" = "1" ]; then
+		_t="$(dns_target)"
+		ipt -t nat -N ZGZ_DNS
+		ipt -t nat -A ZGZ_DNS -m mark --mark "$BYPASS" -j RETURN
+		ipt_must -t nat -A ZGZ_DNS -p udp --dport 53 -j REDIRECT --to-ports "$_t" || return 1
+		ipt_must -t nat -A ZGZ_DNS -p tcp --dport 53 -j REDIRECT --to-ports "$_t" || return 1
+		for _d in $_devs; do
+			ipt_must -t nat -A PREROUTING -i "$_d" -j ZGZ_DNS || return 1
+		done
+	fi
+
+	if [ "$ipv6_mode" != "off" ] && command -v ip6tables >/dev/null 2>&1; then
+		ipt6 -t filter -N ZGZ_FWD6 2>/dev/null || true
+		ipt6 -t filter -A ZGZ_FWD6 -m mark --mark "$BYPASS" -j RETURN 2>/dev/null || true
+		ipt6 -t filter -A ZGZ_FWD6 -d ::1/128 -j RETURN 2>/dev/null || true
+		ipt6 -t filter -A ZGZ_FWD6 -d fc00::/7 -j RETURN 2>/dev/null || true
+		ipt6 -t filter -A ZGZ_FWD6 -d fe80::/10 -j RETURN 2>/dev/null || true
+		ipt6 -t filter -A ZGZ_FWD6 -j REJECT 2>/dev/null || true
+		for _d in $_devs; do
+			ipt6 -t filter -I FORWARD -i "$_d" -j ZGZ_FWD6 2>/dev/null || true
+		done
+	fi
+	return 0
+}
+
+# Access Control, the same shape as the nftables side: a chain per rule, a
+# jump to it per kind of source, and a verdict at the end of every chain.
+ipt_acl() {
+	_n=0
+	while IFS='	' read -r _id _if _macs _ips _sets _mode _port _tno _uno _tr _ur; do
+		[ -n "$_id" ] || continue
+		_n=$((_n + 1))
+		_c="ZGZ_ACL$_n"
+		ipt -t mangle -N "$_c"
+
+		if [ "$_mode" = "0" ]; then
+			ipt -t mangle -A "$_c" -j ACCEPT
+		else
+			_tp="$tproxy_port"
+			[ "$_mode" = "1" ] && [ "$_port" != "0" ] && _tp="$_port"
+			if [ "$_tno" != "-" ]; then
+				for _g in $(ipt_port_groups "$_tno"); do
+					ipt -t mangle -A "$_c" -p tcp -m multiport --dports "$_g" -j ACCEPT
+				done
+			fi
+			if [ "$_uno" != "-" ]; then
+				for _g in $(ipt_port_groups "$_uno"); do
+					ipt -t mangle -A "$_c" -p udp -m multiport --dports "$_g" -j ACCEPT
+				done
+			fi
+			# "Only these ports" as a jump past the tproxy rules for each
+			# group that matches, then accept for whatever matched none.
+			if [ "$_tr" != "-" ] && [ "$_tr" != "1:65535" ]; then
+				ipt -t mangle -N "${_c}T"
+				for _g in $(ipt_port_groups "$_tr"); do
+					ipt -t mangle -A "${_c}T" -p tcp -m multiport --dports "$_g" -j RETURN
+				done
+				ipt -t mangle -A "${_c}T" -p tcp -j ACCEPT
+				ipt -t mangle -A "$_c" -p tcp -j "${_c}T"
+			fi
+			if [ "$_ur" != "-" ] && [ "$_ur" != "1:65535" ]; then
+				ipt -t mangle -N "${_c}U"
+				for _g in $(ipt_port_groups "$_ur"); do
+					ipt -t mangle -A "${_c}U" -p udp -m multiport --dports "$_g" -j RETURN
+				done
+				ipt -t mangle -A "${_c}U" -p udp -j ACCEPT
+				ipt -t mangle -A "$_c" -p udp -j "${_c}U"
+			fi
+			if [ "$block_quic" = "1" ]; then
+				ipt -t mangle -A "$_c" -p udp --dport 443 -j DROP
+			fi
+			ipt_must -t mangle -A "$_c" -p tcp -j TPROXY 				--on-ip 127.0.0.1 --on-port "$_tp" --tproxy-mark "$MARK" || return 1
+			ipt_must -t mangle -A "$_c" -p udp -j TPROXY 				--on-ip 127.0.0.1 --on-port "$_tp" --tproxy-mark "$MARK" || return 1
+			ipt -t mangle -A "$_c" -j ACCEPT
+		fi
+
+		_ifa=""
+		[ "$_if" != "-" ] && _ifa="-i $_if"
+		_any=0
+		if [ "$_macs" != "-" ]; then
+			for _v in $(printf '%s' "$_macs" | tr ',' ' '); do
+				# shellcheck disable=SC2086
+				ipt -t mangle -A ZGZ_PRE $_ifa -m mac --mac-source "$_v" -j "$_c"
+			done
+			_any=1
+		fi
+		if [ "$_ips" != "-" ]; then
+			for _v in $(printf '%s' "$_ips" | tr ',' ' '); do
+				case "$_v" in
+					*-*) # shellcheck disable=SC2086
+					     ipt -t mangle -A ZGZ_PRE $_ifa -m iprange --src-range "$_v" -j "$_c" ;;
+					*)   # shellcheck disable=SC2086
+					     ipt -t mangle -A ZGZ_PRE $_ifa -s "$_v" -j "$_c" ;;
+				esac
+			done
+			_any=1
+		fi
+		if [ "$_sets" != "-" ]; then
+			for _v in $(printf '%s' "$_sets" | tr ',' ' '); do
+				# shellcheck disable=SC2086
+				ipt -t mangle -A ZGZ_PRE $_ifa -m set --match-set "$_v" src -j "$_c"
+			done
+			_any=1
+		fi
+		if [ "$_any" = "0" ]; then
+			# shellcheck disable=SC2086
+			ipt -t mangle -A ZGZ_PRE $_ifa -j "$_c"
+		fi
+	done <<ACL
+$(acl_lines)
+ACL
+	return 0
+}
+
+# Teardown has to remove the jumps before the chains they point at, and has to
+# keep going when a piece is already gone: half-removed rules are how a router
+# ends up sending traffic at a tunnel that is not running any more.
+ipt_drop_jumps() {
+	_tbl="$1"; _parent="$2"; _target="$3"; _cmd="$4"
+	while $_cmd -t "$_tbl" -C "$_parent" -j "$_target" >/dev/null 2>&1; do
+		$_cmd -t "$_tbl" -D "$_parent" -j "$_target" >/dev/null 2>&1 || break
+	done
+	# ...including the per-device forms
+	$_cmd -t "$_tbl" -S "$_parent" 2>/dev/null |
+		grep -- "-j $_target" |
+		sed "s/^-A /-D /" |
+		while read -r _r; do
+			# shellcheck disable=SC2086
+			$_cmd -t "$_tbl" $_r >/dev/null 2>&1 || true
+		done
+	return 0
+}
+
+ipt_kill_chain() {
+	_tbl="$1"; _chain="$2"; _cmd="$3"
+	$_cmd -t "$_tbl" -F "$_chain" >/dev/null 2>&1 || true
+	$_cmd -t "$_tbl" -X "$_chain" >/dev/null 2>&1 || true
+	return 0
+}
+
+# The router's own traffic, the iptables way: marked on the way out, and
+# handed to the tunnel when the policy route brings it back in on lo.
+ipt_local_up() {
+	ipt_local_down
+	ipt -t mangle -N ZGZ_OUT
+	ipt -t mangle -A ZGZ_OUT -m mark --mark "$BYPASS" -j RETURN
+	ipt -t mangle -A ZGZ_OUT -m conntrack --ctdir REPLY -j RETURN
+	ipt -t mangle -A ZGZ_OUT -p tcp --dport 53 -j RETURN
+	ipt -t mangle -A ZGZ_OUT -p udp --dport 53 -j RETURN
+	for _c in $RESERVED_V4 $(direct_ips) $(local_exclusions); do
+		ipt -t mangle -A ZGZ_OUT -d "$_c" -j RETURN
+	done
+	ipt -t mangle -A ZGZ_OUT -p tcp -j MARK --set-mark "$MARK"
+	ipt -t mangle -A ZGZ_OUT -p udp -j MARK --set-mark "$MARK"
+
+	ipt -t mangle -N ZGZ_LO
+	ipt_must -t mangle -A ZGZ_LO -p tcp -j TPROXY \
+		--on-ip 127.0.0.1 --on-port "$tproxy_port" --tproxy-mark "$MARK" || return 1
+	ipt_must -t mangle -A ZGZ_LO -p udp -j TPROXY \
+		--on-ip 127.0.0.1 --on-port "$tproxy_port" --tproxy-mark "$MARK" || return 1
+	ipt_must -t mangle -A PREROUTING -i lo -m mark --mark "$MARK" -j ZGZ_LO || return 1
+	ipt_must -t mangle -A OUTPUT -j ZGZ_OUT || return 1
+	return 0
+}
+
+ipt_local_down() {
+	command -v iptables >/dev/null 2>&1 || return 0
+	ipt_drop_jumps mangle OUTPUT     ZGZ_OUT iptables
+	ipt_drop_jumps mangle PREROUTING ZGZ_LO  iptables
+	ipt_kill_chain mangle ZGZ_OUT iptables
+	ipt_kill_chain mangle ZGZ_LO  iptables
+	return 0
+}
+
+ipt_down() {
+	command -v iptables >/dev/null 2>&1 || return 0
+	ipt_local_down
+	ipt_drop_jumps mangle PREROUTING ZGZ_PRE iptables
+	ipt_drop_jumps nat    PREROUTING ZGZ_DNS iptables
+	ipt_drop_jumps nat    PREROUTING ZGZ_NAT iptables
+	ipt_drop_jumps filter FORWARD    ZGZ_FWD iptables
+	ipt_kill_chain mangle ZGZ_PRE    iptables
+	ipt_kill_chain mangle ZGZ_GTR    iptables
+	ipt_kill_chain mangle ZGZ_GUR    iptables
+	ipt_kill_chain nat    ZGZ_NAT    iptables
+	ipt_kill_chain mangle ZGZ_DIVERT iptables
+	# Whatever Access Control chains the last start made, however many that
+	# was - the rules may have changed since.
+	for _c in $(iptables -t mangle -S 2>/dev/null | sed -n 's/^-N \(ZGZ_ACL[0-9A-Z]*\)$/\1/p'); do
+		ipt_kill_chain mangle "$_c" iptables
+	done
+	ipt_kill_chain nat    ZGZ_DNS    iptables
+	ipt_kill_chain filter ZGZ_FWD    iptables
+	if command -v ip6tables >/dev/null 2>&1; then
+		ipt_drop_jumps filter FORWARD ZGZ_FWD6 ip6tables
+		ipt_kill_chain filter ZGZ_FWD6 ip6tables
+	fi
+	return 0
+}
+
+ipt_status() {
+	echo "backend: ipt"
+	if iptables -t mangle -S ZGZ_PRE >/dev/null 2>&1; then
+		echo "active:  yes"
+		iptables -t mangle -L ZGZ_PRE -n -v 2>/dev/null |
+			awk '/TPROXY/ { p += $1; b += $2 } END { printf "captured: %d packets, %d bytes\n", p, b }'
+	else
+		echo "active:  no"
+	fi
+	return 0
+}
+
+# --------------------------------------------------------------------- main
+
+cmd_up() {
+	_backend="$(firewall_backend)"
+	[ "$_backend" != "none" ] || {
+		say_message "This router has neither nftables nor iptables available, so traffic cannot be redirected."
+		echo "no firewall available" >&2
+		exit 1
+	}
+
+	# Another transparent proxy fighting for the same packets is not something
+	# to discover later from a connection that behaves strangely.
+	#
+	# The log, and not say_message. A stored message outlives the thing it
+	# describes: this one was written while PassWall was running, sat in the
+	# file afterwards, and was still on the front page once PassWall had been
+	# switched off - telling the reader to do the thing they had just done.
+	# The status the page shows is asked fresh every few seconds, so that is
+	# where a condition that can go away belongs.
+	if passwall_running; then
+		warn "another transparent proxy is active - expect trouble"
+	fi
+
+	cmd_down
+
+	_devs="$(lan_devices)"
+	set -- $_devs
+	[ "$#" -gt 0 ] || { echo "no LAN device found" >&2; exit 1; }
+
+	routing_up || exit 1
+
+	case "$_backend" in
+		nft)
+			if ! nft_probe tproxy; then
+				say_message "This kernel cannot do transparent proxying with nftables. Install kmod-nft-tproxy (the Dependencies button on the settings page will do it)."
+				echo "kmod-nft-tproxy is missing" >&2
+				routing_down
+				exit 1
+			fi
+			if ! nft_up "$_devs"; then
+				echo "could not load the nftables ruleset" >&2
+				nft_down
+				routing_down
+				exit 1
+			fi
+			;;
+		ipt)
+			if ! ipt_probe; then
+				say_message "This kernel cannot do transparent proxying with iptables. Install iptables-mod-tproxy (the Dependencies button on the settings page will do it)."
+				echo "iptables TPROXY support is missing" >&2
+				routing_down
+				exit 1
+			fi
+			if ! ipt_up "$_devs"; then
+				echo "could not install the iptables rules" >&2
+				ipt_down
+				routing_down
+				exit 1
+			fi
+			;;
+	esac
+
+	echo "$_backend" > "$ZGZ_RUN/backend" 2>/dev/null || true
+	echo "tunnelling $_devs via $_backend"
+
+	# The router's own traffic, when asked for - and not while a node is
+	# being measured, which has to reach the node directly.
+	if [ "$localhost_proxy" = "1" ] && [ ! -f "$LOCAL_PAUSE" ]; then
+		cmd_local_on || warn "could not send the router's own traffic into the tunnel"
+	fi
+	return 0
+}
+
+cmd_local_on() {
+	[ "$localhost_proxy" = "1" ] || return 0
+	case "$(cat "$ZGZ_RUN/backend" 2>/dev/null)" in
+		nft) nft_local_up ;;
+		ipt) ipt_local_up ;;
+		*) return 0 ;;
+	esac
+}
+
+cmd_local_off() {
+	nft_local_down
+	ipt_local_down
+	return 0
+}
+
+# zgz-rules local pause|resume
+#
+# While a node is chosen or tested, the router's own connections to the nodes
+# must go straight to them: a handshake that went through the tunnel would be
+# measuring the tunnel. Pause takes the router's own traffic out and says so
+# in a file, so that a start in the meantime leaves it out too; resume puts
+# it back if the tunnel is up.
+cmd_local() {
+	case "${1:-}" in
+		pause)
+			touch "$LOCAL_PAUSE" 2>/dev/null || true
+			cmd_local_off
+			;;
+		resume)
+			rm -f "$LOCAL_PAUSE"
+			[ -s "$ZGZ_RUN/backend" ] && cmd_local_on
+			;;
+		*) echo "usage: $0 local pause|resume" >&2; return 1 ;;
+	esac
+	return 0
+}
+
+cmd_down() {
+	# Both are torn down whatever the current setting says. Changing the
+	# backend while the tunnel is up would otherwise leave the old one's rules
+	# in place for ever, still redirecting to a port nothing listens on.
+	nft_down
+	ipt_down
+	routing_down
+	rm -f "$ZGZ_RUN/backend"
+	return 0
+}
+
+cmd_status() {
+	# One unambiguous line for anything reading this rather than looking at
+	# it. "table: not loaded" and "table: inet zirgozar (loaded)" both contain the
+	# word loaded, and a caller grepping for it believed the tunnel was up
+	# whenever the backend was nftables at all.
+	case "$(firewall_backend)" in
+		nft) nft_status ;;
+		ipt) ipt_status ;;
+		*) echo "backend: none"; echo "active:  no" ;;
+	esac
+	echo "devices: $(lan_devices)"
+	return 0
+}
+
+case "${1:-}" in
+	up)     cmd_up ;;
+	down)   cmd_down ;;
+	status) cmd_status ;;
+	dump)   nft_ruleset "$(lan_devices)" ;;
+	dump-local) nft_local_ruleset ;;
+	local)  cmd_local "${2:-}" ;;
+	*) echo "usage: $0 up|down|status|dump|dump-local|local pause|resume" >&2; exit 1 ;;
+esac
