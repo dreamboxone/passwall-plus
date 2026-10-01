@@ -114,7 +114,7 @@ return view.extend({
 			_('The tunnel on or off. Save and apply for it to take effect; it holds across a reboot.'));
 		o.rmempty = false;
 
-		o = s.taboption('main', form.ListValue, 'node', _('Node'),
+		o = s.taboption('main', form.ListValue, 'node', _('Choose node'),
 			_('Auto measures the nodes and uses the fastest. A node added by hand is used as it is, and nothing is measured.'));
 		o.value('', _('Auto (fastest)'));
 		nodeChoices(o);

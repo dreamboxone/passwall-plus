@@ -61,6 +61,7 @@ var FA = {
 
 	/* ----------------------------------------------------------- the nodes */
 	'Node': 'کانفیگ',
+	'Choose node': 'انتخاب کانفیگ',
 	'Nodes': 'کانفیگ‌ها',
 	'%d nodes': '%d کانفیگ',
 	'Protocol': 'پروتکل',
@@ -398,14 +399,14 @@ var FA = {
 	'Direct DNS answers for everything that goes straight out, and for the names of the nodes themselves — which can never be looked up through the tunnel they are the way into. Auto uses the router’s own upstream, then the ISP’s.':
 		'DNS مستقیم به هر چیزی که بدون تونل بیرون می‌رود جواب می‌دهد، و به نام خود کانفیگ‌ها — که هیچ‌وقت نمی‌شود از داخل همان تونلی پیدایشان کرد که راه ورود به آن هستند. «خودکار» از DNS بالادستی خود روتر استفاده می‌کند، و اگر نبود از DNS اینترنت‌دهنده.',
 	'Direct DNS': 'DNS مستقیم',
-	'Direct Query Strategy': 'روش پرس‌وجوی مستقیم',
+	'Direct Query Strategy': 'روش درخواست DNS مستقیم',
 	'Remote DNS Protocol': 'پروتکل DNS راه دور',
 	'TCP is the default because a great many free nodes carry no UDP at all, and a lookup sent as UDP through one of them is simply lost.':
-		'پیش‌فرض TCP است، چون خیلی از کانفیگ‌های رایگان اصلا UDP را جابه‌جا نمی‌کنند و پرس‌وجویی که با UDP از داخل آن‌ها فرستاده شود گم می‌شود.',
+		'پیش‌فرض TCP است، چون خیلی از کانفیگ‌های رایگان اصلا UDP را جابه‌جا نمی‌کنند و درخواستی که با UDP از داخل آن‌ها فرستاده شود گم می‌شود.',
 	'Remote DNS': 'DNS راه دور',
 	'Remote DNS DoH': 'DoH برای DNS راه دور',
 	'An address, or an address and the server’s own IP after a comma so its name is never itself a lookup.':
-		'یک آدرس، یا آدرس و بعد از یک کاما IP خود سرور، تا نام خودش هیچ‌وقت نیاز به پرس‌وجو نداشته باشد.',
+		'یک آدرس، یا آدرس و بعد از یک کاما IP خود سرور، تا نام خودش هیچ‌وقت نیاز به درخواست نداشته باشد.',
 	'DoH request address': 'آدرس درخواست DoH',
 	'Format must be:': 'قالب باید این باشد:',
 	'Remote DNS EDNS Client Subnet': 'EDNS Client Subnet برای DNS راه دور',
@@ -415,8 +416,8 @@ var FA = {
 	'Remote': 'از تونل',
 	'Direct': 'مستقیم',
 	'Answers with a made-up address and lets the tunnel find the real one at the far end, which saves a lookup on every new site. Only takes effect with “Straight into the tunnel” above: with dnsmasq in front, the router’s own lookups would be made up too, and nothing the router fetches for itself would work.':
-		'با یک آدرس ساختگی جواب می‌دهد و پیدا کردن آدرس واقعی را به آن سر تونل می‌سپارد، که برای هر سایت تازه یک پرس‌وجو صرفه‌جویی می‌کند. فقط با «مستقیم داخل تونل» در بالا کار می‌کند: وقتی dnsmasq جلوی کار است، جواب پرس‌وجوهای خود روتر هم ساختگی می‌شد و هیچ چیزی که روتر برای خودش دانلود می‌کند کار نمی‌کرد.',
-	'Remote Query Strategy': 'روش پرس‌وجوی راه دور',
+		'با یک آدرس ساختگی جواب می‌دهد و پیدا کردن آدرس واقعی را به آن سر تونل می‌سپارد، که برای هر سایت تازه یک درخواست صرفه‌جویی می‌کند. فقط با «مستقیم داخل تونل» در بالا کار می‌کند: وقتی dnsmasq جلوی کار است، جواب درخواست‌های خود روتر هم ساختگی می‌شد و هیچ چیزی که روتر برای خودش دانلود می‌کند کار نمی‌کرد.',
+	'Remote Query Strategy': 'روش درخواست DNS راه دور',
 	'Domain Override': 'جایگزینی دامنه',
 	'One per line: a name, a space, and the address it should resolve to.':
 		'در هر خط یکی: یک نام، یک فاصله، و آدرسی که باید برگرداند.',
@@ -424,7 +425,7 @@ var FA = {
 
 	'Preproxy': 'پیش‌پروکسی',
 	'Every node the tunnel may choose dials out through this node first — PassWall2’s pre-proxy. For a node that cannot be reached from here directly, or to hide which nodes are being used. With it on, the first-pass handshake is skipped, because no node is reached directly.':
-		'هر کانفیگی که تونل انتخاب کند، اول از داخل این کانفیگ وصل می‌شود — همان پیش‌پروکسی پسوال۲. برای کانفیگی که از اینجا مستقیم در دسترس نیست، یا برای پنهان کردن اینکه از کدام کانفیگ‌ها استفاده می‌شود. وقتی روشن است، هندشیک مرحله اول انجام نمی‌شود، چون به هیچ کانفیگی مستقیم وصل نمی‌شویم.',
+		'هر کانفیگی که تونل انتخاب کند، اول از داخل این نود رد می‌شود. برای نودی که از اینجا مستقیم در دسترس نیست، یا برای پنهان کردن اینکه از کدام نودها استفاده می‌شود. وقتی روشن است، هندشیک مرحله اول انجام نمی‌شود، چون به هیچ نودی مستقیم وصل نمی‌شویم.',
 	'Preproxy Node': 'کانفیگ پیش‌پروکسی',
 	'Nodes added by hand on the Node List page.': 'کانفیگ‌هایی که در صفحه فهرست کانفیگ‌ها دستی اضافه شده‌اند.',
 	'Fragment': 'فرگمنت',
@@ -541,10 +542,10 @@ var FA = {
 	'Client Proxy': 'پروکسی دستگاه‌های شبکه',
 	'When selected, devices in LAN go through the tunnel. Otherwise they do not, but the devices named on the Access Control page still do.':
 		'وقتی انتخاب شود، دستگاه‌های شبکه LAN از تونل می‌روند. در غیر این صورت نمی‌روند، ولی دستگاه‌هایی که در صفحه کنترل دسترسی آمده‌اند همچنان می‌روند.',
-	'Node Socks Listen Port': 'پورت SOCKS کانفیگ',
+	'Node Socks Listen Port': 'پورت نود Socks',
 	'A SOCKS server on the router that goes out the way the tunnel does. Empty for none.':
 		'یک سرور SOCKS روی روتر که از همان راه تونل بیرون می‌رود. خالی یعنی هیچ.',
-	'Node Socks Bind Local': 'SOCKS کانفیگ فقط برای خود روتر',
+	'Node Socks Bind Local': 'نود SOCKS محلی روتر',
 	'When selected, it can only be accessed localhost.': 'وقتی انتخاب شود، فقط از خود روتر قابل دسترسی است.',
 	'Socks Main switch': 'کلید اصلی SOCKS',
 	'More SOCKS ports, each through a node of its own — the table below.':
@@ -778,7 +779,7 @@ var FA = {
 	'unknown file': 'فایل ناشناخته',
 	'Not valid, please re-enter: %s': 'نادرست است، دوباره وارد کنید: %s',
 	'Names that go through a node are answered with made-up addresses, and the node looks up the real one at the far end — for streaming services that unlock by DNS, or to save a lookup. Tick it for each rule below that should use it. The router itself can open those names only with Localhost Proxy on.':
-		'برای دامنه‌هایی که از کانفیگ عبور می‌کنند آدرس ساختگی برگردانده می‌شود و کانفیگ آدرس واقعی را در سمت سرور پیدا می‌کند؛ برای سرویس‌های پخش ویدیو که با DNS باز می‌شوند، یا برای صرفه‌جویی در یک پرس‌وجو. برای هر قانونی که باید از آن استفاده کند، تیک آن را در جدول پایین بزنید. خود روتر فقط وقتی «پروکسی خود روتر» روشن باشد می‌تواند این دامنه‌ها را باز کند.',
+		'برای دامنه‌هایی که از کانفیگ عبور می‌کنند آدرس ساختگی برگردانده می‌شود و کانفیگ آدرس واقعی را در سمت سرور پیدا می‌کند؛ برای سرویس‌های پخش ویدیو که با DNS باز می‌شوند، یا برای صرفه‌جویی در یک درخواست. برای هر قانونی که باید از آن استفاده کند، تیک آن را در جدول پایین بزنید. خود روتر فقط وقتی «پروکسی خود روتر» روشن باشد می‌تواند این دامنه‌ها را باز کند.',
 	'FakeDNS works with its main switch on, for a rule whose names go through a node. Preproxy: the rule’s hand-added node is reached through this node first — only for a rule that goes to a hand-added node, and one layer only: a node with a chain of its own keeps it.':
 		'FakeDNS وقتی کار می‌کند که کلید اصلی آن روشن باشد و دامنه‌های آن قانون از یک کانفیگ عبور کنند. پیش‌پروکسی: کانفیگ دستی آن قانون از طریق این کانفیگ وصل می‌شود؛ فقط برای قانونی که به یک کانفیگ دستی می‌رود، و فقط یک لایه: کانفیگی که زنجیره خودش را دارد همان را نگه می‌دارد.',
 	'Everything the tunnel carries gets made-up addresses — the DNS tab’s FakeDNS. Like that one, it takes effect only with lookups sent straight into the tunnel.':
@@ -825,7 +826,7 @@ var FA = {
 	'This kernel cannot do transparent proxying with iptables. Install iptables-mod-tproxy (the Dependencies button on the settings page will do it).':
 		'کرنل این روتر با iptables پروکسی شفاف انجام نمی‌دهد. iptables-mod-tproxy را نصب کنید (دکمه نصب وابستگی‌ها در صفحه «به‌روزرسانی برنامه»).',
 	'Could not find the directory dnsmasq reads its extra configuration from, so name lookups are being redirected straight into the tunnel instead. Local machine names will not resolve while connected.':
-		'پوشه تنظیمات اضافه dnsmasq پیدا نشد، پس پرس‌وجوهای دامنه مستقیم به تونل فرستاده می‌شوند. تا وقتی وصل هستید نام دستگاه‌های شبکه محلی پیدا نمی‌شوند.',
+		'پوشه تنظیمات اضافه dnsmasq پیدا نشد، پس درخواست‌های دامنه مستقیم به تونل فرستاده می‌شوند. تا وقتی وصل هستید نام دستگاه‌های شبکه محلی پیدا نمی‌شوند.',
 	'Could not download the package index. The router needs a working internet connection before dependencies can be installed.':
 		'فهرست بسته‌ها دانلود نشد. برای نصب وابستگی‌ها روتر باید به اینترنت وصل باشد.',
 	'This router has neither opkg nor apk, so nothing can be installed automatically.':
