@@ -357,12 +357,15 @@ core_version_cached() {
 xray_by_version() {
 	for _xv in $(xray_paths); do
 		[ -x "$_xv" ] || continue
-		printf '%s %s\n' "$(core_version_cached "$_xv" | sed 's/^v//')" "$_xv"
+		# The path first: a version that will not say is an empty field, and
+		# an empty field first shifts every other one along - which made the
+		# path come out empty, and no core at all be found.
+		printf '%s %s\n' "$_xv" "$(core_version_cached "$_xv" | sed 's/^v//')"
 	done | awk '{
-		n = split($1, p, ".")
+		n = split($2, p, ".")
 		k = ""
 		for (i = 1; i <= 4; i++) k = k sprintf("%06d", (i <= n && p[i] ~ /^[0-9]+$/) ? p[i] : 0)
-		print k, $2
+		print k, $1
 	}' | sort -r | awk '{ print $2 }'
 	return 0
 }
