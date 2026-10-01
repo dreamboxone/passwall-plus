@@ -321,13 +321,16 @@ reload_service() {
 		"$ZGZ_LIB/zgz-probe" use "$_fixed" >/dev/null 2>&1 || true
 	fi
 
-	if ! "$MKCONFIG" > "$ZGZ_CONFIG_JSON.next" 2>/dev/null; then
-		rm -f "$ZGZ_CONFIG_JSON.next"
+	# Ending in .json: the core decides how to read a file by its name, and
+	# refuses one it cannot tell the format of.
+	_next="${ZGZ_CONFIG_JSON%.json}.next.json"
+	if ! "$MKCONFIG" > "$_next" 2>/dev/null; then
+		rm -f "$_next"
 		restart
 		return
 	fi
 	_core=same
-	cmp -s "$ZGZ_CONFIG_JSON.next" "$ZGZ_CONFIG_JSON" || _core=changed
+	cmp -s "$_next" "$ZGZ_CONFIG_JSON" || _core=changed
 	_rules=same
 	"$RULES" dump 2>/dev/null | cmp -s - "$ZGZ_RUN/rules.applied" || _rules=changed
 	_dns=same
@@ -338,13 +341,13 @@ reload_service() {
 		# leaves the tunnel exactly as it was, still working.
 		_prog="$(sed -n 's/^path=//p' "$ZGZ_RUN/core.info" 2>/dev/null | head -1)"
 		_geo="$(geo_dir)" || _geo=""
-		if [ -n "$_prog" ] && ! XRAY_LOCATION_ASSET="$_geo" bounded 60 "$_prog" run -test -config "$ZGZ_CONFIG_JSON.next" >/dev/null 2>&1; then
-			rm -f "$ZGZ_CONFIG_JSON.next"
-			log "the new settings were refused by the core - the tunnel is left as it was"
+		if [ -n "$_prog" ] && ! XRAY_LOCATION_ASSET="$_geo" bounded 60 "$_prog" run -test -config "$_next" >"$ZGZ_RUN/core-test.out" 2>&1; then
+			rm -f "$_next"
+			log "the new settings were refused by the core - the tunnel is left as it was: $(grep -v '^[[:space:]]*$' "$ZGZ_RUN/core-test.out" 2>/dev/null | tail -1)"
 			say_message "The core refused the new settings, so the tunnel was left running as it was. Check the Runtime Logs page."
 			return 1
 		fi
-		rm -f "$ZGZ_CONFIG_JSON.next"
+		rm -f "$_next"
 		log "Settings saved - restarting the core only"
 		# start, not restart: the service is already running, so procd swaps
 		# the one instance whose configuration changed and nothing else is
@@ -352,7 +355,7 @@ reload_service() {
 		start
 		return
 	fi
-	rm -f "$ZGZ_CONFIG_JSON.next"
+	rm -f "$_next"
 
 	if [ "$_rules" = "changed" ]; then
 		"$RULES" up >/dev/null 2>&1 || { restart; return; }
