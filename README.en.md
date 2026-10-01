@@ -173,8 +173,11 @@ At the top, PassWall2's row of tiles:
 | **Cloudflare / Google / GitHub Connection** | Press one: a single request is made through whatever the router's traffic goes through, and the time it took is shown — green under a second, amber under two, red above, or *Problem detected!* |
 
 Under them the **Status** card: whether the tunnel is connected, which config
-it is using, its protocol, its latency, and how routing is set. A progress bar
-appears while configs are being measured; **Choose again** throws away the
+it is using, its protocol, its latency, and how routing is set. The server's
+IP address is **blurred** so that it does not end up in a screenshot or a video;
+the **eye** beside it shows it, and the choice is remembered in that browser. A
+config chosen by hand gets its latency from one handshake to its port. A
+progress bar appears while configs are being measured; **Choose again** throws away the
 current choice and measures afresh. A message the router needs you to act on
 appears here, with a cross to put it away.
 
@@ -193,6 +196,7 @@ The form below has four tabs, in PassWall2's order.
 | **Node Socks Listen Port** | `node_socks_port` | 1070 | A SOCKS server on the router that goes out the way the tunnel does. Empty for none |
 | **Node Socks Bind Local** | `node_socks_bind_local` | on | That SOCKS server answers the router itself only |
 | **Socks Main switch** | `socks_enabled` | off | More SOCKS ports, each through a config of its own — the **Socks Config** table under it |
+| **Restore defaults** | `factory_reset` | off | Tick it and save: the tunnel comes down, every config and subscription is deleted and every setting goes back to how it was installed (an untouched copy lives in `/usr/share/zirgozar`). The routing data, the downloaded cores and the traffic history are kept. It asks before it is ticked, and there is no undo |
 | **Language** | `lang` | English | English or Persian. The language button in the banner does the same without a save |
 
 **Socks Config** (a `config socks` section per row):
@@ -471,7 +475,7 @@ be made.
 | Card | What it shows |
 |---|---|
 | **App Update** | This program's version and whether a newer one is published. **Update to …** downloads the new version from GitHub, checks it against that release's checksums and installs it with the router's own package manager (apk or opkg); the settings are kept, the tunnel comes back if it was on, and the page reloads by itself |
-| **Cores** | Xray, sing-box, hysteria and Geoview: what is installed, what each project has published, **Check update**, **Install / Update to …**, **Remove**. sing-box and hysteria are only for configs that speak hysteria2 or tuic, which Xray does not; Geoview only for the Geo View page |
+| **Cores** | Xray, sing-box, hysteria and Geoview: what is installed, what each project has published, **Check update**, **Install / Update to …**, **Remove**. An update is only offered for something actually newer. Beside Xray is a list of its recent releases, pre-releases included, with **Install this version**. Of the Xray cores on the router the **newest** is always used; to pin one, put its path in Xray App Path. sing-box and hysteria are only for configs that speak hysteria2 or tuic, which Xray does not; Geoview only for the Geo View page |
 | **Router requirements** | One line: everything is ready, or how many things are missing. **Details** opens the questions put to the running system — transparent proxy, policy routing, HTTPS, the firewall in use, missing packages — with **Install them**. They open by themselves when something is missing |
 
 **App Path**
