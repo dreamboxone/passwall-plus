@@ -453,3 +453,9 @@ body.pwp-fa #modal_overlay>.modal textarea,body.pwp-fa #modal_overlay>.modal inp
 .mk .drag-handle:active{cursor:grabbing!important}
 .mk tr.drag-over-above>.td{box-shadow:inset 0 3px 0 #3b82f6}
 .mk tr.drag-over-below>.td{box-shadow:inset 0 -3px 0 #3b82f6}
+/* The server address on the status card, blurred until the eye is pressed */
+.pwp-ip{transition:filter .2s ease}
+.pwp-ip.pwp-ip-hidden{filter:blur(6px);user-select:none}
+.pwp-eye{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer}
+.pwp-eye:hover{background:var(--soft);color:var(--text)}
+.pwp-eye svg{width:17px;height:17px}

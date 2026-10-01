@@ -526,7 +526,10 @@ cmd_use() {
 	_row="$(node_records "$1" 1 2>/dev/null | head -1)"
 	[ -n "$_row" ] || { warn "the node chosen in Basic Settings is not there or cannot be read"; return 1; }
 	log "using the node chosen in Basic Settings: $(printf '%s' "$_row" | cut -f2)"
-	select_row "$_row" 0
+	# Nothing is measured to choose it, but the status page still wants its
+	# latency: one handshake to its port, the same figure the TCPing column
+	# shows. Zero - no answer - is shown as a dash, as before.
+	select_row "$_row" "$(tcp_ms "$(printf '%s' "$_row" | cut -f4)" "$(printf '%s' "$_row" | cut -f5)")"
 }
 
 select_row() {

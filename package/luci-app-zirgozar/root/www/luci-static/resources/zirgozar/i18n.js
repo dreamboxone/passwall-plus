@@ -246,6 +246,8 @@ var FA = {
 	'Router requirements': 'پیش‌نیازهای روتر',
 	'Everything is ready': 'همه چیز آماده است',
 	'Details': 'جزئیات',
+	'Show the address': 'نمایش آدرس',
+	'Hide the address': 'پنهان کردن آدرس',
 	'Hide details': 'بستن جزئیات',
 	'These are questions put to the running system, not a list of package names. A package can be installed and the thing it provides still not work.':
 		'این‌ها سوال‌هایی است که از سیستم در حال اجرا پرسیده شده، نه یک لیست از اسم پکیج‌ها. یک پکیج می‌تواند نصب باشد و چیزی که فراهم می‌کند باز هم کار نکند.',

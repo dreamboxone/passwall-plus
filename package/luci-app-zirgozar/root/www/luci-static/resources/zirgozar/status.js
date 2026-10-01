@@ -188,6 +188,39 @@ function badge(st) {
 	return E('span', { 'class': 'mk-chip ' + cls, 'style': 'font-size:13px;padding:5px 14px' }, text);
 }
 
+/* The server's address beside its protocol, hidden until asked for - a
+   screenshot of this page is the usual way a server's address gets passed
+   around, and nobody means to. The choice is remembered in this browser. */
+function ipShown() {
+	try { return window.localStorage.getItem('zirgozar-show-ip') == '1'; } catch (e) { return false; }
+}
+
+function protoLine() {
+	var shown = ipShown();
+	var host = E('span', { 'id': 'pwp-host', 'class': 'pwp-ip' + (shown ? '' : ' pwp-ip-hidden'), 'dir': 'ltr' }, '');
+	var eye = E('button', {
+		'type': 'button', 'class': 'pwp-eye',
+		'title': shown ? _('Hide the address') : _('Show the address'),
+		'click': function() {
+			shown = !shown;
+			try { window.localStorage.setItem('zirgozar-show-ip', shown ? '1' : '0'); } catch (e) {}
+			host.className = 'pwp-ip' + (shown ? '' : ' pwp-ip-hidden');
+			eye.title = shown ? _('Hide the address') : _('Show the address');
+			while (eye.firstChild) eye.removeChild(eye.firstChild);
+			eye.appendChild(pui.icon(shown ? 'eye' : 'eye-off'));
+		}
+	}, [ pui.icon(shown ? 'eye' : 'eye-off') ]);
+	return E('div', { 'style': 'display:flex;gap:10px;padding:4px 0;align-items:baseline' }, [
+		E('span', { 'style': 'flex:0 0 130px;color:var(--muted);font-size:13px' }, _('Protocol')),
+		E('span', { 'style': 'flex:1 1 auto;font-weight:600;display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap' }, [
+			E('span', { 'id': 'pwp-proto' }, '-'),
+			E('span', { 'id': 'pwp-hostwrap', 'style': 'display:none;gap:6px;align-items:center' }, [
+				E('span', { 'style': 'color:var(--muted)' }, '·'), host, eye
+			])
+		])
+	]);
+}
+
 function line(label, id) {
 	return E('div', { 'style': 'display:flex;gap:10px;padding:4px 0;align-items:baseline' }, [
 		E('span', { 'style': 'flex:0 0 130px;color:var(--muted);font-size:13px' }, label),
@@ -254,7 +287,10 @@ function renderState(st) {
 	setNode('pwp-version', pui.versionText(st.version));
 	setNode('pwp-state', badge(st));
 	setNode('pwp-node', st.server || '-');
-	setNode('pwp-proto', st.protocol ? st.protocol + (st.host ? '  ·  ' + st.host : '') : '-');
+	setNode('pwp-proto', st.protocol ? st.protocol : '-');
+	setNode('pwp-host', st.host ? st.host : '');
+	var hw = byId('pwp-hostwrap');
+	if (hw) hw.style.display = st.host ? 'inline-flex' : 'none';
 	setNode('pwp-latency', st.latency_ms > 0 ? pui.ms(st.latency_ms) : '-');
 	setNode('pwp-route', st.route_ir
 		? (st.geo_ready ? _('Iran is Direct')
@@ -428,7 +464,7 @@ return baseclass.extend({
 				E('div', { 'id': 'pwp-pct', 'style': 'margin-top:5px;font-size:12px;color:var(--muted)' }, '')
 			]),
 			line(_('Node'), 'pwp-node'),
-			line(_('Protocol'), 'pwp-proto'),
+			protoLine(),
 			line(_('Latency'), 'pwp-latency'),
 			line(_('Routing'), 'pwp-route'),
 			E('div', { 'class': 'mk-row', 'style': 'margin-top:14px' }, [
