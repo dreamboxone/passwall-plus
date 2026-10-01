@@ -35,6 +35,11 @@ boot() {
 start_service() {
 	rm -f "$STARTED_FLAG"
 
+	# Asked for and not carried out - a reboot came first, say.
+	if [ "$(cfg_bool factory_reset 0)" = "1" ]; then
+		"$ZGZ_LIB/zgz-router" reset >/dev/null 2>&1 || true
+	fi
+
 	# The rebind exceptions on the Traffic Rules page belong to dnsmasq, not
 	# to the tunnel, so they are brought in step whether or not the tunnel is
 	# about to start - this runs on every boot and on every save.
@@ -307,6 +312,16 @@ dns_signature() {
 # Anything else - the switch, a tunnel that is not up, a helper core for a
 # hysteria2 or tuic node - goes the whole way round, as before.
 reload_service() {
+	# Restore defaults: the tunnel comes down while the old settings still
+	# describe what to take down, then everything goes back to how it was
+	# installed - with the main switch off, as it ships.
+	if [ "$(cfg_bool factory_reset 0)" = "1" ]; then
+		stop
+		"$ZGZ_LIB/zgz-router" reset >/dev/null 2>&1 || true
+		start
+		return
+	fi
+
 	if [ "$(cfg_bool enabled 0)" != "1" ] || [ ! -f "$STARTED_FLAG" ] ||
 	   ! tunnel_running || "$BRIDGE" needed 2>/dev/null; then
 		restart

@@ -246,6 +246,11 @@ var FA = {
 	'Router requirements': 'پیش‌نیازهای روتر',
 	'Everything is ready': 'همه چیز آماده است',
 	'Details': 'جزئیات',
+	'Restore defaults': 'بازگشت به حالت پیش‌فرض',
+	'Tick and save to delete every config and subscription and put every setting back as it was when the program was installed. The routing data, the downloaded cores and the traffic history are kept. There is no undo.':
+		'با تیک زدن و ذخیره، همه کانفیگ‌ها و اشتراک‌ها پاک می‌شوند و همه تنظیمات به حالت زمان نصب برمی‌گردند. داده‌های مسیریابی، هسته‌های دانلودشده و تاریخچه مصرف حفظ می‌شوند. این کار برگشت‌پذیر نیست.',
+	'Every config, every subscription and every setting will be deleted when you save. Continue?':
+		'با ذخیره کردن، همه کانفیگ‌ها، اشتراک‌ها و تنظیمات پاک می‌شوند. ادامه می‌دهید؟',
 	'%s (pre-release)': '%s (پیش‌انتشار)',
 	'Install this version': 'نصب این نسخه',
 	'Downloading Xray %s.': 'در حال دانلود Xray %s.',

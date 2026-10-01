@@ -180,6 +180,27 @@ return view.extend({
 		/* After the tunnel's own ports, so a new row never lands on one. */
 		so.default = String(1090 + uci.sections('zirgozar', 'socks').length);
 
+		/* Back to how the package installed it, on the next save. Asked about
+		   when ticked, since there is no undo; the page reloads once it has
+		   happened, because everything it shows has just changed. */
+		o = s.taboption('main', form.Flag, 'factory_reset', _('Restore defaults'),
+			_('Tick and save to delete every config and subscription and put every setting back as it was when the program was installed. The routing data, the downloaded cores and the traffic history are kept. There is no undo.'));
+		o.default = '0';
+		o.rmempty = true;
+		o.onchange = function(ev, section_id, value) {
+			if (value == '1' && !window.confirm(_('Every config, every subscription and every setting will be deleted when you save. Continue?'))) {
+				var cb = ev && ev.target;
+				if (cb) cb.checked = false;
+				this.getUIElement(section_id).setValue('0');
+				return;
+			}
+			if (value == '1') {
+				document.addEventListener('uci-applied', function() {
+					window.setTimeout(function() { location.reload(); }, 4000);
+				}, { once: true });
+			}
+		};
+
 		o = s.taboption('main', form.ListValue, 'lang', _('Language'));
 		o.value('en', _('English'));
 		o.value('fa', _('Persian'));

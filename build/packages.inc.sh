@@ -7,7 +7,7 @@
 # packages.inc.sh - what goes into a package, shared by the .apk and .ipk
 # builders so the two formats can never drift apart.
 
-VERSION=2.0.8
+VERSION=2.0.9
 RELEASE=1
 PKGVER="$VERSION-r$RELEASE"
 LICENSE="AGPL-3.0-or-later"
@@ -62,6 +62,10 @@ stage_zgz() {
 	           "$i/usr/libexec/rpcd" "$i/etc/zirgozar" "$i/etc/zirgozar/geo"
 	install -m 0755 "$core"            "$i/usr/libexec/zirgozar/xray"
 	install -m 0644 "$f/zirgozar.config"   "$i/etc/config/zirgozar"
+	# An untouched copy, for Restore defaults in Basic Settings: the one in
+	# /etc/config is the reader's from the first save on.
+	install -d "$i/usr/share/zirgozar"
+	install -m 0644 "$f/zirgozar.config"   "$i/usr/share/zirgozar/zirgozar.config"
 	install -m 0755 "$f/zirgozar.init"     "$i/etc/init.d/zirgozar"
 	install -m 0644 "$f/zgz-common.sh" "$i/usr/libexec/zgz-common.sh"
 	install -m 0755 "$f/luci.zirgozar"     "$i/usr/libexec/rpcd/luci.zirgozar"

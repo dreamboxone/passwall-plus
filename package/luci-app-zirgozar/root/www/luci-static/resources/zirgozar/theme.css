@@ -461,3 +461,6 @@ body.pwp-fa #modal_overlay>.modal textarea,body.pwp-fa #modal_overlay>.modal inp
 .pwp-eye svg{width:17px;height:17px}
 /* The Xray version list on App Update */
 .pwp-vsel{height:34px;min-height:34px!important;padding:4px 10px!important;margin:0!important;border-radius:10px;border:1.5px solid var(--line);background:var(--panel);color:var(--text);font-size:13px;max-width:200px}
+
+/* Restore defaults: its warning in red, like every warning */
+#cbi-zirgozar-config-factory_reset .cbi-value-description{color:#dc2626!important;font-weight:600}

@@ -248,9 +248,38 @@ cmd_schedule() {
 	return 0
 }
 
+# Back to the settings the package was installed with - the Restore defaults
+# switch in Basic Settings. Every node and subscription goes, and with them
+# what was read, chosen and measured. The routing data, the downloaded cores
+# and the traffic history stay: they are downloads and a record, not
+# settings, and fetching twenty-five megabytes again helps nobody.
+DEFAULT_CONFIG=/usr/share/zirgozar/zirgozar.config
+
+cmd_reset() {
+	if [ ! -s "$DEFAULT_CONFIG" ]; then
+		warn "reset: the settings the package was installed with are not on this router"
+		uci -q delete zirgozar.config.factory_reset
+		uci -q commit zirgozar
+		return 1
+	fi
+	log "Back to the settings the program was installed with"
+	cp -f "$DEFAULT_CONFIG" /etc/config/zirgozar
+	rm -rf "$ZGZ_ETC/best.json" "$ZGZ_ETC/best.meta" "$ZGZ_ETC/bridge.json" \
+	       "$ZGZ_ETC/nodes.cache" "$ZGZ_ETC/subs"
+	if [ -n "$ZGZ_RUN" ] && [ -d "$ZGZ_RUN" ]; then
+		rm -rf "$ZGZ_RUN"/*.tsv "$ZGZ_RUN/tests" "$ZGZ_RUN/message" \
+		       "$ZGZ_RUN/attempts" "$ZGZ_RUN/rejected" "$ZGZ_RUN/progress"
+	fi
+	# What follows from the settings, brought into line with the new ones.
+	cmd_rebind || true
+	cmd_schedule sync || true
+	return 0
+}
+
 case "${1:-}" in
+	reset)    cmd_reset ;;
 	rebind)   cmd_rebind ;;
 	clock)    cmd_clock ;;
 	schedule) cmd_schedule "${2:-}" "${3:-}" ;;
-	*) echo "usage: $0 rebind|clock|schedule sync|stop|start|restart|geo|sub <section>" >&2; exit 1 ;;
+	*) echo "usage: $0 reset|rebind|clock|schedule sync|stop|start|restart|geo|sub <section>" >&2; exit 1 ;;
 esac

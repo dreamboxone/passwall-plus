@@ -5,7 +5,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=zirgozar
-PKG_VERSION:=2.0.8
+PKG_VERSION:=2.0.9
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=routekernel <https://t.me/routekernel1>
@@ -47,6 +47,8 @@ define Package/zirgozar/install
 
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_DATA) ./files/zirgozar.config $(1)/etc/config/zirgozar
+	$(INSTALL_DIR) $(1)/usr/share/zirgozar
+	$(INSTALL_DATA) ./files/zirgozar.config $(1)/usr/share/zirgozar/zirgozar.config
 
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/zirgozar.init $(1)/etc/init.d/zirgozar
