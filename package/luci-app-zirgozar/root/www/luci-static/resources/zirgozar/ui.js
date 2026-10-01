@@ -21,7 +21,7 @@ var _ = i18n.tr;
 
 /* Put on the stylesheet's and the logo's addresses, so a browser holding the
    previous release's copies fetches these. Kept in step with PKG_VERSION. */
-var BUILD = '2.0.9-1';
+var BUILD = '2.0.10-1';
 
 var callAction = rpc.declare({ object: 'luci.zirgozar', method: 'action',
                                params: [ 'name', 'arg' ], expect: { '': {} } });
@@ -81,6 +81,28 @@ function logoImg(file, height, cls) {
 		'alt': 'Zirgozar',
 		'style': 'height:' + height + 'px'
 	});
+}
+
+/* The browser keeps these files, and LuCI asks for them under its own
+   version, not this program's - so after an update a browser went on running
+   the old pages against the new router, asking for files the update had
+   removed. When the router says another version than the one these pages
+   were built for, each file is fetched again past the cache and the page
+   reloaded, once. */
+var OWN_FILES = [ 'zirgozar/ui', 'zirgozar/i18n', 'zirgozar/status', 'zirgozar/logoanim',
+	'view/zirgozar/settings', 'view/zirgozar/nodes', 'view/zirgozar/subscribe', 'view/zirgozar/other',
+	'view/zirgozar/update', 'view/zirgozar/traffic', 'view/zirgozar/geoview', 'view/zirgozar/acl',
+	'view/zirgozar/log' ];
+
+function freshen(installed) {
+	var have = String(BUILD).replace(/-\d+$/, ''), want = String(installed).replace(/-r\d+$/, '');
+	if (!want || have == want) return;
+	var key = 'zirgozar-freshened-' + want;
+	try { if (window.sessionStorage.getItem(key)) return; window.sessionStorage.setItem(key, '1'); } catch (e) { return; }
+	var v = L.env.resource_version ? '?v=' + L.env.resource_version : '';
+	Promise.all(OWN_FILES.map(function(f) {
+		return fetch(L.env.base_url + '/' + f + '.js' + v, { cache: 'reload' }).catch(function() {});
+	})).then(function() { location.reload(); });
 }
 
 function btn(text, tone, fn, ico) {
@@ -281,10 +303,11 @@ function hero(root, version) {
 	}, [ icon('globe'), E('span', {}, fa ? 'English' : 'فارسی') ]);
 
 	var ver = E('span', { 'class': 'mk-version', 'id': 'pwp-version' }, versionText(version));
-	if (!version)
-		callState().then(function(st) {
-			if (st && st.version) ver.textContent = versionText(st.version);
-		}).catch(function() {});
+	callState().then(function(st) {
+		if (!st || !st.version) return;
+		if (!version) ver.textContent = versionText(st.version);
+		freshen(st.version);
+	}).catch(function() {});
 
 	/* The still logo at once, the moving one as soon as it has arrived. */
 	var heroLogo = logoImg('logo-light.png', 60);
