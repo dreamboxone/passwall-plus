@@ -246,7 +246,7 @@ find_xray() {
 	# same router connected perfectly, which is what made it look like a
 	# problem with the split rather than with where the core was told to look.
 	_geo="$(geo_dir)" || _geo=""
-	for _x in $_pref $(xray_paths); do
+	for _x in $_pref $(xray_by_version); do
 		[ -n "$_x" ] || continue
 		[ -x "$_x" ] || continue
 		if [ -n "$_cfg" ]; then
@@ -348,10 +348,29 @@ core_version_cached() {
 	return 0
 }
 
+# The cores on this router, newest first. Our own copy used to be tried
+# first whatever its age, and a router that had a newer one from another
+# package went on using ours - which is how large uploads over xhttp, fixed
+# in Xray months earlier, kept failing here while the same server worked
+# from a laptop and from PassWall2 on the very same router. Versions are
+# compared as numbers, part by part; one that will not say comes last.
+xray_by_version() {
+	for _xv in $(xray_paths); do
+		[ -x "$_xv" ] || continue
+		printf '%s %s\n' "$(core_version_cached "$_xv" | sed 's/^v//')" "$_xv"
+	done | awk '{
+		n = split($1, p, ".")
+		k = ""
+		for (i = 1; i <= 4; i++) k = k sprintf("%06d", (i <= n && p[i] ~ /^[0-9]+$/) ? p[i] : 0)
+		print k, $2
+	}' | sort -r | awk '{ print $2 }'
+	return 0
+}
+
 # Which Xray a page should talk about, without starting any of them to find
-# out: the one the settings insist on, or the first one there is.
+# out: the one the settings insist on, or the newest there is.
 xray_installed() {
-	for _xi in $(cfg core_xray '') $(xray_paths); do
+	for _xi in $(cfg core_xray '') $(xray_by_version); do
 		[ -x "$_xi" ] && { echo "$_xi"; return 0; }
 	done
 	return 1

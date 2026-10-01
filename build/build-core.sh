@@ -19,7 +19,7 @@
 set -e
 
 TARGET="${1:-armv7}"
-XRAY_VERSION="${XRAY_VERSION:-v26.3.27}"
+XRAY_VERSION="${XRAY_VERSION:-v26.9.9}"
 BASE="https://github.com/XTLS/Xray-core/releases/download/$XRAY_VERSION"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
