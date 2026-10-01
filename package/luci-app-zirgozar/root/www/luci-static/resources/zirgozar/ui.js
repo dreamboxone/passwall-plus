@@ -21,7 +21,7 @@ var _ = i18n.tr;
 
 /* Put on the stylesheet's and the logo's addresses, so a browser holding the
    previous release's copies fetches these. Kept in step with PKG_VERSION. */
-var BUILD = '2.0.6-1';
+var BUILD = '2.0.7-1';
 
 var callAction = rpc.declare({ object: 'luci.zirgozar', method: 'action',
                                params: [ 'name', 'arg' ], expect: { '': {} } });
@@ -288,7 +288,7 @@ function hero(root, version) {
 
 	return E('div', { 'class': 'mk-hero' }, [
 		E('div', { 'class': 'mk-brand' }, [ E('div', {}, [
-			E('h2', { 'aria-label': 'Zirgozar' }, [ logoImg('logo-light.png', 60), ver ]),
+			E('h2', { 'aria-label': 'Zirgozar' }, [ logoImg('logo-anim.webp', 60), ver ]),
 			E('p', {}, _('Complete tunnel management on your router'))
 		]) ]),
 		E('div', { 'class': 'mk-row' }, [
