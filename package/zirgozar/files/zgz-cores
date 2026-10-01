@@ -68,12 +68,27 @@ need_room() {
 # ------------------------------------------------------------------- xray
 
 install_xray() {
+	# A version may be named - v26.9.30 - or left out for the newest there is,
+	# pre-releases included: see cmd_latest.
+	_xtag="${1:-}"
+	case "$_xtag" in
+		'') : ;;
+		v[0-9]*.[0-9]*) case "$_xtag" in *[!0-9v.]*) say_message "Not a version: $_xtag"; return 1 ;; esac ;;
+		*) say_message "Not a version: $_xtag"; return 1 ;;
+	esac
+	[ -n "$_xtag" ] || _xtag="v$(latest_of xray | sed 's/^v//')"
+	[ "$_xtag" != "v" ] || _xtag=""
 	_asset="$(asset_for xray)"
 	[ "$_asset" != "-" ] && [ -n "$_asset" ] || {
 		say_message "Xray publishes no build for this router's processor ($(openwrt_arch)$(uname -m))."
 		return 1
 	}
-	_url="https://github.com/$XRAY_REPO/releases/latest/download/Xray-linux-$_asset.zip"
+	if [ -n "$_xtag" ]; then
+		_url="https://github.com/$XRAY_REPO/releases/download/$_xtag/Xray-linux-$_asset.zip"
+	else
+		_url="https://github.com/$XRAY_REPO/releases/latest/download/Xray-linux-$_asset.zip"
+	fi
+	log "installing Xray ${_xtag:-latest}"
 	_zip="$ZGZ_RUN/xray.zip"
 
 	command -v unzip >/dev/null 2>&1 || {
@@ -318,6 +333,36 @@ tag_version() {
 	return 0
 }
 
+# A version as a sortable key: 26.9.30 -> 000026000009000030000000.
+ver_key() {
+	echo "${1#v}" | awk -F. '{ k = ""; for (i = 1; i <= 4; i++) k = k sprintf("%06d", ($i ~ /^[0-9]+$/) ? $i : 0); print k }'
+	return 0
+}
+
+# Is $1 newer than $2? Different strings are not enough: offering 26.3.27 as
+# an "update" over 26.9.9 is what comparing them as strings did, because
+# GitHub's "latest" leaves pre-releases out and Xray has published nothing
+# else for six months.
+ver_newer() {
+	# Compared as strings, with a letter in front so awk does not read
+	# twenty-four digits as a number and lose the end of it.
+	awk -v a="k$(ver_key "$1")" -v b="k$(ver_key "$2")" 'BEGIN { exit !(a > b) }'
+}
+
+# The last few Xray releases, newest first, pre-releases included and
+# marked: "<tag> <pre|stable>" a line. Read by the App Update page, which
+# offers them as a choice.
+XRAY_VERSIONS="$ZGZ_ETC/xray.versions"
+
+xray_releases() {
+	curl -fsSL --connect-timeout 8 --max-time 25 \
+		"https://api.github.com/repos/$XRAY_REPO/releases?per_page=12" 2>/dev/null |
+		tr ',' '\n' | awk '
+			/"tag_name"[ \t]*:/ { t = $0; sub(/.*"tag_name"[ \t]*:[ \t]*"/, "", t); sub(/".*/, "", t) }
+			/"prerelease"[ \t]*:/ { if (t != "") { print t, ($0 ~ /true/ ? "pre" : "stable"); t = "" } }'
+	return 0
+}
+
 cmd_latest() {
 	# Refresh only when it is old, unless asked to do it anyway. Three small
 	# requests twice a day is nothing; three on every page poll is a habit
@@ -329,7 +374,18 @@ cmd_latest() {
 
 	_tmp="$LATEST_CACHE.new"
 	: > "$_tmp"
-	for _c in xray sing-box hysteria geoview zirgozar; do
+	# Xray's newest is the newest of its recent releases, pre-releases
+	# included: its "latest" has been six months behind what everyone runs.
+	_xr="$(xray_releases)"
+	if [ -n "$_xr" ]; then
+		printf '%s\n' "$_xr" > "$XRAY_VERSIONS.new" && mv -f "$XRAY_VERSIONS.new" "$XRAY_VERSIONS"
+		_xn="$(printf '%s\n' "$_xr" | while read -r _t _k; do echo "$(ver_key "$_t") $_t"; done | sort -r | head -1 | cut -d' ' -f2)"
+		[ -n "$_xn" ] && printf 'xray\t%s\n' "$(tag_version "$_xn")" >> "$_tmp"
+	else
+		_old="$(latest_of xray)"
+		[ -n "$_old" ] && printf 'xray\t%s\n' "$_old" >> "$_tmp"
+	fi
+	for _c in sing-box hysteria geoview zirgozar; do
 		_repo="$(repo_of "$_c")"
 		[ -n "$_repo" ] || continue
 		# The tag is all that is wanted, so this is a small request and a
@@ -362,8 +418,7 @@ one() {
 		# three different projects is a way to be confidently wrong. The page
 		# shows both and the reader decides.
 		_new=false
-		if [ -n "$_latest" ] && [ -n "$_have" ] && \
-		   [ "${_latest#v}" != "${_have#v}" ]; then
+		if [ -n "$_latest" ] && [ -n "$_have" ] && ver_newer "$_latest" "$_have"; then
 			_new=true
 		fi
 		printf '{"name":"%s","installed":true,"path":"%s","version":"%s","latest":"%s","update":%s,"bytes":%s,"ours":%s,"arch_ok":%s}' \
@@ -395,13 +450,19 @@ cmd_list() {
 	one sing-box "$_s"; printf ','
 	one hysteria "$_h"; printf ','
 	one geoview "$_g"
+	printf ']'
 	# This program itself, for the App Update page: what is installed and
 	# what has been published. It is updated by installing the new package,
 	# not from here - a package manager is the only thing that can replace a
 	# package cleanly - so this only says whether there is one to install.
+	printf ',"xray_versions":['
+	if [ -s "$XRAY_VERSIONS" ]; then
+		awk 'NF == 2 { printf "%s{\"tag\":\"%s\",\"pre\":%s}", (n++ ? "," : ""), $1, ($2 == "pre" ? "true" : "false") }' "$XRAY_VERSIONS"
+	fi
+	printf ']'
 	_mine="$(zgz_version)"; _mine="${_mine%-r*}"
 	_pub="$(latest_of zirgozar)"
-	printf '],"app":{"version":"%s","latest":"%s","update":%s}}\n' \
+	printf ',"app":{"version":"%s","latest":"%s","update":%s}}\n' \
 		"$(json_escape "$_mine")" "$(json_escape "${_pub#v}")" \
 		"$([ -n "$_pub" ] && [ "${_pub#v}" != "$_mine" ] && echo true || echo false)"
 	return 0
@@ -551,7 +612,7 @@ case "${1:-list}" in
 	install)
 		clear_message
 		case "${2:-}" in
-			xray)     install_xray ;;
+			xray)     install_xray "${3:-}" ;;
 			sing-box) install_singbox ;;
 			hysteria) install_hysteria ;;
 			geoview)  install_geoview ;;

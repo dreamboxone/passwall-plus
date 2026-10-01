@@ -459,3 +459,5 @@ body.pwp-fa #modal_overlay>.modal textarea,body.pwp-fa #modal_overlay>.modal inp
 .pwp-eye{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer}
 .pwp-eye:hover{background:var(--soft);color:var(--text)}
 .pwp-eye svg{width:17px;height:17px}
+/* The Xray version list on App Update */
+.pwp-vsel{height:34px;min-height:34px!important;padding:4px 10px!important;margin:0!important;border-radius:10px;border:1.5px solid var(--line);background:var(--panel);color:var(--text);font-size:13px;max-width:200px}

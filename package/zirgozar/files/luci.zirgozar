@@ -536,6 +536,12 @@ method_action() {
 		core_install)
 			case "$arg" in
 				xray|sing-box|hysteria|geoview) run_job "Installing $arg" "$CORES install $arg" ;;
+				# One particular Xray, picked from the list on the page.
+				xray@v[0-9]*)
+					_v="${arg#xray@}"
+					case "$_v" in *[!0-9v.]*) fail "unknown core"; return ;; esac
+					run_job "Installing xray" "$CORES install xray $_v"
+					;;
 				*) fail "unknown core"; return ;;
 			esac
 			;;

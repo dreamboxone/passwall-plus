@@ -249,6 +249,19 @@ function render(d) {
 					return act('core:' + c.name, 'core_install', c.name, _('Downloading %s.').format(c.name));
 				}, 'download'));
 			}
+			/* Any recent Xray, pre-releases included - those are what most
+			   people run, and GitHub's "latest" leaves them out. */
+			if (c.name == 'xray' && c.arch_ok && (cores.xray_versions || []).length) {
+				var sel = E('select', { 'class': 'pwp-vsel' }, (cores.xray_versions || []).map(function(v) {
+					var t = v.tag.replace(/^v/, '');
+					return E('option', { 'value': v.tag }, v.pre ? _('%s (pre-release)').format(t) : t);
+				}));
+				actions.push(sel);
+				actions.push(pui.btn(_('Install this version'), 'soft-blue mk-small', function() {
+					return act('core:xray', 'core_install', 'xray@' + sel.value,
+						_('Downloading Xray %s.').format(sel.value.replace(/^v/, '')));
+				}, 'download'));
+			}
 			if (c.installed && c.ours && c.name != 'xray')
 				actions.push(pui.btn(_('Remove'), 'danger mk-small', function() {
 					return act('core:' + c.name, 'core_remove', c.name, _('%s removed.').format(c.name));
