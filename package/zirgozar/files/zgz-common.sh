@@ -286,7 +286,7 @@ core_engine() {
 
 active_engine() {
 	case "$(sed -n 's/^name=//p' "$ZGZ_RUN/core.info" 2>/dev/null | tail -1)" in
-		sing-box) echo singbox ;;
+		sing-box|sing-box-lx) echo singbox ;;
 		xray) echo xray ;;
 		*) core_engine ;;
 	esac
@@ -296,12 +296,16 @@ active_engine() {
 # The engine's name as written down for the status page, and as it reads in
 # the log.
 core_label() {
-	if [ "$1" = "singbox" ]; then echo sing-box; else echo xray; fi
+	if [ "$1" = "singbox" ]; then
+		if [ "$(cfg core_engine xray)" = "singbox-lx" ]; then echo sing-box-lx; else echo sing-box; fi
+	else
+		echo xray
+	fi
 	return 0
 }
 
 core_title() {
-	if [ "$1" = "singbox" ]; then echo sing-box; else echo Xray; fi
+	if [ "$1" = "singbox" ]; then core_label singbox; else echo Xray; fi
 	return 0
 }
 
