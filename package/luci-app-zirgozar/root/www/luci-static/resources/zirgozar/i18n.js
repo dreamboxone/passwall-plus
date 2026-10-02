@@ -328,7 +328,7 @@ var FA = {
 	'These addresses always go straight out, never through the tunnel. One address or one range per entry.':
 		'این آدرس‌ها همیشه مستقیم می‌روند و هیچ‌وقت از تونل رد نمی‌شوند. در هر ردیف یک آدرس یا یک رنج.',
 	'Addresses': 'آدرس‌ها',
-	'Direct domains': 'دامنه‌های مستقیم',
+	'Direct addresses and domains': 'آدرس‌ها و دامنه‌های مستقیم',
 	'These sites always go straight out, never through the tunnel. A name covers everything under it: example.com also covers www.example.com. Xray’s own forms — full:, regexp:, keyword: — are accepted as written.':
 		'این سایت‌ها همیشه مستقیم می‌روند و هیچ‌وقت از تونل رد نمی‌شوند. هر دامنه زیردامنه‌هایش را هم شامل می‌شود: ‎example.com‎ شامل ‎www.example.com‎ هم هست. شکل‌های خود Xray — ‎full:‎، ‎regexp:‎، ‎keyword:‎ — همان‌طور که نوشته شوند پذیرفته می‌شوند.',
 

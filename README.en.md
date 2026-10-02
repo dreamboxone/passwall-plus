@@ -431,7 +431,6 @@ switch is on.
 | **Hijacking ICMP (PING)** | `accept_icmp` | off | A tunnel carries no ICMP, so a ping to a tunnelled address never comes back. With this on, the router answers it |
 | **IPv6** | `ipv6` | Refuse it while connected | Almost no free config carries IPv6, and a client that prefers it leaves without the tunnel while looking fine. Refusing it makes the client fall back to IPv4, which is tunnelled |
 | **Interfaces to tunnel** | `lan_zone` | All | Read from this router. Unset, every LAN interface is tunnelled; choose one to pick up traffic from that interface only |
-| **Direct IP List** | `direct_ip` | — | Addresses that connect directly and never enter the core |
 
 **Xray Settings**
 
@@ -526,6 +525,7 @@ The shunt rules are in the **Shunt Rule** tab of Basic Settings.
 | **Block BitTorrent** | `block_torrent` | on | BitTorrent gets a VPN server blocked and your config cut off for good |
 | **Refuse QUIC** | `block_quic` | off | When the config cannot carry UDP, browsers are made to use TCP. Off by default: where UDP works, QUIC is faster |
 | **Sites with a rebind weakness** | `rebind_domain` | Iranian banks and services | Some sites answer with a private address — Iranian banks and government services among them. The router's rebind protection refuses those answers and the site does not open; every name here is excused, with everything under it |
+| **Direct IP List** | `direct_ip` | — | Addresses that connect directly and never enter the core |
 | **Direct domains** | `direct_domain` | — | Sites that always go straight out. A name covers everything under it; `full:`, `regexp:`, `keyword:` are accepted as written |
 
 ### 🔍 4.7 Geo View

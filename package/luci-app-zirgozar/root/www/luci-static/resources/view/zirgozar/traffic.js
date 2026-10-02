@@ -241,13 +241,16 @@ return view.extend({
 			return _('That does not look like a domain name');
 		};
 
-		/* Direct addresses are PassWall2's "Direct IP List", and live where it
-		   keeps it: Other Settings, under Forwarding. */
-
 		/* --------------------------------------------------- direct names */
-		s = m.section(form.NamedSection, 'config', 'zirgozar', _('Direct domains'),
+		s = m.section(form.NamedSection, 'config', 'zirgozar', _('Direct addresses and domains'),
 			_('These sites always go straight out, never through the tunnel. A name covers everything under it: example.com also covers www.example.com. Xray’s own forms — full:, regexp:, keyword: — are accepted as written.'));
 		s.anonymous = true;
+
+		o = s.option(form.DynamicList, 'direct_ip', _('Direct IP List'),
+			E('span', { 'style': 'color:#ef4444' },
+				_('These had been joined ip addresses will connect directly (not entering the core).')));
+		o.datatype = 'ipmask4';
+		o.placeholder = '1.2.3.4 or 5.6.0.0/16';
 
 		o = s.option(form.DynamicList, 'direct_domain', _('Domains'));
 		o.placeholder = 'example.com';

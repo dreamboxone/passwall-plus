@@ -172,12 +172,6 @@ return view.extend({
 		if (curlan && !seen[curlan])
 			o.value(curlan, curlan);
 
-		o = s.option(form.DynamicList, 'direct_ip', _('Direct IP List'),
-			E('span', { 'style': 'color:#ef4444' },
-				_('These had been joined ip addresses will connect directly (not entering the core).')));
-		o.datatype = 'ipmask4';
-		o.placeholder = '1.2.3.4 or 5.6.0.0/16';
-
 		/* -------------------------------------------------- Xray Settings */
 		s = m.section(form.NamedSection, 'config', 'zirgozar', _('Xray Settings'));
 		s.anonymous = true;
