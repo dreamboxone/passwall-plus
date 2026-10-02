@@ -36,6 +36,10 @@ DIR="$(cfg core_dir "$ZGZ_OWN_DIR")"
 
 XRAY_REPO=XTLS/Xray-core
 SINGBOX_REPO=SagerNet/sing-box
+# A fork of sing-box that speaks xhttp, which the official one does not. It is
+# a sing-box like any other as far as running goes, kept in a file of its own
+# so that the helper copy of the official one is never replaced by it.
+LX_REPO=Leadaxe/sing-box-lx
 HYSTERIA_REPO=apernet/hysteria
 GEOVIEW_REPO=snowie2000/geoview
 
@@ -44,6 +48,8 @@ asset_for() {
 	case "$1" in
 		xray)     echo "$_a" | awk '{print $1}' ;;
 		sing-box) echo "$_a" | awk '{print $2}' ;;
+		# Its builds: amd64, arm64, armv7, and the two soft-float mips ones.
+		sing-box-lx) echo "$_a" | awk '{ s = $2; print (s == "amd64" || s == "arm64" || s == "armv7") ? s : (s == "mipsle" ? "mipsle-softfloat" : (s == "mips" ? "mips-softfloat" : "-")) }' ;;
 		hysteria) echo "$_a" | awk '{print $3}' ;;
 		# Geoview names its builds the way sing-box does, but for "i386".
 		geoview)  echo "$_a" | awk '{ print ($2 == "386") ? "i386" : $2 }' ;;
@@ -117,13 +123,20 @@ install_xray() {
 
 # ---------------------------------------------------------------- sing-box
 
+# install_singbox [sing-box|sing-box-lx]
 install_singbox() {
-	_asset="$(asset_for sing-box)"
+	_kind="${1:-sing-box}"
+	if [ "$_kind" = "sing-box-lx" ]; then
+		_repo="$LX_REPO"; _target="$(singbox_lx_path)"
+	else
+		_repo="$SINGBOX_REPO"; _target="$(singbox_path)"
+	fi
+	_asset="$(asset_for "$_kind")"
 	[ "$_asset" != "-" ] && [ -n "$_asset" ] || {
 		say_message "sing-box publishes no build for this router's processor."
 		return 1
 	}
-	_tag="$(latest_tag "$SINGBOX_REPO")"
+	_tag="$(latest_tag "$_repo")"
 	[ -n "$_tag" ] || {
 		say_message "Could not reach GitHub to find out which sing-box is current. Connect the tunnel first, then try again."
 		return 1
@@ -132,11 +145,11 @@ install_singbox() {
 	# The archive name carries the version, so unlike the others this one
 	# cannot be fetched from the /latest/download/ path without asking first.
 	_name="sing-box-$_ver-linux-$_asset"
-	_url="https://github.com/$SINGBOX_REPO/releases/download/$_tag/$_name.tar.gz"
+	_url="https://github.com/$_repo/releases/download/$_tag/$_name.tar.gz"
 	_tgz="$ZGZ_RUN/sing-box.tar.gz"
 
 	_size="$(remote_size "$_url")"
-	need_room $((_size * 3)) "$(dirname "$(singbox_path)")" || return 1
+	need_room $((_size * 3)) "$(dirname "$_target")" || return 1
 	download_checked "$_url" "$_tgz" "$_size" || return 1
 
 	rm -rf "$ZGZ_RUN/xtract"
@@ -149,7 +162,7 @@ install_singbox() {
 	rm -f "$_tgz"
 	_bin="$(find "$ZGZ_RUN/xtract" -name sing-box -type f 2>/dev/null | head -1)"
 	[ -n "$_bin" ] || { rm -rf "$ZGZ_RUN/xtract"; say_message "No sing-box program inside the archive."; return 1; }
-	install_binary "$_bin" "$(singbox_path)" sing-box
+	install_binary "$_bin" "$_target" "$_kind"
 	return $?
 }
 
@@ -316,6 +329,7 @@ repo_of() {
 	case "$1" in
 		xray)     echo "$XRAY_REPO" ;;
 		sing-box) echo "$SINGBOX_REPO" ;;
+		sing-box-lx) echo "$LX_REPO" ;;
 		hysteria) echo "$HYSTERIA_REPO" ;;
 		geoview)  echo "$GEOVIEW_REPO" ;;
 		zirgozar) echo "dreamboxone/zirgozar" ;;
@@ -385,7 +399,7 @@ cmd_latest() {
 		_old="$(latest_of xray)"
 		[ -n "$_old" ] && printf 'xray\t%s\n' "$_old" >> "$_tmp"
 	fi
-	for _c in sing-box hysteria geoview zirgozar; do
+	for _c in sing-box sing-box-lx hysteria geoview zirgozar; do
 		_repo="$(repo_of "$_c")"
 		[ -n "$_repo" ] || continue
 		# The tag is all that is wanted, so this is a small request and a
@@ -426,7 +440,7 @@ one() {
 			"$(json_escape "$_have")" \
 			"$(json_escape "$_latest")" "$_new" \
 			"$(file_size "$_path")" \
-			"$(case "$_path" in "$DIR"/*|"$(singbox_path)"|"$(hysteria_path)"|"$(geoview_path)") echo true ;; *) echo false ;; esac)" \
+			"$(case "$_path" in "$DIR"/*|"$(singbox_path)"|"$(singbox_lx_path)"|"$(hysteria_path)"|"$(geoview_path)") echo true ;; *) echo false ;; esac)" \
 			"$([ "$(asset_for "$_name")" != "-" ] && echo true || echo false)"
 	else
 		printf '{"name":"%s","installed":false,"path":"","version":"","latest":"%s","update":false,"bytes":0,"ours":false,"arch_ok":%s}' \
@@ -441,6 +455,7 @@ cmd_list() {
 	# come from the cache in core_version_cached for the same reason.
 	_x="$(xray_installed 2>/dev/null)" || _x=""
 	_s="$(singbox_path)"; [ -x "$_s" ] || _s=""
+	_l="$(singbox_lx_path)"; [ -x "$_l" ] || _l=""
 	_h="$(hysteria_path)"; [ -x "$_h" ] || _h=""
 	_g="$(geoview_path)"; [ -x "$_g" ] || _g=""
 	printf '{"dir":"%s","free":%s,"arch":"%s","cores":[' \
@@ -448,6 +463,7 @@ cmd_list() {
 		"$(json_escape "$(openwrt_arch)")"
 	one xray "$_x"; printf ','
 	one sing-box "$_s"; printf ','
+	one sing-box-lx "$_l"; printf ','
 	one hysteria "$_h"; printf ','
 	one geoview "$_g"
 	printf ']'
@@ -584,12 +600,13 @@ install_self() {
 
 cmd_remove() {
 	case "$1" in
-		sing-box|hysteria|geoview)
+		sing-box|sing-box-lx|hysteria|geoview)
 			# Only ever our own copy - the one at its App Path. Something
 			# else on this router installed anything else, and it is not
 			# ours to delete.
 			case "$1" in
 				sing-box) _rm="$(singbox_path)" ;;
+				sing-box-lx) _rm="$(singbox_lx_path)" ;;
 				hysteria) _rm="$(hysteria_path)" ;;
 				*)        _rm="$(geoview_path)" ;;
 			esac
@@ -602,7 +619,7 @@ cmd_remove() {
 			say_message "Xray is the engine and cannot be removed - it can only be updated."
 			return 1
 			;;
-		*) echo "usage: $0 remove sing-box|hysteria|geoview" >&2; return 1 ;;
+		*) echo "usage: $0 remove sing-box|sing-box-lx|hysteria|geoview" >&2; return 1 ;;
 	esac
 	return 0
 }
@@ -613,13 +630,13 @@ case "${1:-list}" in
 		clear_message
 		case "${2:-}" in
 			xray)     install_xray "${3:-}" ;;
-			sing-box) install_singbox ;;
+			sing-box|sing-box-lx) install_singbox "$2" ;;
 			hysteria) install_hysteria ;;
 			geoview)  install_geoview ;;
 			# This file is among those the install replaces, so nothing
 			# after it may be read from here: it ends the script outright.
 			zirgozar) install_self; exit $? ;;
-			*) echo "usage: $0 install xray|sing-box|hysteria|geoview|zirgozar" >&2; exit 1 ;;
+			*) echo "usage: $0 install xray|sing-box|sing-box-lx|hysteria|geoview|zirgozar" >&2; exit 1 ;;
 		esac
 		;;
 	remove) clear_message; cmd_remove "${2:-}" ;;

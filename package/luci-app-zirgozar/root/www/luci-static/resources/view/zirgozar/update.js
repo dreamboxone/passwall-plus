@@ -267,7 +267,7 @@ function render(d) {
 					return act('core:' + c.name, 'core_remove', c.name, _('%s removed.').format(c.name));
 				}, 'trash'));
 
-			cbox.appendChild(row({ xray: 'Xray', geoview: 'Geoview' }[c.name] || c.name, value, actions, 'core:' + c.name));
+			cbox.appendChild(row({ xray: 'Xray', geoview: 'Geoview', 'sing-box-lx': 'sing-box-lx' }[c.name] || c.name, value, actions, 'core:' + c.name));
 		});
 		cbox.appendChild(row(_('Free space'),
 			[ E('span', {}, bytes(cores.free)), E('code', { 'style': 'font-size:11.5px;color:var(--muted)' }, cores.dir || '') ]));
@@ -302,13 +302,6 @@ return view.extend({
 			_('Point this at USB storage on a router short of flash. A core another package installed is used where it is and never moved.'));
 		o.placeholder = '/usr/libexec/zirgozar';
 
-		o = s.option(form.ListValue, 'core_engine', _('Core that carries the tunnel'),
-			_('Xray is the default. sing-box reads the same settings and carries the same rules and DNS, but not everything: mux, noise, FakeDNS and mKCP have no equivalent there, and statistics are counted a little differently. A node or setting it cannot use is named in the log, and if it cannot start at all Xray takes over. It needs a sing-box with xhttp, such as sing-box-lx, for xhttp nodes - point the Sing-Box App Path at it.'));
-		o.value('xray', 'Xray');
-		o.value('singbox', 'sing-box');
-		o.default = 'xray';
-		o.rmempty = false;
-
 		o = s.option(form.Value, 'core_xray', _('Xray App Path'),
 			_('Empty means: whichever Xray on this router accepts the configuration, preferring one already installed.'));
 		o.placeholder = '/usr/bin/xray';
@@ -319,6 +312,10 @@ return view.extend({
 		o = s.option(form.Value, 'core_singbox', _('Sing-Box App Path'),
 			_('Empty means this program’s own copy in the folder above.'));
 		o.placeholder = '/usr/libexec/zirgozar/sing-box';
+
+		o = s.option(form.Value, 'core_singbox_lx', _('Sing-Box-LX App Path'),
+			_('The sing-box build that speaks xhttp. Empty means this program’s own copy in the folder above.'));
+		o.placeholder = '/usr/libexec/zirgozar/sing-box-lx';
 
 		o = s.option(form.Value, 'core_hysteria', _('Hysteria App Path'),
 			_('Empty means this program’s own copy in the folder above.'));

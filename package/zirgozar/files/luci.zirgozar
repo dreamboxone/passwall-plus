@@ -239,7 +239,7 @@ method_log() {
 CORE_LOG_MARK="$ZGZ_RUN/core-log.mark"
 
 core_log_all() {
-	logread 2>/dev/null | grep -E ' (xray|sing-box|hysteria)\[[0-9]+\]:'
+	logread 2>/dev/null | grep -E ' (xray|sing-box|sing-box-lx|hysteria)\[[0-9]+\]:'
 	return 0
 }
 
@@ -535,7 +535,7 @@ method_action() {
 			;;
 		core_install)
 			case "$arg" in
-				xray|sing-box|hysteria|geoview) run_job "Installing $arg" "$CORES install $arg" ;;
+				xray|sing-box|sing-box-lx|hysteria|geoview) run_job "Installing $arg" "$CORES install $arg" ;;
 				# One particular Xray, picked from the list on the page.
 				xray@v[0-9]*)
 					_v="${arg#xray@}"
@@ -554,7 +554,7 @@ method_action() {
 			;;
 		core_remove)
 			case "$arg" in
-				sing-box|hysteria|geoview) "$CORES" remove "$arg" >/dev/null 2>&1 ;;
+				sing-box|sing-box-lx|hysteria|geoview) "$CORES" remove "$arg" >/dev/null 2>&1 ;;
 				*) fail "unknown core"; return ;;
 			esac
 			;;

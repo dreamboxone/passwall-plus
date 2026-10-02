@@ -188,6 +188,7 @@ The form below has four tabs, in PassWall2's order.
 | Option | In the file | Default | What it does |
 |---|---|---|---|
 | **Main switch** | `enabled` | off | The tunnel on or off. Save and apply for it to take effect; it holds across a reboot |
+| **Active core** | `core_engine` | Xray | `Xray`, `sing-box` or `sing-box-lx`. sing-box is given the same configuration, translated: same inbounds, rules, DNS and Iran split; hysteria2 and tuic nodes are dialled directly, with no helper program. Not carried over: mux, noise, FakeDNS, mKCP and the poisoned-address inbound; traffic statistics are counted by polling and run a little low. The official sing-box has no xhttp; [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) does, and is installed from the Cores list on this page with one press (its path is **Sing-Box-LX App Path**). If the chosen sing-box is missing or cannot run the tunnel, Xray takes over and the page says so |
 | **Node** | `node` | Auto (fastest) | Auto measures the configs and uses the fastest. A config added by hand is used as it is, and nothing is measured |
 | **Preproxy** | `preproxy_enabled` | off | Every config the tunnel may choose dials out through a config of yours first — PassWall2's pre-proxy. For configs that cannot be reached from here directly, or to hide which ones are being used. With it on, the first-pass handshake is skipped, because no config is reached directly |
 | **Preproxy Node** | `preproxy_node` | — | The config dialled first. Only configs added by hand on Node List |
@@ -482,7 +483,6 @@ be made.
 | Option | In the file | Default | What it does |
 |---|---|---|---|
 | **Folder for downloaded cores** | `core_dir` | `/usr/libexec/zirgozar` | Point it at USB storage on a router short of flash. A core another package installed is used where it is and never moved |
-| **Core that carries the tunnel** | `core_engine` | Xray | `Xray` or `sing-box`. sing-box is given the same configuration, translated: same inbounds, rules, DNS and Iran split. Not carried over: mux, noise, FakeDNS, mKCP and the poisoned-address inbound; traffic statistics are counted by polling and run a little low. It needs a sing-box with xhttp for xhttp nodes, such as [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — put its path in Sing-Box App Path. If sing-box is missing or cannot run the tunnel, Xray takes over and the page says so |
 | **Xray App Path** | `core_xray` | — | Empty means whichever Xray on this router accepts the configuration, preferring one already installed |
 | **Sing-Box App Path** | `core_singbox` | — | The file sing-box is installed, updated and run from. Empty is this program's own copy in the folder above |
 | **Hysteria App Path** | `core_hysteria` | — | The same for hysteria |

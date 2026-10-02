@@ -30,6 +30,8 @@
 //   api=PORT       the clash API port the statistics are read from
 //   mark=N         the mark every connection the core opens carries
 //   level=LEVEL    the log level, in Xray's words
+//   bridge=FILE    the hysteria2 or tuic server the chosen node is, if it is one
+//   bridgeport=N   the local port Xray would have been given for it
 
 import { stdin, stderr, popen, stat, mkdir, readfile } from 'fs';
 
@@ -235,8 +237,49 @@ function transport_of(ss, tag) {
 	return false;
 }
 
+// A hysteria2 or tuic node is, for Xray, a plain socks outbound pointing at a
+// helper program. sing-box needs no helper: the node itself is read from the
+// file that describes it and dialled directly.
+function native_bridge(o) {
+	if (o.tag != 'proxy' || o.protocol != 'socks' || !args.bridge)
+		return null;
+	let sv = (o.settings?.servers ?? [])[0];
+	if (!sv || sv.address != '127.0.0.1' || sv.port != int(args.bridgeport ?? 10808))
+		return null;
+	let raw = readfile(args.bridge);
+	let b = raw ? json(raw) : null;
+	if (type(b) != 'object')
+		return null;
+	let tls = { enabled: true, server_name: b.sni ? b.sni : b.server };
+	if (b.insecure)
+		tls.insecure = true;
+	let r = { tag: 'proxy', server: b.server, server_port: int(b.port), routing_mark: MARK };
+	if (b.type == 'hysteria2') {
+		r.type = 'hysteria2';
+		r.password = b.password;
+		if (b.obfs)
+			r.obfs = { type: b.obfs, password: b.obfs_password };
+	} else if (b.type == 'tuic') {
+		r.type = 'tuic';
+		r.uuid = b.uuid;
+		r.password = b.password;
+		r.congestion_control = b.congestion_control ? b.congestion_control : 'bbr';
+		tls.alpn = [ 'h3' ];
+	} else {
+		return null;
+	}
+	r.tls = tls;
+	return r;
+}
+
 function conv_outbound(o) {
 	let tag = o.tag;
+	let nb = native_bridge(o);
+	if (nb) {
+		push(outbounds, nb);
+		out_tags[tag] = true;
+		return;
+	}
 	let proto = o.protocol;
 	let ss = o.streamSettings ?? {};
 	let sock = ss.sockopt ?? {};

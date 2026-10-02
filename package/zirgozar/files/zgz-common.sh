@@ -278,7 +278,7 @@ find_xray() {
 # started, so everything that talks to the core asks that.
 core_engine() {
 	case "$(cfg core_engine xray)" in
-		singbox|sing-box) echo singbox ;;
+		singbox|sing-box|singbox-lx) echo singbox ;;
 		*) echo xray ;;
 	esac
 	return 0
@@ -310,7 +310,11 @@ core_title() {
 sbconfig() {
 	_sb_level="$(cfg loglevel warning)"
 	[ "$(cfg_bool log_node 1)" = "1" ] || _sb_level=none
-	ucode "$ZGZ_LIB/zgz-sbconfig" 		geoview="$(geoview_path)" geodir="$(geo_dir 2>/dev/null)" 		rsdir="$ZGZ_RUN/rs" api="$(cfg api_port 10853)" 		mark="$ZGZ_OUT_MARK" level="$_sb_level"
+	ucode "$ZGZ_LIB/zgz-sbconfig" \
+		geoview="$(geoview_path)" geodir="$(geo_dir 2>/dev/null)" \
+		rsdir="$ZGZ_RUN/rs" api="$(cfg api_port 10853)" \
+		bridge="$ZGZ_ETC/bridge.json" bridgeport="$(cfg bridge_port 10808)" \
+		mark="$ZGZ_OUT_MARK" level="$_sb_level"
 }
 
 # The configuration for the engine asked for, on stdout.
@@ -347,9 +351,19 @@ core_accepts() {
 }
 
 # The sing-box to run: the file the settings name, or this program's own copy.
-# Never another package's - see core_dir below.
-find_singbox() {
-	_fs_sb="$(singbox_path)"
+# Never another package's - see core_dir below. Which of the two sing-box
+# files it is depends on the setting: the official one, or sing-box-lx.
+engine_singbox_path() {
+	if [ "$(cfg core_engine xray)" = "singbox-lx" ]; then
+		singbox_lx_path
+	else
+		singbox_path
+	fi
+	return 0
+}
+
+find_engine_singbox() {
+	_fs_sb="$(engine_singbox_path)"
 	[ -x "$_fs_sb" ] || return 1
 	if [ -n "$1" ]; then
 		core_accepts "$_fs_sb" "$1" singbox || return 1
@@ -379,6 +393,15 @@ core_dir() {
 singbox_path() {
 	_sp="$(cfg core_singbox '')"
 	echo "${_sp:-$(core_dir)/sing-box}"
+	return 0
+}
+
+# The sing-box build that speaks xhttp - sing-box-lx - installed from App
+# Update into a file of its own. It is what carries the tunnel when the
+# engine is set to it; the helper above stays the official one.
+singbox_lx_path() {
+	_lp="$(cfg core_singbox_lx '')"
+	echo "${_lp:-$(core_dir)/sing-box-lx}"
 	return 0
 }
 
@@ -481,7 +504,9 @@ core_version() {
 		*hysteria*) "$1" version 2>/dev/null | sed -n 's/^Version:[[:space:]]*//p' | head -1 ;;
 		*sing-box*) "$1" version 2>/dev/null | sed -n 's/^sing-box version //p' | head -1 ;;
 		*geoview*)  "$1" -version 2>/dev/null | awk 'NR == 1 && $1 == "Geoview" { print $2 }' ;;
-		*)          "$1" version 2>/dev/null | head -1 | awk '{print $2}' ;;
+		# Xray prints "Xray 26.9.9 (...)", a sing-box under any file name prints
+		# "sing-box version 1.14.2".
+		*)          "$1" version 2>/dev/null | head -1 | awk '$1 == "sing-box" { print $3; next } { print $2 }' ;;
 	esac
 	return 0
 }

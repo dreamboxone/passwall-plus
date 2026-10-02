@@ -96,13 +96,13 @@ start_service() {
 	ENGINE="$(core_engine)"
 	if [ "$ENGINE" = "singbox" ]; then
 		if core_config singbox > "$ZGZ_CONFIG_JSON" 2>"$ZGZ_RUN/sbconfig.err" &&
-		   PROG="$(find_singbox "$ZGZ_CONFIG_JSON")"; then
+		   PROG="$(find_engine_singbox "$ZGZ_CONFIG_JSON")"; then
 			_sbw="$(grep '^warn:' "$ZGZ_RUN/sbconfig.err" 2>/dev/null | sed 's/^warn: //')"
 			[ -z "$_sbw" ] || printf '%s
 ' "$_sbw" | while IFS= read -r _l; do log_step "sing-box: $_l"; done
 		else
 			_why="$(grep -v '^warn:' "$ZGZ_RUN/sbconfig.err" 2>/dev/null | sed 's/^error: //' | head -1)"
-			[ -x "$(singbox_path)" ] || _why="sing-box is not installed"
+			[ -x "$(engine_singbox_path)" ] || _why="sing-box is not installed"
 			[ -n "$_why" ] || _why="sing-box refused the configuration"
 			log "sing-box could not run this tunnel ($_why) - running Xray instead"
 			say_message "sing-box could not run this tunnel ($_why), so Xray is carrying it. Install sing-box on the App Update page, or choose Xray in the App Path section."
@@ -153,7 +153,7 @@ start_service() {
 	# status page - which asks every few seconds, and starting a core just to
 	# ask it its version is not something to do every few seconds.
 	_ver="$(core_version "$PROG")" || _ver=""
-	printf 'name=xray\npath=%s\nversion=%s\n' "$PROG" "$_ver" > "$ZGZ_RUN/core.info" 2>/dev/null || true
+	printf 'name=%s\npath=%s\nversion=%s\n' "$(core_label "$ENGINE")" "$PROG" "$_ver" > "$ZGZ_RUN/core.info" 2>/dev/null || true
 	log_step "Core: $(core_title "$ENGINE") ${_ver:-?} ($PROG)"
 	_gp="$(global_preproxy)" && log_step "Pre-proxy: $(uci -q get "zirgozar.$_gp.name" 2>/dev/null || echo "$_gp")"
 	[ "$(cfg_bool fragment 0)" = "1" ] && log_step "Fragment: $(cfg fragment_packets tlshello), length $(cfg fragment_lengths '3-5,6-8,10-20'), delay $(cfg fragment_delays '10-20')"
@@ -164,7 +164,9 @@ start_service() {
 	# offering it as a local SOCKS port. It has to be running before the
 	# tunnel is any use, so it is an instance of this same service and procd
 	# keeps it alive on the same terms.
-	if "$BRIDGE" needed 2>/dev/null; then
+	# Only for Xray: sing-box speaks hysteria2 and tuic itself, and
+	# zgz-sbconfig dials them directly, with no second program in between.
+	if [ "$ENGINE" = "xray" ] && "$BRIDGE" needed 2>/dev/null; then
 		if BRIDGE_CMD="$("$BRIDGE" command 2>/dev/null)"; then
 			log_step "Bridge: $(sed -n 's/.*"type"[ \t]*:[ \t]*"\([^"]*\)".*/\1/p' "$ZGZ_ETC/bridge.json" 2>/dev/null | head -1) through $BRIDGE_CMD"
 			_bbin="${BRIDGE_CMD%% *}"
@@ -263,7 +265,7 @@ service_started() {
 	tproxy_port="$(cfg tproxy_port 1082)"
 	bridge_port="$(cfg bridge_port 10808)"
 
-	if "$BRIDGE" needed 2>/dev/null; then
+	if [ "$(active_engine)" = "xray" ] && "$BRIDGE" needed 2>/dev/null; then
 		if ! wait_for_port "$bridge_port" 15; then
 			log "the bridge never started listening on $bridge_port"
 			say_status failed
@@ -359,7 +361,7 @@ reload_service() {
 	# The engine is not something a swap of the configuration can change: the
 	# running core reads the other format, so it goes the whole way round.
 	if [ "$(cfg_bool enabled 0)" != "1" ] || [ ! -f "$STARTED_FLAG" ] ||
-	   ! tunnel_running || "$BRIDGE" needed 2>/dev/null ||
+	   ! tunnel_running || { [ "$(active_engine)" = "xray" ] && "$BRIDGE" needed 2>/dev/null; } ||
 	   [ "$(core_engine)" != "$(active_engine)" ]; then
 		restart
 		return

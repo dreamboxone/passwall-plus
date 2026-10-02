@@ -328,9 +328,11 @@ var FA = {
 	'These addresses always go straight out, never through the tunnel. One address or one range per entry.':
 		'این آدرس‌ها همیشه مستقیم می‌روند و هیچ‌وقت از تونل رد نمی‌شوند. در هر ردیف یک آدرس یا یک رنج.',
 	'Addresses': 'آدرس‌ها',
-	'Core that carries the tunnel': 'هسته‌ای که تونل را می‌برد',
-	'Xray is the default. sing-box reads the same settings and carries the same rules and DNS, but not everything: mux, noise, FakeDNS and mKCP have no equivalent there, and statistics are counted a little differently. A node or setting it cannot use is named in the log, and if it cannot start at all Xray takes over. It needs a sing-box with xhttp, such as sing-box-lx, for xhttp nodes - point the Sing-Box App Path at it.':
-		'Xray پیش‌فرض است. sing-box همان تنظیمات را می‌خواند و همان قوانین و DNS را اجرا می‌کند، ولی نه همه چیز را: mux، noise، FakeDNS و mKCP در آن معادل ندارند و آمار مصرف کمی متفاوت شمرده می‌شود. نود یا تنظیمی که نتواند به کار ببرد در گزارش اجرا نوشته می‌شود و اگر اصلاً راه نیفتد، Xray کار را به دست می‌گیرد. برای نودهای xhttp به sing-box ای با پشتیبانی xhttp نیاز دارد، مثل sing-box-lx؛ مسیر برنامه Sing-Box را روی آن بگذارید.',
+	'Sing-Box-LX App Path': 'مسیر برنامه Sing-Box-LX',
+	'The sing-box build that speaks xhttp. Empty means this program’s own copy in the folder above.': 'نسخه‌ای از sing-box که xhttp را می‌فهمد. خالی یعنی نسخه خود این برنامه در پوشه بالا.',
+	'Active core': 'هسته فعال',
+	'Xray is the default. sing-box reads the same settings and carries the same rules and DNS, but not everything: mux, noise, FakeDNS and mKCP have no equivalent there, and statistics are counted a little differently. A node or setting it cannot use is named in the log, and if it cannot start at all Xray takes over. sing-box-lx, the build that speaks xhttp, is installed from App Update.':
+		'Xray پیش‌فرض است. sing-box همان تنظیمات را می‌خواند و همان قوانین و DNS را اجرا می‌کند، ولی نه همه چیز را: mux، noise، FakeDNS و mKCP در آن معادل ندارند و آمار مصرف کمی متفاوت شمرده می‌شود. نود یا تنظیمی که نتواند به کار ببرد در گزارش اجرا نوشته می‌شود و اگر اصلاً راه نیفتد، Xray کار را به دست می‌گیرد. sing-box-lx، نسخه‌ای که xhttp را می‌فهمد، از صفحه «به‌روزرسانی» نصب می‌شود.',
 	'Direct addresses and domains': 'آدرس‌ها و دامنه‌های مستقیم',
 	'These sites always go straight out, never through the tunnel. A name covers everything under it: example.com also covers www.example.com. Xray’s own forms — full:, regexp:, keyword: — are accepted as written.':
 		'این سایت‌ها همیشه مستقیم می‌روند و هیچ‌وقت از تونل رد نمی‌شوند. هر دامنه زیردامنه‌هایش را هم شامل می‌شود: ‎example.com‎ شامل ‎www.example.com‎ هم هست. شکل‌های خود Xray — ‎full:‎، ‎regexp:‎، ‎keyword:‎ — همان‌طور که نوشته شوند پذیرفته می‌شوند.',
@@ -569,7 +571,7 @@ var FA = {
 	'Socks Listen Port': 'پورت SOCKS',
 	'What the core itself says, shown on the Runtime Logs page beside this program’s own log.':
 		'پیام‌های هسته Xray ثبت شوند و در صفحه «لاگ‌های اجرا»، بخش «لاگ کانفیگ» نمایش داده شوند.',
-	'Asking the router…': 'در حال پرسیدن از روتر…',
+	'Asking the router…': 'در انتظار پاسخ روتر…',
 
 	/* ----------------------------------------------------------- units */
 	'TB': 'ترابایت',

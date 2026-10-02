@@ -114,6 +114,14 @@ return view.extend({
 			_('The tunnel on or off. Save and apply for it to take effect; it holds across a reboot.'));
 		o.rmempty = false;
 
+		o = s.taboption('main', form.ListValue, 'core_engine', _('Active core'),
+			_('Xray is the default. sing-box reads the same settings and carries the same rules and DNS, but not everything: mux, noise, FakeDNS and mKCP have no equivalent there, and statistics are counted a little differently. A node or setting it cannot use is named in the log, and if it cannot start at all Xray takes over. sing-box-lx, the build that speaks xhttp, is installed from App Update.'));
+		o.value('xray', 'Xray');
+		o.value('singbox', 'sing-box');
+		o.value('singbox-lx', 'sing-box-lx');
+		o.default = 'xray';
+		o.rmempty = false;
+
 		o = s.taboption('main', form.ListValue, 'node', _('Choose node'),
 			_('Auto measures the nodes and uses the fastest. A node added by hand is used as it is, and nothing is measured.'));
 		o.value('', _('Auto (fastest)'));
