@@ -482,6 +482,7 @@ be made.
 | Option | In the file | Default | What it does |
 |---|---|---|---|
 | **Folder for downloaded cores** | `core_dir` | `/usr/libexec/zirgozar` | Point it at USB storage on a router short of flash. A core another package installed is used where it is and never moved |
+| **Core that carries the tunnel** | `core_engine` | Xray | `Xray` or `sing-box`. sing-box is given the same configuration, translated: same inbounds, rules, DNS and Iran split. Not carried over: mux, noise, FakeDNS, mKCP and the poisoned-address inbound; traffic statistics are counted by polling and run a little low. It needs a sing-box with xhttp for xhttp nodes, such as [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) — put its path in Sing-Box App Path. If sing-box is missing or cannot run the tunnel, Xray takes over and the page says so |
 | **Xray App Path** | `core_xray` | — | Empty means whichever Xray on this router accepts the configuration, preferring one already installed |
 | **Sing-Box App Path** | `core_singbox` | — | The file sing-box is installed, updated and run from. Empty is this program's own copy in the folder above |
 | **Hysteria App Path** | `core_hysteria` | — | The same for hysteria |

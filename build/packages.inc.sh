@@ -7,7 +7,7 @@
 # packages.inc.sh - what goes into a package, shared by the .apk and .ipk
 # builders so the two formats can never drift apart.
 
-VERSION=2.0.11
+VERSION=2.0.12
 RELEASE=1
 PKGVER="$VERSION-r$RELEASE"
 LICENSE="AGPL-3.0-or-later"
@@ -30,7 +30,7 @@ MAINTAINER="routekernel <https://t.me/routekernel1>"
 # PassWall2 pulled it in - needs nothing, and this finds it. Depending on it
 # would drag a second copy onto routers that do not need one, and refusing to
 # install alongside it would be worse still.
-ZGZ_DEPS="jshn libubox curl ca-bundle nftables kmod-nft-tproxy kmod-nft-socket ip-full unzip"
+ZGZ_DEPS="jshn libubox curl ca-bundle nftables kmod-nft-tproxy kmod-nft-socket ip-full unzip ucode ucode-mod-fs"
 LUCI_DEPS="zirgozar luci-base"
 
 ZGZ_DESC="Transparent proxy client for OpenWrt built on Xray, for Iran. Reads its server list every quarter of an hour, sifts a hundred servers with one handshake each and then measures only the ones that answered, ten at a time, until it finds one fast enough. Optional Iran routing split, per-day traffic accounting, and both nftables and iptables."
@@ -46,7 +46,7 @@ LUCI_DESC="Web interface for Zirgozar: connect, servers and subscriptions, traff
 CRON_LIST='*/15 * * * * /usr/libexec/zgz-refresh >/dev/null 2>&1'
 CRON_STATS='*/5 * * * * /usr/libexec/zgz-stats sample >/dev/null 2>&1'
 
-ZGZ_SCRIPTS="zgz-nodes zgz-probe zgz-connect zgz-refresh zgz-parse zgz-mkconfig zgz-rules zgz-dns zgz-stats zgz-test zgz-geo zgz-cores zgz-deps zgz-bridge zgz-router"
+ZGZ_SCRIPTS="zgz-nodes zgz-probe zgz-connect zgz-refresh zgz-parse zgz-mkconfig zgz-rules zgz-dns zgz-stats zgz-test zgz-geo zgz-cores zgz-deps zgz-bridge zgz-router zgz-sbconfig zgz-sbstats"
 
 # stage_zgz <staging-root> <source-root> <xray-binary>
 stage_zgz() {

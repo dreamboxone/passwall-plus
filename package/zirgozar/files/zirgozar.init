@@ -90,16 +90,40 @@ start_service() {
 	fi
 	log_step "Node: $(sed -n 's/^label=//p' "$ZGZ_BEST_META" 2>/dev/null | tail -1) [$(sed -n 's/^protocol=//p' "$ZGZ_BEST_META" 2>/dev/null | tail -1) $(sed -n 's/^host=//p' "$ZGZ_BEST_META" 2>/dev/null | tail -1):$(sed -n 's/^port=//p' "$ZGZ_BEST_META" 2>/dev/null | tail -1)]"
 
-	if ! "$MKCONFIG" > "$ZGZ_CONFIG_JSON"; then
-		log "could not write $ZGZ_CONFIG_JSON"
-		return 1
+	# Which engine: what the settings say, unless that cannot run this - no
+	# sing-box on the router, or a node it cannot speak - in which case Xray,
+	# because a tunnel on the other engine beats no tunnel.
+	ENGINE="$(core_engine)"
+	if [ "$ENGINE" = "singbox" ]; then
+		if core_config singbox > "$ZGZ_CONFIG_JSON" 2>"$ZGZ_RUN/sbconfig.err" &&
+		   PROG="$(find_singbox "$ZGZ_CONFIG_JSON")"; then
+			_sbw="$(grep '^warn:' "$ZGZ_RUN/sbconfig.err" 2>/dev/null | sed 's/^warn: //')"
+			[ -z "$_sbw" ] || printf '%s
+' "$_sbw" | while IFS= read -r _l; do log_step "sing-box: $_l"; done
+		else
+			_why="$(grep -v '^warn:' "$ZGZ_RUN/sbconfig.err" 2>/dev/null | sed 's/^error: //' | head -1)"
+			[ -x "$(singbox_path)" ] || _why="sing-box is not installed"
+			[ -n "$_why" ] || _why="sing-box refused the configuration"
+			log "sing-box could not run this tunnel ($_why) - running Xray instead"
+			say_message "sing-box could not run this tunnel ($_why), so Xray is carrying it. Install sing-box on the App Update page, or choose Xray in the App Path section."
+			ENGINE=xray
+			PROG=""
+		fi
+	fi
+	if [ "$ENGINE" = "xray" ]; then
+		if ! core_config xray > "$ZGZ_CONFIG_JSON"; then
+			log "could not write $ZGZ_CONFIG_JSON"
+			return 1
+		fi
 	fi
 	chmod 600 "$ZGZ_CONFIG_JSON"
 
 	# Prefer a core the router already has; fall back to our own copy. The
 	# candidate has to accept this exact configuration to be chosen, which is
 	# a question no version number can answer.
-	PROG="$(find_xray "$ZGZ_CONFIG_JSON")" || PROG=""
+	if [ "$ENGINE" = "xray" ]; then
+		PROG="$(find_xray "$ZGZ_CONFIG_JSON")" || PROG=""
+	fi
 
 	# Refused by every core on the router. When the configuration named a geo
 	# category, that is the likeliest reason and it is worth one more try
@@ -108,7 +132,7 @@ start_service() {
 	# categories, and asking for one it has not got makes the core refuse the
 	# whole file. Connected without the split beats not connected, as long as
 	# the page says which of the two happened.
-	if [ -z "$PROG" ] && grep -q 'geoip:ir\|geosite:ir\|geosite:category-ads-all' "$ZGZ_CONFIG_JSON" 2>/dev/null; then
+	if [ "$ENGINE" = "xray" ] && [ -z "$PROG" ] && grep -q 'geoip:ir\|geosite:ir\|geosite:category-ads-all' "$ZGZ_CONFIG_JSON" 2>/dev/null; then
 		if "$MKCONFIG" nogeo > "$ZGZ_CONFIG_JSON.nogeo" 2>/dev/null &&
 		   PROG="$(find_xray "$ZGZ_CONFIG_JSON.nogeo")"; then
 			mv -f "$ZGZ_CONFIG_JSON.nogeo" "$ZGZ_CONFIG_JSON"
@@ -122,7 +146,7 @@ start_service() {
 	fi
 
 	if [ -z "$PROG" ]; then
-		log "no xray on this router can run the generated configuration"
+		log "no $ENGINE on this router can run the generated configuration"
 		return 1
 	fi
 	# Which core, and which version of it, written down once here for the
@@ -130,7 +154,7 @@ start_service() {
 	# ask it its version is not something to do every few seconds.
 	_ver="$(core_version "$PROG")" || _ver=""
 	printf 'name=xray\npath=%s\nversion=%s\n' "$PROG" "$_ver" > "$ZGZ_RUN/core.info" 2>/dev/null || true
-	log_step "Core: Xray ${_ver:-?} ($PROG)"
+	log_step "Core: $(core_title "$ENGINE") ${_ver:-?} ($PROG)"
 	_gp="$(global_preproxy)" && log_step "Pre-proxy: $(uci -q get "zirgozar.$_gp.name" 2>/dev/null || echo "$_gp")"
 	[ "$(cfg_bool fragment 0)" = "1" ] && log_step "Fragment: $(cfg fragment_packets tlshello), length $(cfg fragment_lengths '3-5,6-8,10-20'), delay $(cfg fragment_delays '10-20')"
 	[ "$(cfg_bool noise 0)" = "1" ] && log_step "Noise: on"
@@ -159,7 +183,8 @@ start_service() {
 	fi
 
 	procd_open_instance zirgozar
-	procd_set_param command "$PROG" run -config "$ZGZ_CONFIG_JSON"
+	# shellcheck disable=SC2046
+	procd_set_param command "$PROG" $(core_run_args "$ENGINE" "$ZGZ_CONFIG_JSON")
 	# Where geoip.dat and geosite.dat are. Empty is fine and normal: the
 	# configuration only names geo categories when the files are there.
 	_geo="$(geo_dir)" || _geo=""
@@ -183,6 +208,15 @@ start_service() {
 	procd_set_param stderr 1
 	procd_set_param pidfile /var/run/zirgozar.pid
 	procd_close_instance
+
+	# sing-box has no counters to ask for, so something beside it keeps them.
+	rm -f "$ZGZ_RUN/sb.counters"
+	if [ "$ENGINE" = "singbox" ]; then
+		procd_open_instance sbstats
+		procd_set_param command ucode "$ZGZ_LIB/zgz-sbstats" port="$(cfg api_port 10853)" out="$ZGZ_RUN/sb.counters"
+		procd_set_param respawn 3600 5 0
+		procd_close_instance
+	fi
 
 	touch "$STARTED_FLAG"
 	return 0
@@ -242,7 +276,7 @@ service_started() {
 	# lookups to another. Install them before it is listening and the whole
 	# network has nowhere to go - no web, no DNS, and no obvious reason why.
 	if ! wait_for_port "$tproxy_port" 20; then
-		log "xray never started listening on $tproxy_port - leaving the network untouched"
+		log "$(core_title "$(active_engine)") never started listening on $tproxy_port - leaving the network untouched"
 		log "listening now: $(netstat -ln 2>/dev/null | awk '/LISTEN|udp/ { print $4 }' | tr '\n' ' ')"
 		say_status failed
 		say_message "The tunnel process started but never accepted connections. Check the system log for what it said."
@@ -268,7 +302,7 @@ service_started() {
 	# since the tunnel came up rather than counting the core's start-up twice.
 	"$STATS" sample >/dev/null 2>&1 || true
 
-	log_step "Xray[$tproxy_port] transparent proxy, DNS[$(cfg dns_port 1053)], firewall: $("$RULES" status 2>/dev/null | sed -n 's/^backend:[ 	]*//p' | head -1)"
+	log_step "$(core_title "$(active_engine)")[$tproxy_port] transparent proxy, DNS[$(cfg dns_port 1053)], firewall: $("$RULES" status 2>/dev/null | sed -n 's/^backend:[ 	]*//p' | head -1)"
 	say_status ready
 	log "Running complete!"
 	return 0
@@ -283,7 +317,7 @@ stop_service() {
 
 	"$DNS" down >/dev/null 2>&1 || true
 	"$RULES" down >/dev/null 2>&1 || true
-	rm -f "$ZGZ_CONFIG_JSON" "$STARTED_FLAG" "$ZGZ_RUN/core.info"
+	rm -f "$ZGZ_CONFIG_JSON" "$STARTED_FLAG" "$ZGZ_RUN/core.info" "$ZGZ_RUN/sb.counters"
 	log "Clearing and closing related programs complete."
 	return 0
 }
@@ -322,8 +356,11 @@ reload_service() {
 		return
 	fi
 
+	# The engine is not something a swap of the configuration can change: the
+	# running core reads the other format, so it goes the whole way round.
 	if [ "$(cfg_bool enabled 0)" != "1" ] || [ ! -f "$STARTED_FLAG" ] ||
-	   ! tunnel_running || "$BRIDGE" needed 2>/dev/null; then
+	   ! tunnel_running || "$BRIDGE" needed 2>/dev/null ||
+	   [ "$(core_engine)" != "$(active_engine)" ]; then
 		restart
 		return
 	fi
@@ -339,7 +376,8 @@ reload_service() {
 	# Ending in .json: the core decides how to read a file by its name, and
 	# refuses one it cannot tell the format of.
 	_next="${ZGZ_CONFIG_JSON%.json}.next.json"
-	if ! "$MKCONFIG" > "$_next" 2>/dev/null; then
+	_eng="$(active_engine)"
+	if ! core_config "$_eng" > "$_next" 2>/dev/null; then
 		rm -f "$_next"
 		restart
 		return
@@ -356,7 +394,9 @@ reload_service() {
 		# leaves the tunnel exactly as it was, still working.
 		_prog="$(sed -n 's/^path=//p' "$ZGZ_RUN/core.info" 2>/dev/null | head -1)"
 		_geo="$(geo_dir)" || _geo=""
-		if [ -n "$_prog" ] && ! XRAY_LOCATION_ASSET="$_geo" bounded 60 "$_prog" run -test -config "$_next" >"$ZGZ_RUN/core-test.out" 2>&1; then
+		if [ "$_eng" = "singbox" ]; then _tcmd="check -c"; else _tcmd="run -test -config"; fi
+		# shellcheck disable=SC2086
+		if [ -n "$_prog" ] && ! XRAY_LOCATION_ASSET="$_geo" bounded 60 "$_prog" $_tcmd "$_next" >"$ZGZ_RUN/core-test.out" 2>&1; then
 			rm -f "$_next"
 			log "the new settings were refused by the core - the tunnel is left as it was: $(grep -v '^[[:space:]]*$' "$ZGZ_RUN/core-test.out" 2>/dev/null | tail -1)"
 			say_message "The core refused the new settings, so the tunnel was left running as it was. Check the Runtime Logs page."

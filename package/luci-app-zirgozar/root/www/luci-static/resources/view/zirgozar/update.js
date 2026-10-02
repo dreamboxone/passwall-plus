@@ -302,6 +302,13 @@ return view.extend({
 			_('Point this at USB storage on a router short of flash. A core another package installed is used where it is and never moved.'));
 		o.placeholder = '/usr/libexec/zirgozar';
 
+		o = s.option(form.ListValue, 'core_engine', _('Core that carries the tunnel'),
+			_('Xray is the default. sing-box reads the same settings and carries the same rules and DNS, but not everything: mux, noise, FakeDNS and mKCP have no equivalent there, and statistics are counted a little differently. A node or setting it cannot use is named in the log, and if it cannot start at all Xray takes over. It needs a sing-box with xhttp, such as sing-box-lx, for xhttp nodes - point the Sing-Box App Path at it.'));
+		o.value('xray', 'Xray');
+		o.value('singbox', 'sing-box');
+		o.default = 'xray';
+		o.rmempty = false;
+
 		o = s.option(form.Value, 'core_xray', _('Xray App Path'),
 			_('Empty means: whichever Xray on this router accepts the configuration, preferring one already installed.'));
 		o.placeholder = '/usr/bin/xray';

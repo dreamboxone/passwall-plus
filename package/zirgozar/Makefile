@@ -5,7 +5,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=zirgozar
-PKG_VERSION:=2.0.11
+PKG_VERSION:=2.0.12
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=routekernel <https://t.me/routekernel1>
@@ -16,14 +16,14 @@ include $(INCLUDE_DIR)/package.mk
 # Kept in step with build/packages.inc.sh, which is what the release builds
 # use. A helper that reaches one of them and not the other is a helper that
 # is missing on exactly half of the installations.
-ZGZ_SCRIPTS:=zgz-nodes zgz-probe zgz-connect zgz-refresh zgz-parse zgz-mkconfig zgz-rules zgz-dns zgz-stats zgz-test zgz-geo zgz-cores zgz-deps zgz-bridge zgz-router
+ZGZ_SCRIPTS:=zgz-nodes zgz-probe zgz-connect zgz-refresh zgz-parse zgz-mkconfig zgz-rules zgz-dns zgz-stats zgz-test zgz-geo zgz-cores zgz-deps zgz-bridge zgz-router zgz-sbconfig zgz-sbstats
 
 define Package/zirgozar
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Transparent proxy client built on Xray
   URL:=https://github.com/dreamboxone/zirgozar
-  DEPENDS:=+jshn +libubox +curl +ca-bundle +nftables +kmod-nft-tproxy +kmod-nft-socket +ip-full +unzip
+  DEPENDS:=+jshn +libubox +curl +ca-bundle +nftables +kmod-nft-tproxy +kmod-nft-socket +ip-full +unzip +ucode +ucode-mod-fs
 endef
 
 define Package/zirgozar/description

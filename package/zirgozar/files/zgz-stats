@@ -70,6 +70,14 @@ api_port="$(cfg api_port 10853)"
 
 # name<TAB>bytes for every outbound counter the core is keeping.
 read_counters() {
+	# A tunnel run by sing-box has no counters of its own to ask: a small
+	# process beside it adds up what each connection carried and keeps the
+	# totals in a file, in the names Xray's come in.
+	if [ "$(active_engine)" = "singbox" ]; then
+		[ -s "$ZGZ_RUN/sb.counters" ] || return 1
+		cat "$ZGZ_RUN/sb.counters"
+		return 0
+	fi
 	_x="$(find_xray '')" || return 1
 	"$_x" api statsquery --server="127.0.0.1:$api_port" 2>/dev/null | awk '
 		BEGIN { RS = "{" }

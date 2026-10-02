@@ -1,0 +1,81 @@
+#!/usr/bin/ucode -S
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+// Part of Zirgozar - https://github.com/dreamboxone/zirgozar
+//
+// zgz-sbstats - the traffic counters, for a tunnel run by sing-box.
+//
+// Xray keeps a running total for every outbound and answers for it whenever
+// asked. sing-box does not: its API lists the connections that are open right
+// now, each with how much it has carried so far, and a connection that has
+// closed is gone. So something has to be watching all the time, adding up what
+// each connection carried since it was last looked at. That is this: a small
+// process that lives and dies with the core, looks every couple of seconds
+// and keeps the totals in a file the statistics script reads in the same
+// shape Xray's come in.
+//
+//   zgz-sbstats port=10853 out=/var/run/zirgozar/sb.counters [every=2]
+//
+// A connection that opens and closes between two looks is missed - short ones
+// that carry little - so the totals are close, not exact, and a little below
+// the truth rather than above it.
+
+import { popen, open, rename, stderr } from 'fs';
+
+let args = {};
+for (let a in ARGV) {
+	let m = match(a, /^([a-z]+)=(.*)$/);
+	if (m)
+		args[m[1]] = m[2];
+}
+
+let port = int(args.port ?? 10853);
+let out = args.out;
+let every = int(args.every ?? 2);
+if (!out) {
+	warn('zgz-sbstats: no out= given\n');
+	exit(1);
+}
+
+let seen = {};
+let total = { proxy: { up: 0, down: 0 }, direct: { up: 0, down: 0 } };
+
+function save() {
+	let tmp = `${out}.new`;
+	let f = open(tmp, 'w');
+	if (!f)
+		return;
+	for (let o in [ 'proxy', 'direct' ]) {
+		f.write(`outbound>>>${o}>>>traffic>>>uplink\t${total[o].up}\n`);
+		f.write(`outbound>>>${o}>>>traffic>>>downlink\t${total[o].down}\n`);
+	}
+	f.close();
+	rename(tmp, out);
+}
+
+save();
+for (;;) {
+	let p = popen(`curl -s -m 5 http://127.0.0.1:${port}/connections`, 'r');
+	let body = p ? p.read('all') : null;
+	if (p)
+		p.close();
+	let doc = body ? json(body) : null;
+	if (doc && type(doc.connections) == 'array') {
+		let now = {};
+		for (let c in doc.connections) {
+			let before = seen[c.id] ?? { up: 0, down: 0 };
+			let up = c.upload ?? 0, down = c.download ?? 0;
+			let way = 'proxy';
+			for (let hop in c.chains ?? [])
+				if (hop == 'direct')
+					way = 'direct';
+			total[way].up += up >= before.up ? up - before.up : up;
+			total[way].down += down >= before.down ? down - before.down : down;
+			now[c.id] = { up, down };
+		}
+		seen = now;
+		save();
+	}
+	system([ 'sleep', `${every}` ]);
+}

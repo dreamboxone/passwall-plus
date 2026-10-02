@@ -264,6 +264,102 @@ find_xray() {
 	return 1
 }
 
+# ------------------------------------------------------ the engine choice
+#
+# Xray is the engine unless the settings say sing-box. zgz-mkconfig is the one
+# place that decides what the tunnel does and it speaks Xray; for sing-box the
+# same configuration is run through zgz-sbconfig, which says it again in
+# sing-box's words - the same inbounds, outbounds, rules and DNS, not a second
+# set of decisions to keep in step with the first.
+#
+# What is configured is not always what is running: a router with no sing-box
+# on it, or a node sing-box cannot speak, falls back to Xray rather than to no
+# tunnel at all. What is running is what the service wrote down when it
+# started, so everything that talks to the core asks that.
+core_engine() {
+	case "$(cfg core_engine xray)" in
+		singbox|sing-box) echo singbox ;;
+		*) echo xray ;;
+	esac
+	return 0
+}
+
+active_engine() {
+	case "$(sed -n 's/^name=//p' "$ZGZ_RUN/core.info" 2>/dev/null | tail -1)" in
+		sing-box) echo singbox ;;
+		xray) echo xray ;;
+		*) core_engine ;;
+	esac
+	return 0
+}
+
+# The engine's name as written down for the status page, and as it reads in
+# the log.
+core_label() {
+	if [ "$1" = "singbox" ]; then echo sing-box; else echo xray; fi
+	return 0
+}
+
+core_title() {
+	if [ "$1" = "singbox" ]; then echo sing-box; else echo Xray; fi
+	return 0
+}
+
+# Xray's configuration on stdin, sing-box's on stdout. What could not be
+# carried over is said on stderr, one line each, and ends up in the log.
+sbconfig() {
+	_sb_level="$(cfg loglevel warning)"
+	[ "$(cfg_bool log_node 1)" = "1" ] || _sb_level=none
+	ucode "$ZGZ_LIB/zgz-sbconfig" 		geoview="$(geoview_path)" geodir="$(geo_dir 2>/dev/null)" 		rsdir="$ZGZ_RUN/rs" api="$(cfg api_port 10853)" 		mark="$ZGZ_OUT_MARK" level="$_sb_level"
+}
+
+# The configuration for the engine asked for, on stdout.
+#
+#   core_config [xray|singbox] [nogeo]
+core_config() {
+	_cc_engine="$1"; shift
+	if [ "$_cc_engine" = "singbox" ]; then
+		"$ZGZ_LIB/zgz-mkconfig" "$@" | sbconfig
+	else
+		"$ZGZ_LIB/zgz-mkconfig" "$@"
+	fi
+}
+
+# The command line that runs a configuration, and the one that only checks it.
+core_run_args() {
+	if [ "$1" = "singbox" ]; then echo "run -c $2"; else echo "run -config $2"; fi
+}
+
+# Does this core accept this configuration? The question every candidate is
+# asked, exactly as the service would run it.
+core_accepts() {
+	_ca_prog="$1"; _ca_cfg="$2"; _ca_engine="$3"
+	if [ "$_ca_engine" = "singbox" ]; then
+		"$_ca_prog" check -c "$_ca_cfg" >/dev/null 2>&1
+		return $?
+	fi
+	_ca_geo="$(geo_dir)" || _ca_geo=""
+	if [ -n "$_ca_geo" ]; then
+		XRAY_LOCATION_ASSET="$_ca_geo" "$_ca_prog" run -test -config "$_ca_cfg" >/dev/null 2>&1
+	else
+		"$_ca_prog" run -test -config "$_ca_cfg" >/dev/null 2>&1
+	fi
+}
+
+# The sing-box to run: the file the settings name, or this program's own copy.
+# Never another package's - see core_dir below.
+find_singbox() {
+	_fs_sb="$(singbox_path)"
+	[ -x "$_fs_sb" ] || return 1
+	if [ -n "$1" ]; then
+		core_accepts "$_fs_sb" "$1" singbox || return 1
+	else
+		"$_fs_sb" version >/dev/null 2>&1 || return 1
+	fi
+	echo "$_fs_sb"
+	return 0
+}
+
 # The helper cores are this program's own, kept in its own folder, and never
 # another package's. A sing-box that PassWall2 installed is PassWall2's: it is
 # upgraded, downgraded or removed on PassWall2's schedule, and a bridge built
@@ -773,7 +869,7 @@ zgz_unlock() {
 # holds for whichever core was chosen and cannot be confused with someone
 # else's.
 tunnel_running() {
-	pgrep -f "run -config $ZGZ_CONFIG_JSON" >/dev/null 2>&1
+	pgrep -f "run -c(onfig)? $ZGZ_CONFIG_JSON" >/dev/null 2>&1
 }
 
 # Another transparent proxy on the same router will fight this one for the

@@ -1,0 +1,678 @@
+#!/usr/bin/ucode -S
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+// Part of Zirgozar - https://github.com/dreamboxone/zirgozar
+//
+// zgz-sbconfig - the configuration zgz-mkconfig wrote, in sing-box's words.
+//
+//   zgz-mkconfig | ucode zgz-sbconfig key=value ...  > sing-box.json
+//
+// There is one place that decides what the tunnel does - zgz-mkconfig - and
+// it speaks Xray. Rather than keep a second generator in step with it, a
+// second core is given the same decisions translated: the same inbounds, the
+// same outbounds, the same rules in the same order, the same DNS.
+//
+// What does not carry over is said on stderr, one "warn: ..." line each, and
+// never silently: Xray's mux.cool and noise have no sing-box equivalent, mKCP
+// is not a sing-box transport at all, and FakeDNS is built differently there.
+// An outbound that cannot be translated is dropped, and a rule that sent
+// traffic to it sends it through the tunnel's own node instead - the same
+// thing the generator does for a node it cannot use. Only the tunnel's own
+// node is fatal: exit 2.
+//
+// Arguments, all key=value:
+//   geoview=PATH   the geoview binary, to turn geoip.dat / geosite.dat
+//                  categories into rule-sets - sing-box no longer reads the
+//                  .dat files itself
+//   geodir=DIR     where those two files are
+//   rsdir=DIR      where the rule-sets are written
+//   api=PORT       the clash API port the statistics are read from
+//   mark=N         the mark every connection the core opens carries
+//   level=LEVEL    the log level, in Xray's words
+
+import { stdin, stderr, popen, stat, mkdir, readfile } from 'fs';
+
+let args = {};
+for (let a in ARGV) {
+	let m = match(a, /^([a-z]+)=(.*)$/);
+	if (m)
+		args[m[1]] = m[2];
+}
+
+function warn(msg) {
+	stderr.write(`warn: ${msg}\n`);
+}
+
+function camel2snake(s) {
+	return lc(replace(s, /([A-Z])/g, '_$1'));
+}
+
+// Xray's `extra` for xhttp is camelCase all the way down; sing-box-lx spells
+// the same keys in snake_case.
+function snake(v) {
+	if (type(v) == 'array')
+		return map(v, snake);
+	if (type(v) != 'object')
+		return v;
+	let o = {};
+	for (let k, x in v)
+		o[camel2snake(k)] = snake(x);
+	return o;
+}
+
+function arr(v) {
+	if (v == null)
+		return [];
+	return type(v) == 'array' ? v : [ v ];
+}
+
+// ------------------------------------------------------------------ input
+
+let X = json(stdin.read('all'));
+if (type(X) != 'object') {
+	stderr.write('error: the Xray configuration could not be read\n');
+	exit(2);
+}
+
+let MARK = int(args.mark ?? 255);
+let GEOVIEW = args.geoview;
+let GEODIR = args.geodir;
+let RSDIR = args.rsdir ?? '/var/run/zirgozar/rs';
+
+// ----------------------------------------------------------------- geo data
+
+// sing-box does not read geoip.dat or geosite.dat. Each category the rules
+// name is turned into a rule-set once - geoview does the reading - and kept
+// until the .dat it came from is replaced.
+let rule_sets = {};      // tag -> path
+let geo_failed = {};
+
+function geo_tag(kind, name) {
+	let key = `${kind}-${name}`;
+	if (key in rule_sets)
+		return key;
+	if (key in geo_failed)
+		return null;
+	if (!GEOVIEW || !GEODIR) {
+		geo_failed[key] = true;
+		return null;
+	}
+	let src = `${GEODIR}/${kind}.dat`;
+	let out = `${RSDIR}/${key}.srs`;
+	let ss = stat(src), os = stat(out);
+	if (!ss) {
+		geo_failed[key] = true;
+		return null;
+	}
+	if (!os || os.size < 8 || os.mtime < ss.mtime) {
+		mkdir(RSDIR);
+		let cmd = `'${GEOVIEW}' -action convert -type ${kind} -input '${src}' -list '${name}' -format ruleset -output '${out}' >/dev/null 2>&1`;
+		let p = popen(`${cmd}; echo $?`, 'r');
+		let rc = trim(p.read('all'));
+		p.close();
+		os = stat(out);
+		if (rc != '0' || !os || os.size < 8) {
+			warn(`${kind}:${name} is not in ${kind}.dat - the entry is left out`);
+			geo_failed[key] = true;
+			return null;
+		}
+	}
+	rule_sets[key] = out;
+	return key;
+}
+
+// -------------------------------------------------------------- outbounds
+
+let failed = {};         // tag -> why
+let out_tags = {};       // tags that made it
+let outbounds = [];
+let endpoints = [];
+
+function fail_out(tag, why) {
+	failed[tag] = why;
+	warn(`outbound ${tag}: ${why}`);
+}
+
+function tls_of(ss) {
+	let sec = ss.security;
+	if (sec != 'tls' && sec != 'reality')
+		return null;
+	let st = (sec == 'reality' ? ss.realitySettings : ss.tlsSettings) ?? {};
+	let t = { enabled: true };
+	if (st.serverName)
+		t.server_name = st.serverName;
+	if (st.alpn)
+		t.alpn = st.alpn;
+	let fp = st.fingerprint;
+	if (fp == 'randomizednoalpn')
+		fp = 'randomized';
+	if (fp == 'unsafe' || fp == 'hellogolang')
+		fp = null;
+	if (sec == 'reality') {
+		t.utls = { enabled: true, fingerprint: fp ?? 'chrome' };
+		t.reality = { enabled: true, public_key: st.publicKey ?? '' };
+		if (st.shortId)
+			t.reality.short_id = st.shortId;
+	} else if (fp) {
+		t.utls = { enabled: true, fingerprint: fp };
+	}
+	for (let m in arr(ss.finalmask?.tcp)) {
+		if (m.type == 'fragment') {
+			t.fragment = true;
+			break;
+		}
+	}
+	return t;
+}
+
+function transport_of(ss, tag) {
+	let net = ss.network ?? 'tcp';
+	switch (net) {
+	case 'tcp':
+	case 'raw':
+		if (ss.tcpSettings?.header?.type == 'http') {
+			fail_out(tag, 'a TCP http-header obfuscation has no sing-box transport');
+			return false;
+		}
+		return null;
+	case 'ws': {
+		let w = ss.wsSettings ?? {};
+		let t = { type: 'ws', path: w.path ?? '/' };
+		let m = match(t.path, /^([^?]*)\?(.*)$/);
+		if (m) {
+			let ed = match(m[2], /(^|&)ed=([0-9]+)/);
+			if (ed) {
+				t.path = m[1];
+				t.max_early_data = int(ed[2]);
+				t.early_data_header_name = 'Sec-WebSocket-Protocol';
+			}
+		}
+		if (w.headers)
+			t.headers = w.headers;
+		else if (w.host)
+			t.headers = { Host: w.host };
+		return t;
+	}
+	case 'grpc':
+		return { type: 'grpc', service_name: ss.grpcSettings?.serviceName ?? '' };
+	case 'http':
+	case 'h2': {
+		let h = ss.httpSettings ?? {};
+		let t = { type: 'http', path: h.path ?? '/' };
+		if (h.host)
+			t.host = arr(h.host);
+		return t;
+	}
+	case 'httpupgrade': {
+		let h = ss.httpupgradeSettings ?? {};
+		let t = { type: 'httpupgrade', path: h.path ?? '/' };
+		if (h.host)
+			t.host = h.host;
+		return t;
+	}
+	case 'xhttp':
+	case 'splithttp': {
+		let h = ss.xhttpSettings ?? {};
+		let t = { type: 'xhttp', path: h.path ?? '/' };
+		if (h.host)
+			t.host = h.host;
+		if (h.mode)
+			t.mode = h.mode;
+		if (h.headers)
+			t.headers = h.headers;
+		let ex = snake(h.extra ?? {});
+		if (ex.download_settings) {
+			warn(`outbound ${tag}: a separate download connection (downloadSettings) is not supported by sing-box - it uses one connection`);
+			delete ex.download_settings;
+		}
+		for (let k, v in ex)
+			t[k] = v;
+		return t;
+	}
+	}
+	fail_out(tag, `the ${net} transport does not exist in sing-box`);
+	return false;
+}
+
+function conv_outbound(o) {
+	let tag = o.tag;
+	let proto = o.protocol;
+	let ss = o.streamSettings ?? {};
+	let sock = ss.sockopt ?? {};
+	let s = o.settings ?? {};
+	let r = null;
+
+	if (proto == 'freedom') {
+		r = { type: 'direct', tag };
+	} else if (proto == 'dns' || proto == 'blackhole') {
+		return;
+	} else if (proto == 'wireguard') {
+		let p = (s.peers ?? [])[0] ?? {};
+		let ep = match(p.endpoint ?? '', /^(.*):([0-9]+)$/);
+		if (!ep)
+			return fail_out(tag, 'the WireGuard peer has no endpoint');
+		let e = {
+			type: 'wireguard', tag,
+			address: arr(s.address),
+			private_key: s.secretKey,
+			peers: [{
+				address: replace(ep[1], /^\[|\]$/g, ''),
+				port: int(ep[2]),
+				public_key: p.publicKey,
+				allowed_ips: [ '0.0.0.0/0', '::/0' ]
+			}]
+		};
+		if (p.preSharedKey)
+			e.peers[0].pre_shared_key = p.preSharedKey;
+		if (s.reserved)
+			e.peers[0].reserved = s.reserved;
+		if (s.mtu)
+			e.mtu = s.mtu;
+		if (sock.dialerProxy)
+			e.detour = sock.dialerProxy;
+		else
+			e.routing_mark = sock.mark ?? MARK;
+		push(endpoints, e);
+		out_tags[tag] = true;
+		return;
+	} else {
+		let v = (s.vnext ?? s.servers ?? [])[0];
+		if (!v)
+			return fail_out(tag, 'no server in the outbound');
+		r = { type: null, tag, server: v.address, server_port: v.port };
+		let u = (v.users ?? [])[0] ?? {};
+		switch (proto) {
+		case 'vless':
+			r.type = 'vless';
+			r.uuid = u.id;
+			if (u.flow)
+				r.flow = u.flow;
+			if (u.encryption && u.encryption != 'none')
+				r.encryption = u.encryption;
+			r.packet_encoding = 'xudp';
+			break;
+		case 'vmess':
+			r.type = 'vmess';
+			r.uuid = u.id;
+			r.security = u.security ?? 'auto';
+			r.alter_id = u.alterId ?? 0;
+			r.packet_encoding = 'xudp';
+			break;
+		case 'trojan':
+			r.type = 'trojan';
+			r.password = v.password;
+			break;
+		case 'shadowsocks':
+			r.type = 'shadowsocks';
+			r.method = v.method;
+			r.password = v.password;
+			break;
+		case 'socks':
+			r.type = 'socks';
+			r.version = '5';
+			if (u.user) {
+				r.username = u.user;
+				r.password = u.pass;
+			}
+			break;
+		case 'http':
+			r.type = 'http';
+			if (u.user) {
+				r.username = u.user;
+				r.password = u.pass;
+			}
+			break;
+		default:
+			return fail_out(tag, `the ${proto} protocol is not translated`);
+		}
+		if (type(r.server_port) == 'string')
+			r.server_port = int(r.server_port);
+
+		let tr = transport_of(ss, tag);
+		if (tr === false)
+			return;
+		let tls = tls_of(ss);
+		if (tls)
+			r.tls = tls;
+		if (tr)
+			r.transport = tr;
+		if (o.mux?.enabled)
+			warn(`outbound ${tag}: mux.cool has no sing-box equivalent and is left off`);
+	}
+
+	if (sock.dialerProxy)
+		r.detour = sock.dialerProxy;
+	r.routing_mark = sock.mark ?? MARK;
+	push(outbounds, r);
+	out_tags[tag] = true;
+}
+
+for (let o in X.outbounds)
+	conv_outbound(o);
+
+if (!out_tags.proxy) {
+	stderr.write(`error: the tunnel's own node cannot be used with sing-box: ${failed.proxy ?? 'not translated'}\n`);
+	exit(2);
+}
+
+// The tag a rule's outbound becomes. Anything dropped goes through the tunnel.
+function target(tag) {
+	if (tag == 'direct' || tag == 'block')
+		return tag;
+	return out_tags[tag] ? tag : 'proxy';
+}
+
+// ----------------------------------------------------------------- inbounds
+
+let inbounds = [];
+let sniff_in = [];
+
+for (let i in X.inbounds) {
+	let tag = i.tag;
+	if (tag == 'api-in')
+		continue;
+	let ss = i.streamSettings ?? {};
+	let b = null;
+	if (i.protocol == 'dokodemo-door' && tag == 'dns-in') {
+		b = { type: 'direct', tag, listen: i.listen, listen_port: i.port,
+		      override_address: i.settings?.address, override_port: i.settings?.port };
+	} else if (i.protocol == 'dokodemo-door') {
+		let way = ss.sockopt?.tproxy;
+		if (way == 'redirect') {
+			b = { type: 'redirect', tag, listen: i.listen, listen_port: i.port };
+		} else {
+			b = { type: 'tproxy', tag, listen: i.listen, listen_port: i.port };
+			let nw = i.settings?.network;
+			if (nw == 'tcp' || nw == 'udp')
+				b.network = nw;
+		}
+		if (i.sniffing?.enabled)
+			push(sniff_in, tag);
+	} else if (i.protocol == 'socks') {
+		b = { type: 'socks', tag, listen: i.listen, listen_port: i.port };
+	} else {
+		warn(`inbound ${tag}: ${i.protocol} is not translated`);
+		continue;
+	}
+	push(inbounds, b);
+}
+
+// -------------------------------------------------------------- name lists
+
+// One Xray list of names, as sing-box's separate matchers. `lit` and `sets`
+// have to stay apart: a rule-set in a rule is an extra condition, not another
+// way to match, so a rule with both would need a name to be in both.
+function split_names(list) {
+	let g = { domain: [], domain_suffix: [], domain_keyword: [], domain_regex: [], sets: [] };
+	for (let d in arr(list)) {
+		let m;
+		if ((m = match(d, /^geosite:(.+)$/))) {
+			let name = replace(m[1], /@.*$/, '');
+			let t = geo_tag('geosite', name);
+			if (t && !(t in g.sets))
+				push(g.sets, t);
+		} else if (match(d, /^ext:/)) {
+			warn(`${d}: external geo files are not supported by sing-box - left out`);
+		} else if ((m = match(d, /^domain:(.+)$/))) {
+			push(g.domain_suffix, m[1]);
+		} else if ((m = match(d, /^full:(.+)$/))) {
+			push(g.domain, m[1]);
+		} else if ((m = match(d, /^regexp:(.+)$/))) {
+			push(g.domain_regex, m[1]);
+		} else if ((m = match(d, /^keyword:(.+)$/))) {
+			push(g.domain_keyword, m[1]);
+		} else if ((m = match(d, /^plain:(.+)$/))) {
+			push(g.domain_keyword, m[1]);
+		} else {
+			// Xray's bare name is a substring match.
+			push(g.domain_keyword, d);
+		}
+	}
+	return g;
+}
+
+// The groups of a name list as conditions, one per group that has anything.
+function name_groups(g) {
+	let r = [];
+	let lit = {};
+	for (let k in [ 'domain', 'domain_suffix', 'domain_keyword', 'domain_regex' ])
+		if (length(g[k]))
+			lit[k] = g[k];
+	if (length(lit))
+		push(r, lit);
+	if (length(g.sets))
+		push(r, { rule_set: g.sets });
+	return r;
+}
+
+function ip_groups(list) {
+	let r = [];
+	let cidr = [], sets = [], priv = false;
+	for (let a in arr(list)) {
+		let m;
+		if ((m = match(a, /^geoip:(.+)$/))) {
+			if (m[1] == 'private') {
+				priv = true;
+			} else {
+				let t = geo_tag('geoip', m[1]);
+				if (t && !(t in sets))
+					push(sets, t);
+			}
+		} else if (match(a, /^ext:/)) {
+			warn(`${a}: external geo files are not supported by sing-box - left out`);
+		} else {
+			push(cidr, a);
+		}
+	}
+	if (length(cidr))
+		push(r, { ip_cidr: cidr });
+	if (length(sets))
+		push(r, { rule_set: sets });
+	if (priv)
+		push(r, { ip_is_private: true });
+	return r;
+}
+
+// ------------------------------------------------------------------- rules
+
+let rules = [];
+let final_out = 'proxy';
+
+if (length(sniff_in))
+	push(rules, { inbound: sniff_in, action: 'sniff', sniffer: [ 'http', 'tls', 'quic' ] });
+for (let i in inbounds)
+	if (i.tag == 'dns-in')
+		push(rules, { inbound: [ 'dns-in' ], action: 'hijack-dns' });
+
+// Which tag each of the core's own DNS servers dials through - Xray decided
+// that with a rule on the resolver's own inbound tag.
+let dns_via = {};
+
+function with_action(c, outbound) {
+	if (outbound == 'block') {
+		c.action = 'reject';
+		c.method = 'drop';
+	} else {
+		c.action = 'route';
+		c.outbound = outbound;
+	}
+	return c;
+}
+
+let xr = X.routing?.rules ?? [];
+for (let ri, r in xr) {
+	let tags = arr(r.inboundTag);
+	if (length(tags) == 1 && (tags[0] == 'api-in' || tags[0] == 'dns-in'))
+		continue;
+	if (length(tags) && length(filter(tags, (t) => match(t, /^dns-/)))) {
+		for (let t in tags)
+			dns_via[t] = target(r.outboundTag);
+		continue;
+	}
+
+	let base = {};
+	if (length(tags))
+		base.inbound = tags;
+	let nw = r.network;
+	if (nw == 'tcp' || nw == 'udp')
+		base.network = nw;
+	if (r.protocol)
+		base.protocol = arr(r.protocol);
+	if (r.source)
+		base.source_ip_cidr = arr(r.source);
+	if (r.port) {
+		let ports = [], ranges = [];
+		for (let p in split(`${r.port}`, ',')) {
+			if (match(p, /[-:]/))
+				push(ranges, replace(p, '-', ':'));
+			else if (p != '')
+				push(ports, int(p));
+		}
+		if (length(ports))
+			base.port = ports;
+		if (length(ranges))
+			base.port_range = ranges;
+	}
+
+	let to = target(r.outboundTag);
+	let groups = [];
+	if (r.domain)
+		groups = name_groups(split_names(r.domain));
+	if (r.ip)
+		groups = [ ...groups, ...ip_groups(r.ip) ];
+
+	// The last rule says where everything else goes: that is not a rule here,
+	// it is `final` - or, for a blackhole, a rule that drops what is left.
+	if (ri == length(xr) - 1 && !r.domain && !r.ip && !r.protocol && !r.port && !r.source && !length(tags)) {
+		if (to == 'block')
+			push(rules, with_action({}, 'block'));
+		else
+			final_out = to;
+		continue;
+	}
+
+	// A list that had only entries which could not be kept is not a rule that
+	// matches everything.
+	if ((r.domain || r.ip) && !length(groups))
+		continue;
+
+	if (!length(groups)) {
+		push(rules, with_action({ ...base }, to));
+	} else {
+		for (let g in groups)
+			push(rules, with_action({ ...base, ...g }, to));
+	}
+}
+
+// -------------------------------------------------------------------- DNS
+
+let QS = { UseIPv4: 'ipv4_only', UseIPv6: 'ipv6_only', UseIP: null };
+
+function dns_server(sv) {
+	let a = sv.address;
+	let m, o;
+	if (a == 'fakedns') {
+		warn('FakeDNS is built differently in sing-box and is not carried over');
+		return null;
+	}
+	if ((m = match(a, /^tcp:\/\/([^:\/]+)(:([0-9]+))?$/))) {
+		o = { type: 'tcp', server: m[1] };
+		if (m[3])
+			o.server_port = int(m[3]);
+	} else if ((m = match(a, /^https:\/\/([^:\/]+)(:([0-9]+))?(\/.*)?$/))) {
+		o = { type: 'https', server: m[1] };
+		if (m[3])
+			o.server_port = int(m[3]);
+		if (m[4])
+			o.path = m[4];
+	} else if ((m = match(a, /^(tls|quic):\/\/([^:\/]+)(:([0-9]+))?$/))) {
+		o = { type: m[1], server: m[2] };
+		if (m[4])
+			o.server_port = int(m[4]);
+	} else {
+		o = { type: 'udp', server: a };
+		if (sv.port && sv.port != 53)
+			o.server_port = sv.port;
+	}
+	o.tag = sv.tag;
+	let via = dns_via[sv.tag];
+	if (via && via != 'direct' && via != 'block')
+		o.detour = via;
+	return o;
+}
+
+let dns = { servers: [], rules: [] };
+let dns_final = null;
+let have_direct_dns = false;
+
+let hosts = X.dns?.hosts ?? {};
+if (length(keys(hosts))) {
+	let pre = {};
+	for (let k, v in hosts)
+		pre[k] = arr(v);
+	push(dns.servers, { type: 'hosts', tag: 'dns-hosts', predefined: pre });
+	push(dns.rules, { domain: keys(hosts), action: 'route', server: 'dns-hosts' });
+}
+
+for (let sv in X.dns?.servers ?? []) {
+	let s = dns_server(sv);
+	if (!s)
+		continue;
+	push(dns.servers, s);
+	let qs = QS[sv.queryStrategy];
+	if (sv.domains) {
+		if (sv.tag == 'dns-direct')
+			have_direct_dns = true;
+		for (let g in name_groups(split_names(sv.domains))) {
+			push(dns.rules, { ...g, action: 'route', server: sv.tag });
+		}
+	} else {
+		dns_final = sv.tag;
+		if (qs)
+			dns.strategy = qs;
+	}
+}
+if (dns_final)
+	dns.final = dns_final;
+if (X.dns?.disableCache)
+	dns.disable_cache = true;
+
+// -------------------------------------------------------------- the config
+
+let level = { debug: 'debug', info: 'info', warning: 'warn', error: 'error' }[args.level ?? 'warning'];
+
+let route = {
+	rules,
+	final: final_out,
+	default_mark: MARK
+};
+if (length(keys(rule_sets)))
+	route.rule_set = map(keys(rule_sets), (t) => ({ tag: t, type: 'local', format: 'binary', path: rule_sets[t] }));
+if (have_direct_dns)
+	route.default_domain_resolver = { server: 'dns-direct', strategy: 'ipv4_only' };
+
+let cfg = {
+	log: level ? { level, timestamp: true } : { disabled: true },
+	dns,
+	inbounds,
+	outbounds: [ ...outbounds, { type: 'direct', tag: 'direct', routing_mark: MARK } ],
+	route,
+	experimental: {
+		clash_api: { external_controller: `127.0.0.1:${args.api ?? 10853}` }
+	}
+};
+if (length(endpoints))
+	cfg.endpoints = endpoints;
+
+// A node is dialled by its own name only through the direct resolver, and
+// the 'direct' tag must exist once even when the node list never named it.
+let seen = {};
+cfg.outbounds = filter(cfg.outbounds, (o) => {
+	if (seen[o.tag])
+		return false;
+	seen[o.tag] = true;
+	return true;
+});
+
+print(sprintf('%.J', cfg), '\n');
