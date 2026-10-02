@@ -71,23 +71,68 @@ function ipEntry(l) {
 	return /^[0-9a-fA-F:]+:[0-9a-fA-F:]*(\/\d{1,3})?$/.test(l);
 }
 
-/* A DNS address typed into a list that already offers a few is kept: the
-   addresses someone has used are added to their own list, offered in the
-   drop-down from then on, and removed only from that list - the control
-   itself forgot a typed address as soon as another was chosen, and had no way
-   to take one away. */
+/* A DNS address typed into a list that already offers a few is kept: it is
+   remembered, offered in the drop-down from then on, and carries a small x
+   beside it that takes it away. The control forgot a typed address as soon as
+   another was chosen, and had no way to remove one. */
 function savedDns(opt, key, builtin) {
-	var saved = uci.get('zirgozar', 'config', key);
-	saved = Array.isArray(saved) ? saved : (saved ? [ saved ] : []);
-	saved.forEach(function(v) {
+	function load(sid) {
+		var v = uci.get('zirgozar', sid, key);
+		return Array.isArray(v) ? v.slice() : (v ? [ v ] : []);
+	}
+
+	function forget(sid, value) {
+		var rest = load(sid).filter(function(x) { return x != value; });
+		if (rest.length)
+			uci.set('zirgozar', sid, key, rest);
+		else
+			uci.unset('zirgozar', sid, key);
+	}
+
+	function decorate(node, sid) {
+		if (!node || !node.querySelectorAll)
+			return node;
+		var mark = function() {
+			node.querySelectorAll('li[data-value]').forEach(function(li) {
+				var v = li.getAttribute('data-value');
+				if (!v || builtin.indexOf(v) >= 0 || li.querySelector('.zgz-del'))
+					return;
+				li.appendChild(E('span', {
+					'class': 'zgz-del',
+					'title': _('Remove'),
+					'style': 'float:inline-end;cursor:pointer;color:#dc2626;font-weight:700;padding:0 8px',
+					'click': function(ev) {
+						ev.preventDefault();
+						ev.stopPropagation();
+						forget(sid, v);
+						if (li.parentNode)
+							li.parentNode.removeChild(li);
+					}
+				}, '×'));
+			});
+		};
+		new MutationObserver(mark).observe(node, { childList: true, subtree: true });
+		mark();
+		return node;
+	}
+
+	load('config').forEach(function(v) {
 		if (builtin.indexOf(v) < 0)
 			opt.value(v, v);
 	});
+
+	var render = opt.renderWidget;
+	opt.renderWidget = function(section_id) {
+		var r = render.apply(this, arguments);
+		if (r && typeof r.then == 'function')
+			return r.then(function(n) { return decorate(n, section_id); });
+		return decorate(r, section_id);
+	};
+
 	var write = opt.write;
 	opt.write = function(section_id, value) {
 		if (value && builtin.indexOf(value) < 0) {
-			var cur = uci.get('zirgozar', section_id, key);
-			cur = Array.isArray(cur) ? cur : (cur ? [ cur ] : []);
+			var cur = load(section_id);
 			if (cur.indexOf(value) < 0)
 				uci.set('zirgozar', section_id, key, cur.concat([ value ]));
 		}
@@ -424,12 +469,6 @@ return view.extend({
 		o.depends('direct_dns_protocol', 'udp');
 		o.depends('direct_dns_protocol', 'tcp');
 
-		o = s.taboption('dns', form.DynamicList, 'direct_dns_custom', _('My Direct DNS servers'),
-			_('Every address typed into Direct DNS is kept here and offered in its list. Remove one with its ×.'));
-		o.datatype = 'or(ipaddr,ipaddrport(1))';
-		o.depends('direct_dns_protocol', 'udp');
-		o.depends('direct_dns_protocol', 'tcp');
-
 		o = s.taboption('dns', form.ListValue, 'direct_dns_query_strategy', _('Direct Query Strategy'));
 		o.value('UseIP');
 		o.value('UseIPv4');
@@ -455,12 +494,6 @@ return view.extend({
 		o.value('208.67.220.220', '208.67.220.220 (OpenDNS)');
 		o.value('208.67.222.222', '208.67.222.222 (OpenDNS)');
 		savedDns(o, 'remote_dns_custom', [ '1.1.1.1', '1.1.1.2', '8.8.4.4', '8.8.8.8', '9.9.9.9', '149.112.112.112', '208.67.220.220', '208.67.222.222' ]);
-		o.depends('remote_dns_protocol', 'tcp');
-		o.depends('remote_dns_protocol', 'udp');
-
-		o = s.taboption('dns', form.DynamicList, 'remote_dns_custom', _('My Remote DNS servers'),
-			_('Every address typed into Remote DNS is kept here and offered in its list. Remove one with its ×.'));
-		o.datatype = 'or(ipaddr,ipaddrport(1))';
 		o.depends('remote_dns_protocol', 'tcp');
 		o.depends('remote_dns_protocol', 'udp');
 
