@@ -331,6 +331,11 @@ var FA = {
 	'Sing-Box-LX App Path': 'مسیر برنامه Sing-Box-LX',
 	'The sing-box build that speaks xhttp. Empty means this program’s own copy in the folder above.': 'نسخه‌ای از sing-box که xhttp را می‌فهمد. خالی یعنی نسخه خود این برنامه در پوشه بالا.',
 	'Active core': 'هسته فعال',
+	'My Direct DNS servers': 'DNS مستقیم‌های من',
+	'My Remote DNS servers': 'DNS راه‌دورهای من',
+	'Every address typed into Direct DNS is kept here and offered in its list. Remove one with its ×.': 'هر آدرسی که در DNS مستقیم بنویسید اینجا نگه داشته می‌شود و در فهرست آن پیشنهاد می‌شود. با × آن را حذف کنید.',
+	'Every address typed into Remote DNS is kept here and offered in its list. Remove one with its ×.': 'هر آدرسی که در DNS راه‌دور بنویسید اینجا نگه داشته می‌شود و در فهرست آن پیشنهاد می‌شود. با × آن را حذف کنید.',
+	'sing-box could not run this tunnel, so Xray is carrying it. The Runtime Logs page says why. The official sing-box has no xhttp: install sing-box-lx on the App Update page and choose it under Active core in Basic Settings, or choose Xray there.': 'sing-box نتوانست این تونل را اجرا کند و Xray آن را می‌برد. دلیلش را صفحه «گزارش اجرا» می‌گوید. sing-box رسمی xhttp ندارد: sing-box-lx را از صفحه «به‌روزرسانی» نصب کنید و در تنظیمات پایه زیر «هسته فعال» آن را انتخاب کنید، یا همان‌جا Xray را انتخاب کنید.',
 	'Xray is the default. sing-box reads the same settings and carries the same rules and DNS, but not everything: mux, noise, FakeDNS and mKCP have no equivalent there, and statistics are counted a little differently. A node or setting it cannot use is named in the log, and if it cannot start at all Xray takes over. sing-box-lx, the build that speaks xhttp, is installed from App Update.':
 		'Xray پیش‌فرض است. sing-box همان تنظیمات را می‌خواند و همان قوانین و DNS را اجرا می‌کند، ولی نه همه چیز را: mux، noise، FakeDNS و mKCP در آن معادل ندارند و آمار مصرف کمی متفاوت شمرده می‌شود. نود یا تنظیمی که نتواند به کار ببرد در گزارش اجرا نوشته می‌شود و اگر اصلاً راه نیفتد، Xray کار را به دست می‌گیرد. sing-box-lx، نسخه‌ای که xhttp را می‌فهمد، از صفحه «به‌روزرسانی» نصب می‌شود.',
 	'Direct addresses and domains': 'آدرس‌ها و دامنه‌های مستقیم',

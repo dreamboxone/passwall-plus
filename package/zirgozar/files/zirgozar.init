@@ -103,9 +103,13 @@ start_service() {
 		else
 			_why="$(grep -v '^warn:' "$ZGZ_RUN/sbconfig.err" 2>/dev/null | sed 's/^error: //' | head -1)"
 			[ -x "$(engine_singbox_path)" ] || _why="sing-box is not installed"
+			# What the core itself said is the reason worth having, and goes in
+			# the log; the message on the page stays the same sentence so that it
+			# can be translated.
+			[ -n "$_why" ] || _why="$(sed "s/$(printf '\033')\[[0-9;]*m//g" "$ZGZ_RUN/core-check.err" 2>/dev/null | grep -i 'fatal\|error' | tail -1 | sed 's/^.*\(FATAL\|ERROR\)[^ ]* *//')"
 			[ -n "$_why" ] || _why="sing-box refused the configuration"
 			log "sing-box could not run this tunnel ($_why) - running Xray instead"
-			say_message "sing-box could not run this tunnel ($_why), so Xray is carrying it. Install sing-box on the App Update page, or choose Xray in the App Path section."
+			say_message "sing-box could not run this tunnel, so Xray is carrying it. The Runtime Logs page says why. The official sing-box has no xhttp: install sing-box-lx on the App Update page and choose it under Active core in Basic Settings, or choose Xray there."
 			ENGINE=xray
 			PROG=""
 		fi

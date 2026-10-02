@@ -339,7 +339,7 @@ core_run_args() {
 core_accepts() {
 	_ca_prog="$1"; _ca_cfg="$2"; _ca_engine="$3"
 	if [ "$_ca_engine" = "singbox" ]; then
-		"$_ca_prog" check -c "$_ca_cfg" >/dev/null 2>&1
+		"$_ca_prog" check -c "$_ca_cfg" >"$ZGZ_RUN/core-check.err" 2>&1
 		return $?
 	fi
 	_ca_geo="$(geo_dir)" || _ca_geo=""

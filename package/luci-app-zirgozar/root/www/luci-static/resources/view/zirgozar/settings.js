@@ -71,6 +71,30 @@ function ipEntry(l) {
 	return /^[0-9a-fA-F:]+:[0-9a-fA-F:]*(\/\d{1,3})?$/.test(l);
 }
 
+/* A DNS address typed into a list that already offers a few is kept: the
+   addresses someone has used are added to their own list, offered in the
+   drop-down from then on, and removed only from that list - the control
+   itself forgot a typed address as soon as another was chosen, and had no way
+   to take one away. */
+function savedDns(opt, key, builtin) {
+	var saved = uci.get('zirgozar', 'config', key);
+	saved = Array.isArray(saved) ? saved : (saved ? [ saved ] : []);
+	saved.forEach(function(v) {
+		if (builtin.indexOf(v) < 0)
+			opt.value(v, v);
+	});
+	var write = opt.write;
+	opt.write = function(section_id, value) {
+		if (value && builtin.indexOf(value) < 0) {
+			var cur = uci.get('zirgozar', section_id, key);
+			cur = Array.isArray(cur) ? cur : (cur ? [ cur ] : []);
+			if (cur.indexOf(value) < 0)
+				uci.set('zirgozar', section_id, key, cur.concat([ value ]));
+		}
+		return write.apply(this, arguments);
+	};
+}
+
 return view.extend({
 	load: function() {
 		return Promise.all([
@@ -396,6 +420,13 @@ return view.extend({
 		o.datatype = 'or(ipaddr,ipaddrport(1))';
 		for (i = 0; i < IR_RESOLVERS.length; i++)
 			o.value(IR_RESOLVERS[i][0], IR_RESOLVERS[i][0] + ' (' + IR_RESOLVERS[i][1] + ')');
+		savedDns(o, 'direct_dns_custom', IR_RESOLVERS.map(function(r) { return r[0]; }));
+		o.depends('direct_dns_protocol', 'udp');
+		o.depends('direct_dns_protocol', 'tcp');
+
+		o = s.taboption('dns', form.DynamicList, 'direct_dns_custom', _('My Direct DNS servers'),
+			_('Every address typed into Direct DNS is kept here and offered in its list. Remove one with its ×.'));
+		o.datatype = 'or(ipaddr,ipaddrport(1))';
 		o.depends('direct_dns_protocol', 'udp');
 		o.depends('direct_dns_protocol', 'tcp');
 
@@ -423,6 +454,13 @@ return view.extend({
 		o.value('149.112.112.112', '149.112.112.112 (Quad9-Recommended)');
 		o.value('208.67.220.220', '208.67.220.220 (OpenDNS)');
 		o.value('208.67.222.222', '208.67.222.222 (OpenDNS)');
+		savedDns(o, 'remote_dns_custom', [ '1.1.1.1', '1.1.1.2', '8.8.4.4', '8.8.8.8', '9.9.9.9', '149.112.112.112', '208.67.220.220', '208.67.222.222' ]);
+		o.depends('remote_dns_protocol', 'tcp');
+		o.depends('remote_dns_protocol', 'udp');
+
+		o = s.taboption('dns', form.DynamicList, 'remote_dns_custom', _('My Remote DNS servers'),
+			_('Every address typed into Remote DNS is kept here and offered in its list. Remove one with its ×.'));
+		o.datatype = 'or(ipaddr,ipaddrport(1))';
 		o.depends('remote_dns_protocol', 'tcp');
 		o.depends('remote_dns_protocol', 'udp');
 
