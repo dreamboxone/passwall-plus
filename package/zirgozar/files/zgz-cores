@@ -47,9 +47,13 @@ asset_for() {
 	_a="$(arch_assets)"
 	case "$1" in
 		xray)     echo "$_a" | awk '{print $1}' ;;
-		sing-box) echo "$_a" | awk '{print $2}' ;;
-		# Its builds: amd64, arm64, armv7, and the two soft-float mips ones.
-		sing-box-lx) echo "$_a" | awk '{ s = $2; print (s == "amd64" || s == "arm64" || s == "armv7") ? s : (s == "mipsle" ? "mipsle-softfloat" : (s == "mips" ? "mips-softfloat" : "-")) }' ;;
+		# The soft-float builds are the ones a MIPS router can run: the plain
+		# mips and mipsle archives are built for a hardware FPU that most of
+		# them do not have, and would not start.
+		sing-box) echo "$_a" | awk '{ s = $2; print (s == "mips" || s == "mipsle" || s == "mips64") ? s "-softfloat" : s }' ;;
+		# sing-box-lx has builds for amd64, arm64, armv7 and the two soft-float
+		# mips ones, and nothing else.
+		sing-box-lx) echo "$_a" | awk '{ s = $2; if (s == "mips" || s == "mipsle") s = s "-softfloat"; print (s == "amd64" || s == "arm64" || s == "armv7" || s == "mips-softfloat" || s == "mipsle-softfloat") ? s : "-" }' ;;
 		hysteria) echo "$_a" | awk '{print $3}' ;;
 		# Geoview names its builds the way sing-box does, but for "i386".
 		geoview)  echo "$_a" | awk '{ print ($2 == "386") ? "i386" : $2 }' ;;
@@ -58,9 +62,18 @@ asset_for() {
 }
 
 latest_tag() {
-	curl -fsSL --connect-timeout 15 --max-time 45 \
+	_lt="$(curl -fsSL --connect-timeout 15 --max-time 45 \
 		"https://api.github.com/repos/$1/releases/latest" 2>/dev/null |
-		sed -n 's/.*"tag_name"[ \t]*:[ \t]*"\([^"]*\)".*/\1/p' | head -1
+		sed -n 's/.*"tag_name"[ \t]*:[ \t]*"\([^"]*\)".*/\1/p' | head -1)"
+	# The API answers a few requests an hour per address, and a router behind a
+	# shared exit address shares that allowance with everyone else using it. The
+	# page of the latest release answers without limit, and the tag is in where
+	# it redirects to.
+	if [ -z "$_lt" ]; then
+		_lt="$(curl -fsSL --connect-timeout 15 --max-time 45 -o /dev/null -w '%{url_effective}' \
+			"https://github.com/$1/releases/latest" 2>/dev/null | sed -n 's|.*/releases/tag/||p' | head -1)"
+	fi
+	echo "$_lt"
 	return 0
 }
 
@@ -146,22 +159,33 @@ install_singbox() {
 	# cannot be fetched from the /latest/download/ path without asking first.
 	_name="sing-box-$_ver-linux-$_asset"
 	_url="https://github.com/$_repo/releases/download/$_tag/$_name.tar.gz"
-	_tgz="$ZGZ_RUN/sing-box.tar.gz"
-
 	_size="$(remote_size "$_url")"
+	# The program is about three times the size of the archive it comes in.
 	need_room $((_size * 3)) "$(dirname "$_target")" || return 1
-	download_checked "$_url" "$_tgz" "$_size" || return 1
 
-	rm -rf "$ZGZ_RUN/xtract"
-	mkdir -p "$ZGZ_RUN/xtract"
-	if ! tar -xzf "$_tgz" -C "$ZGZ_RUN/xtract" 2>/dev/null; then
-		rm -f "$_tgz"; rm -rf "$ZGZ_RUN/xtract"
-		say_message "The sing-box download could not be unpacked."
+	# Straight from the download into the file on flash: the archive is never
+	# stored and nothing is unpacked in memory. It was both - twenty-seven
+	# megabytes of archive and seventy of program in a RAM disk - and on a
+	# router with little memory the unpacking ran out of room and the install
+	# failed with nothing to say why.
+	mkdir -p "$(dirname "$_target")"
+	_bin="$_target.part"
+	rm -f "$_bin"
+	_n=0
+	while [ "$_n" -lt 3 ]; do
+		_n=$((_n + 1))
+		curl -fsSL --connect-timeout 20 --max-time 900 "$_url" 2>/dev/null |
+			tar -xzO -f - "$_name/sing-box" > "$_bin" 2>/dev/null || true
+		[ "$(file_size "$_bin")" -gt 1048576 ] 2>/dev/null && break
+		rm -f "$_bin"
+		sleep 3
+	done
+	if [ ! -s "$_bin" ]; then
+		rm -f "$_bin"
+		say_message "The $_kind download failed. GitHub did not answer, or the connection broke half way. Check that the tunnel is up and try again."
+		warn "$_kind download from $_url failed after $_n tries"
 		return 1
 	fi
-	rm -f "$_tgz"
-	_bin="$(find "$ZGZ_RUN/xtract" -name sing-box -type f 2>/dev/null | head -1)"
-	[ -n "$_bin" ] || { rm -rf "$ZGZ_RUN/xtract"; say_message "No sing-box program inside the archive."; return 1; }
 	install_binary "$_bin" "$_target" "$_kind"
 	return $?
 }
