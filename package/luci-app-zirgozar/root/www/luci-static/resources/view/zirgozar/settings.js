@@ -93,14 +93,18 @@ function savedDns(opt, key, builtin) {
 		if (!node || !node.querySelectorAll)
 			return node;
 		var mark = function() {
+			var kept = load(sid);
 			node.querySelectorAll('li[data-value]').forEach(function(li) {
 				var v = li.getAttribute('data-value');
-				if (!v || builtin.indexOf(v) >= 0 || li.querySelector('.zgz-del'))
+				/* Only an address that is really in the saved list: not one of
+				   the built-in ones, and not the row for typing a new one. */
+				if (!v || builtin.indexOf(v) >= 0 || kept.indexOf(v) < 0 ||
+				    li.classList.contains('create-item') || li.querySelector('input, .zgz-del'))
 					return;
 				li.appendChild(E('span', {
 					'class': 'zgz-del',
 					'title': _('Remove'),
-					'style': 'float:inline-end;cursor:pointer;color:#dc2626;font-weight:700;padding:0 8px',
+					'style': 'float:inline-end;cursor:pointer;color:#dc2626;font-weight:700;font-size:24px;line-height:1;padding:0 10px',
 					'click': function(ev) {
 						ev.preventDefault();
 						ev.stopPropagation();
@@ -116,6 +120,7 @@ function savedDns(opt, key, builtin) {
 		return node;
 	}
 
+	builtin = builtin.concat(opt.keylist || []);
 	load('config').forEach(function(v) {
 		if (builtin.indexOf(v) < 0)
 			opt.value(v, v);
