@@ -194,6 +194,15 @@ url_ms() {
 		-w '%{time_total}' "$(cfg test_url 'http://www.gstatic.com/generate_204')" 2>/dev/null)"
 	then
 		_ms="$(awk -v t="$_t" 'BEGIN { m = int(t * 1000 + 0.5); if (t > 0 && m < 1) m = 1; printf "%d", m }')"
+		# Asked a second time: the first request pays for opening the tunnel -
+		# a WireGuard handshake is most of it - and the second is the round
+		# trip through the node and nothing else.
+		if [ "${URL_REPEAT:-0}" = "1" ]; then
+			if _t="$(curl -s -o /dev/null -x "socks5h://127.0.0.1:$PORT" 				--connect-timeout 8 --max-time 8 				-w '%{time_total}' "$(cfg test_url 'http://www.gstatic.com/generate_204')" 2>/dev/null)"
+			then
+				_ms="$(awk -v t="$_t" 'BEGIN { m = int(t * 1000 + 0.5); if (t > 0 && m < 1) m = 1; printf "%d", m }')"
+			fi
+		fi
 	fi
 
 	kill "$_pid" 2>/dev/null || true
@@ -282,11 +291,19 @@ cmd_run() {
 	_payload="$(printf '%s' "$_row" | cut -f6-)"
 
 	# A TCP handshake to a port that only speaks UDP can never be answered, and
-	# a cross would say the node is dead when it is not. These nodes have no
-	# such measure; the page shows a dash, and the URL test is the one that
-	# says whether they work.
+	# a cross would say the node is dead when it is not.
 	case "$_kind:$_proto" in
-		tcp:wireguard|tcp:hysteria2|tcp:hysteria|tcp:tuic)
+		tcp:wireguard)
+			# There is no TCP port to shake hands with, so the column holds
+			# the next best thing that is true: how long a request takes to
+			# go through the node once the tunnel is open.
+			put "$_id.tcp" -1
+			URL_REPEAT=1 url_ms "$_payload" "$_host" "$_port" > "$DIR/$_id.tcp" 2>/dev/null || true
+			return 0
+			;;
+		tcp:hysteria2|tcp:hysteria|tcp:tuic)
+			# Not something Xray can carry, and the column has no other
+			# honest answer for them.
 			put "$_id.tcp" -2
 			return 0
 			;;
