@@ -281,6 +281,17 @@ cmd_run() {
 	_port="$(printf '%s' "$_row" | cut -f5)"
 	_payload="$(printf '%s' "$_row" | cut -f6-)"
 
+	# A TCP handshake to a port that only speaks UDP can never be answered, and
+	# a cross would say the node is dead when it is not. These nodes have no
+	# such measure; the page shows a dash, and the URL test is the one that
+	# says whether they work.
+	case "$_kind:$_proto" in
+		tcp:wireguard|tcp:hysteria2|tcp:hysteria|tcp:tuic)
+			put "$_id.tcp" -2
+			return 0
+			;;
+	esac
+
 	case "$_kind" in
 		ping) do_ping "$_id" "$_host" ;;
 		tcp)
