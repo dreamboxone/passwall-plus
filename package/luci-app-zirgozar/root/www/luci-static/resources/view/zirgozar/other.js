@@ -273,6 +273,11 @@ return view.extend({
 		s = m.section(form.NamedSection, 'config', 'zirgozar', _('Traffic history'));
 		s.anonymous = true;
 
+		o = s.option(form.Flag, 'stats_enabled', _('Traffic statistics'),
+			_('Counts what goes through the tunnel and shows it on the status page. Off, nothing is counted or written to storage and the card is gone; what was counted before is kept.'));
+		o.default = '1';
+		o.rmempty = false;
+
 		o = s.option(form.Value, 'stats_flush_minutes', _('Traffic: written every (Min)'),
 			_('How often the running total is written to storage, in minutes. Anything not yet written is lost if the router loses power. Five is the default and matches how often the counters are read, so at most one reading is ever at risk.'));
 		o.datatype = 'range(1,1440)';

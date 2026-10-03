@@ -50,7 +50,11 @@ asset_for() {
 		# The soft-float builds are the ones a MIPS router can run: the plain
 		# mips and mipsle archives are built for a hardware FPU that most of
 		# them do not have, and would not start.
-		sing-box) echo "$_a" | awk '{ s = $2; print (s == "mips" || s == "mipsle" || s == "mips64") ? s "-softfloat" : s }' ;;
+		# The plain 64-bit and x86 builds are dynamically linked against glibc,
+		# and a program that asks for /lib/ld-linux-aarch64.so.1 on an OpenWrt
+		# router, which has musl, is reported as "not found". The -musl ones are
+		# static. The ARMv7 build is static already.
+		sing-box) echo "$_a" | awk '{ s = $2; print (s == "mips" || s == "mipsle" || s == "mips64") ? s "-softfloat" : ((s == "arm64" || s == "amd64" || s == "386" || s == "riscv64") ? s "-musl" : s) }' ;;
 		# sing-box-lx has builds for amd64, arm64, armv7 and the two soft-float
 		# mips ones, and nothing else.
 		sing-box-lx) echo "$_a" | awk '{ s = $2; if (s == "mips" || s == "mipsle") s = s "-softfloat"; print (s == "amd64" || s == "arm64" || s == "armv7" || s == "mips-softfloat" || s == "mipsle-softfloat") ? s : "-" }' ;;

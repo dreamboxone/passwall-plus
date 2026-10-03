@@ -217,7 +217,7 @@ start_service() {
 
 	# sing-box has no counters to ask for, so something beside it keeps them.
 	rm -f "$ZGZ_RUN/sb.counters"
-	if [ "$ENGINE" = "singbox" ]; then
+	if [ "$ENGINE" = "singbox" ] && [ "$(cfg_bool stats_enabled 1)" = "1" ]; then
 		procd_open_instance sbstats
 		procd_set_param command ucode "$ZGZ_LIB/zgz-sbstats" port="$(cfg api_port 10853)" out="$ZGZ_RUN/sb.counters"
 		procd_set_param respawn 3600 5 0

@@ -511,6 +511,12 @@ $([ -n "$_lex" ] && printf '\tset exclude {\n\t\ttype ipv4_addr\n\t\tflags inter
 		type route hook output priority mangle; policy accept;
 
 		meta mark $BYPASS return
+		# Tailscale marks its own packets - the ones to its coordination server,
+		# its relays and its peers - so that they do not follow its own routes.
+		# Sent into the tunnel they would arrive from somewhere else and the
+		# direct connections would never form; left alone they go out as they
+		# would without this program.
+		meta mark & 0xff0000 == 0x80000 return
 		ct direction reply return
 		meta l4proto { tcp, udp } th dport 53 return
 		ip daddr @reserved return
@@ -829,6 +835,7 @@ ipt_local_up() {
 	ipt_local_down
 	ipt -t mangle -N ZGZ_OUT
 	ipt -t mangle -A ZGZ_OUT -m mark --mark "$BYPASS" -j RETURN
+	ipt -t mangle -A ZGZ_OUT -m mark --mark 0x80000/0xff0000 -j RETURN
 	ipt -t mangle -A ZGZ_OUT -m conntrack --ctdir REPLY -j RETURN
 	ipt -t mangle -A ZGZ_OUT -p tcp --dport 53 -j RETURN
 	ipt -t mangle -A ZGZ_OUT -p udp --dport 53 -j RETURN

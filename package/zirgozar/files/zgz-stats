@@ -155,6 +155,8 @@ flush_day() {
 }
 
 cmd_flush() {
+	[ "$(cfg_bool stats_enabled 1)" = "1" ] || return 0
+
 	_day="$(get_state day)"
 	[ -n "$_day" ] || return 0
 	flush_day "$_day" \
@@ -182,6 +184,8 @@ stored_today() {
 # ---------------------------------------------------------------- sampling
 
 cmd_sample() {
+	[ "$(cfg_bool stats_enabled 1)" = "1" ] || return 0
+
 	_now="$(date +%s)"
 	_today="$(date +%Y-%m-%d)"
 

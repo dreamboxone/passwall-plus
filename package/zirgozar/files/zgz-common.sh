@@ -833,7 +833,7 @@ forget_caps() {
 }
 
 # Every device that carries a LAN, as the router itself sees it.
-lan_devices() {
+lan_devices_base() {
 	_zone="$(cfg lan_zone '')"
 	if [ -n "$_zone" ]; then
 		echo "$_zone"
@@ -861,6 +861,27 @@ lan_devices() {
 	fi
 	[ -n "$_devs" ] || _devs="br-lan"
 	echo "$_devs"
+	return 0
+}
+
+# The interfaces the firewall takes traffic from: the LAN ones - or the one
+# named in Other Settings - and every interface an Access Control rule is
+# about. A rule for tailscale0 that sends its traffic straight out is no use
+# if tailscale0 is not among the interfaces the firewall looks at: it would
+# never match, and the rule would sit on the page doing nothing.
+lan_devices() {
+	_ld="$(lan_devices_base)"
+	if [ "$(cfg_bool acl_enable 0)" = "1" ]; then
+		for _ai in $(uci -q show zirgozar 2>/dev/null | awk -F"[.=]" -v q="'" '
+				$3 == "acl_rule" && NF == 3 { sec[$2] = 1; next }
+				$3 == "interface" && ($2 in sec) { v = $0; sub(/^[^=]*=/, "", v); gsub(q, "", v); if (v != "") print v }'); do
+			case " $_ld " in
+				*" $_ai "*) : ;;
+				*) _ld="$_ld $_ai" ;;
+			esac
+		done
+	fi
+	echo "$_ld"
 	return 0
 }
 

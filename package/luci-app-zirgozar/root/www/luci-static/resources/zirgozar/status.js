@@ -495,7 +495,8 @@ return baseclass.extend({
 
 		poll.add(refreshState, 3);
 		/* Traffic moves in five-minute steps. */
-		poll.add(function() {
+		var statsOn = st.stats_enabled !== false;
+		if (statsOn) poll.add(function() {
 			return callTraffic().then(renderTraffic).catch(function() {});
 		}, 15);
 
@@ -505,6 +506,6 @@ return baseclass.extend({
 		renderTraffic(tr);
 		scope = null;
 
-		return { top: [ tiles, status ], bottom: [ traffic ], version: st.version };
+		return { top: [ tiles, status ], bottom: statsOn ? [ traffic ] : [], version: st.version };
 	}
 });
