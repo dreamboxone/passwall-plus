@@ -766,8 +766,16 @@ return view.extend({
 		/* ------------------------------------------- automatic choice
 		   This program's own, and it has no PassWall2 equivalent: how the
 		   fastest node is found when the node in Basic Settings is Auto. */
+		/* The three numbers in this sentence are the settings below it, read as
+		   they are saved and kept in step as they are typed. */
+		function selectionText(batch, good, most) {
+			return _('Two passes. A quick handshake to every node, then a real request through the ones that answered — %d at a time (at most %d batches), best first, stopping at the first node faster than %d ms. Connecting therefore takes seconds, not a minute. WireGuard has no TCP port and skips the first pass; hysteria2, tuic and OpenVPN are not part of the automatic choice.')
+				.format(batch, most, good);
+		}
 		s = m.section(form.NamedSection, 'config', 'zirgozar', _('Node selection'),
-			_('Two passes. A quick handshake to every node, then a real request through the ones that answered — ten at a time, best first, stopping at the first node fast enough. Connecting therefore takes seconds, not a minute.'));
+			selectionText(parseInt(uci.get('zirgozar', 'config', 'batch_size')) || 10,
+				parseInt(uci.get('zirgozar', 'config', 'good_ms')) || 1000,
+				parseInt(uci.get('zirgozar', 'config', 'max_batches')) || 5));
 		s.anonymous = true;
 
 		o = s.option(form.ListValue, 'prefilter', _('First pass'),

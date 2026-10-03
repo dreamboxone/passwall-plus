@@ -217,8 +217,8 @@ var FA = {
 	'Reconnect after a reboot': 'اتصال دوباره بعد از ریستارت',
 
 	'Choosing a node': 'انتخاب کانفیگ',
-	'Two passes. A quick handshake to every node, then a real request through the ones that answered — ten at a time, best first, stopping at the first node fast enough. Connecting therefore takes seconds, not a minute.':
-		'انتخاب در دو مرحله است: اول یک آزمایش سریع روی همه کانفیگ‌ها، بعد آزمایش واقعی روی آن‌هایی که جواب داده‌اند، ده تا ده تا و بهترین‌ها اول. با پیدا شدن اولین کانفیگ به‌قدر کافی سریع کار تمام می‌شود؛ برای همین اتصال چند ثانیه طول می‌کشد، نه یک دقیقه.',
+	'Two passes. A quick handshake to every node, then a real request through the ones that answered — %d at a time (at most %d batches), best first, stopping at the first node faster than %d ms. Connecting therefore takes seconds, not a minute. WireGuard has no TCP port and skips the first pass; hysteria2, tuic and OpenVPN are not part of the automatic choice.':
+		'انتخاب در دو مرحله است: اول یک آزمایش سریع روی کانفیگ‌ها، بعد آزمایش واقعی روی آن‌هایی که جواب داده‌اند، هر بار %d کانفیگ (حداکثر %d دسته) و بهترین‌ها اول. با پیدا شدن اولین کانفیگ سریع‌تر از %d میلی‌ثانیه کار تمام می‌شود؛ برای همین اتصال چند ثانیه طول می‌کشد، نه یک دقیقه. وایرگارد پورت TCP ندارد و مرحله اول را رد می‌کند؛ hysteria2 و tuic و OpenVPN در انتخاب خودکار شرکت نمی‌کنند.',
 	'First pass': 'مرحله اول',
 	'A TCP handshake to the node’s real port is the right test. A ping is quicker and wrong often enough to matter: a node behind a CDN answers pings at the edge whatever state it is in, and plenty of working nodes drop ICMP entirely.':
 		'روش آزمایش سریع. «هندشیک TCP» اتصال به پورت واقعی کانفیگ است و دقیق‌تر است. «پینگ» سریع‌تر است ولی اشتباه زیاد دارد: کانفیگ‌های پشت CDN همیشه جواب می‌دهند و خیلی از کانفیگ‌های سالم به پینگ جواب نمی‌دهند.',
