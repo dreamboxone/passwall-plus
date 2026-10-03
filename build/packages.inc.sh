@@ -7,7 +7,7 @@
 # packages.inc.sh - what goes into a package, shared by the .apk and .ipk
 # builders so the two formats can never drift apart.
 
-VERSION=2.0.27
+VERSION=2.0.28
 RELEASE=1
 PKGVER="$VERSION-r$RELEASE"
 LICENSE="AGPL-3.0-or-later"

@@ -714,10 +714,10 @@ var FA = {
 	'Close window': 'بستن',
 	'Add': 'افزودن',
 	'Default Preproxy': 'پیش‌پراکسی پیش‌فرض',
-	'Geo View': 'نمای Geo',
+	'Geo View': 'موقعیت‌یاب',
 	'Geoview App Path': 'مسیر برنامه Geoview',
 	'Only the Geo View page needs it. Empty means this program’s own copy in the folder above.':
-		'فقط صفحه «نمای Geo» به آن نیاز دارد. خالی یعنی نسخه خود این برنامه در پوشه بالا.',
+		'فقط صفحه «موقعیت‌یاب» به آن نیاز دارد. خالی یعنی نسخه خود این برنامه در پوشه بالا.',
 	'Enter something to look for first.': 'اول چیزی برای جست‌وجو وارد کنید.',
 	'Processing, please wait…': 'در حال پردازش، لطفا صبر کنید…',
 	'Geoview is not installed. Install it with the button below, or on the App Update page.':
