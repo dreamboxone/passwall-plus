@@ -365,10 +365,10 @@ var FA = {
 	'the node the tunnel is using': 'کانفیگی که تونل از آن استفاده می‌کند',
 	'Nodes added by hand on the Node List page. A hysteria2 or tuic node cannot be given a rule of its own; such a rule uses the node the tunnel is using instead.':
 		'فقط کانفیگ‌های دستی صفحه «کانفیگ‌ها». کانفیگ‌های hysteria2 و tuic اینجا قابل استفاده نیستند و به جای آن‌ها کانفیگ اصلی تونل استفاده می‌شود.',
-	'TCP No Redir Ports': 'پورت‌های TCP بدون انتقال',
-	'UDP No Redir Ports': 'پورت‌های UDP بدون انتقال',
-	'TCP Redir Ports': 'پورت‌های TCP انتقالی',
-	'UDP Redir Ports': 'پورت‌های UDP انتقالی',
+	'TCP No Redir Ports': 'پورت‌های TCP بدون انتقال بشود (عدم فوروارد این پورت‌های TCP)',
+	'UDP No Redir Ports': 'پورت‌های UDP بدون انتقال بشود (عدم فوروارد این پورت‌های UDP)',
+	'TCP Redir Ports': 'پورت‌های TCP انتقالی بشود (فوروارد این پورت‌های TCP)',
+	'UDP Redir Ports': 'پورت‌های UDP انتقالی بشود (فوروارد این پورت‌های UDP)',
 	'No patterns are used': 'استفاده نشود',
 	'Common Use': 'پرکاربرد',
 	'The port settings support single ports and ranges. Separate multiple ports with commas (,). Example: 21,80,443,1000:2000.':
@@ -459,7 +459,7 @@ var FA = {
 	'Limit the maximum number of splits.': 'حداکثر تعداد تکه‌ها را محدود می‌کند.',
 	'Noise': 'نویز',
 	'UDP noise, Under some circumstances it can bypass some UDP based protocol restrictions. The packets are in the Xray Noise Packets table below; Xray sends them on mKCP nodes and on xhttp over HTTP/3.':
-		'بسته‌های UDP بی‌معنی قبل از اتصال فرستاده می‌شوند تا محدودیت‌های UDP دور زده شوند. فقط روی کانفیگ‌های mKCP و xhttp با HTTP/3 اثر دارد. بسته‌ها در جدول پایین همین صفحه تعریف می‌شوند.',
+		'فقط روی کانفیگ‌های mKCP و xhttp با HTTP/3 اثر دارد. بسته‌ها در جدول پایین تعریف می‌شوند.',
 	'Mux': 'Mux',
 	'Several connections carried in one. Not used on a VLESS flow, xhttp or WireGuard node, where it cannot work.':
 		'چند اتصال داخل یک اتصال. روی کانفیگ‌های VLESS با flow، xhttp و وایرگارد استفاده نمی‌شود، چون آنجا کار نمی‌کند.',
