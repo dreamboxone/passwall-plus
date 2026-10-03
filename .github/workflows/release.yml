@@ -111,6 +111,12 @@ jobs:
             openwrt_arch: arm_cortex-a7_neon-vfpv4
           - name: aarch64    # filogic, rockchip, newer ARM64 routers
             openwrt_arch: aarch64_cortex-a53
+          - name: aarch64_cortex-a72    # mvebu cortexa72, bcm27xx, Raspberry Pi 4 and the like
+            openwrt_arch: aarch64_cortex-a72
+          - name: aarch64_cortex-a76    # Raspberry Pi 5 and the like
+            openwrt_arch: aarch64_cortex-a76
+          - name: aarch64_generic       # armsr, and any 64-bit ARM router the above do not name
+            openwrt_arch: aarch64_generic
           - name: mipsel     # ramips / mt7621
             openwrt_arch: mipsel_24kc
           - name: x86_64     # x86 builds and VMs

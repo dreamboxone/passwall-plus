@@ -83,6 +83,11 @@
 معماری روتر شما در `/etc/openwrt_release` جلوی `DISTRIB_ARCH` نوشته شده. پکیج
 `luci-app-zirgozar` معماری ندارد و به همه روترها می‌خورد.
 
+بسته برای `arm_cortex-a7_neon-vfpv4`، `aarch64_cortex-a53`، `aarch64_cortex-a72`،
+`aarch64_cortex-a76`، `aarch64_generic`، `mipsel_24kc` و `x86_64` ساخته می‌شود. چهار
+بسته‌ی `aarch64` یک برنامه‌ی یکسان دارند: مدیر بسته فقط آن را نصب می‌کند که نامش
+دقیقاً همان معماری روتر باشد.
+
 ### راه ساده: از خود LuCI
 
 در LuCI بروید به **System ← Software** و **Upload Package…** را بزنید. اول فایل

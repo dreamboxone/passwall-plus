@@ -83,6 +83,11 @@ manager in 25.12. Take the pair that matches your router:
 Your architecture is on the `DISTRIB_ARCH` line of `/etc/openwrt_release`. The
 `luci-app-zirgozar` package has no architecture and fits every router.
 
+Packages are built for `arm_cortex-a7_neon-vfpv4`, `aarch64_cortex-a53`,
+`aarch64_cortex-a72`, `aarch64_cortex-a76`, `aarch64_generic`, `mipsel_24kc` and
+`x86_64`. The four `aarch64` ones carry the same program: the package manager
+installs only the one whose name is the router's own.
+
 ### The easy way: from LuCI itself
 
 In LuCI go to **System → Software** and press **Upload Package…**. Upload and

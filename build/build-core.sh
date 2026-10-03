@@ -29,6 +29,15 @@ case "$TARGET" in
 		ASSET=Xray-linux-arm32-v7a.zip;  OUTDIR=arm_cortex-a7_neon-vfpv4 ;;
 	aarch64|arm64|filogic|mediatek)
 		ASSET=Xray-linux-arm64-v8a.zip;  OUTDIR=aarch64_cortex-a53 ;;
+	# The same arm64 program under the other names OpenWrt gives a 64-bit ARM
+	# router: its package manager installs a package only when this name is the
+	# router's own, so a router with Cortex-A72 cores cannot take the a53 one.
+	aarch64_cortex-a72)
+		ASSET=Xray-linux-arm64-v8a.zip;  OUTDIR=aarch64_cortex-a72 ;;
+	aarch64_cortex-a76)
+		ASSET=Xray-linux-arm64-v8a.zip;  OUTDIR=aarch64_cortex-a76 ;;
+	aarch64_generic)
+		ASSET=Xray-linux-arm64-v8a.zip;  OUTDIR=aarch64_generic ;;
 	mipsel|mipsle|ramips|mt7621)
 		ASSET=Xray-linux-mips32le.zip;   OUTDIR=mipsel_24kc ;;
 	x86_64|amd64)
@@ -37,7 +46,7 @@ case "$TARGET" in
 		ASSET=Xray-linux-32.zip;         OUTDIR=i386_pentium4 ;;
 	*)
 		echo "unknown target '$TARGET'"
-		echo "supported: armv7 aarch64 mipsel x86_64 i386"
+		echo "supported: armv7 aarch64 aarch64_cortex-a72 aarch64_cortex-a76 aarch64_generic mipsel x86_64 i386"
 		exit 1 ;;
 esac
 
