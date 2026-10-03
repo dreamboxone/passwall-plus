@@ -1632,7 +1632,11 @@ function jpem(s) {
 	gsub(/\t/, " ", s)
 	gsub(/\r/, "", s)
 	sub(/\n+$/, "", s)
-	gsub(/\n/, "\\n", s)
+	# A bar for a line break, not the backslash-n of JSON: busybox's awk drops
+	# the backslash from a replacement, and the shell reads this record back
+	# through more than one pipe. Base64 and the PEM headers have no bar in
+	# them, so zgz-sbconfig turns each one back into a newline.
+	gsub(/\n/, "|", s)
 	return s
 }
 

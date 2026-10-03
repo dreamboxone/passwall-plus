@@ -120,22 +120,27 @@ function ovpn_key(pem, pass) {
 	return trim(replace(out, /rc=[0-9]+\s*$/, ''));
 }
 
+// A certificate or key as zgz-parse wrote it: a bar where each line ended.
+function pem(s) {
+	return replace(s, '|', '\n');
+}
+
 // The endpoint for one profile record, as zgz-parse wrote it.
 function ovpn_endpoint(b, tag, mark) {
 	let tls = {
-		certificate: [ b.ca ],
+		certificate: [ pem(b.ca) ],
 		version_min: '1.2'
 	};
 	if (b.cert && b.key) {
-		tls.client_certificate = [ b.cert ];
-		tls.client_key = [ ovpn_key(b.key, b.keypass) ];
+		tls.client_certificate = [ pem(b.cert) ];
+		tls.client_key = [ ovpn_key(pem(b.key), b.keypass) ];
 	}
 	if (b.server_name) {
 		tls.server_name = b.server_name;
 		tls.server_name_type = b.server_name_type ?? 'name';
 	}
 	if (b.wrap && b.wrap_key) {
-		tls.control_wrap = { type: b.wrap, key: [ b.wrap_key ] };
+		tls.control_wrap = { type: b.wrap, key: [ pem(b.wrap_key) ] };
 		if (b.wrap_direction)
 			tls.control_wrap.direction = b.wrap_direction;
 	}

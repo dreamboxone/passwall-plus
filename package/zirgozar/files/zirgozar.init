@@ -323,7 +323,7 @@ stop_service() {
 
 	"$DNS" down >/dev/null 2>&1 || true
 	"$RULES" down >/dev/null 2>&1 || true
-	rm -f "$ZGZ_CONFIG_JSON" "$STARTED_FLAG" "$ZGZ_RUN/core.info" "$ZGZ_RUN/sb.counters"
+	rm -f "$ZGZ_CONFIG_JSON" "$ZGZ_BRIDGE_JSON" "$STARTED_FLAG" "$ZGZ_RUN/core.info" "$ZGZ_RUN/sb.counters"
 	log "Clearing and closing related programs complete."
 	return 0
 }
