@@ -156,8 +156,8 @@ return view.extend({
 		o.value('1', _('Proxy'));
 		o.value('2', _('Proxy') + ' ' + _('Use global config') + ' (' + _('the node the tunnel is using') + ')');
 
-		o = s.taboption('main', form.ListValue, 'node', E('a', { 'style': 'color:red' }, _('Node')),
-			_('Nodes added by hand on the Node List page. A hysteria2 or tuic node cannot be given a rule of its own; such a rule uses the node the tunnel is using instead.'));
+		o = s.taboption('main', form.ListValue, 'node', E('a', { 'style': 'color:red' }, _('Node name')),
+			_('Nodes added by hand on the Configs page. A hysteria2 or tuic node cannot be given a rule of its own; such a rule uses the node the tunnel is using instead.'));
 		o.modalonly = true;
 		o.depends('mode', '1');
 		uci.sections('zirgozar', 'node').forEach(function(n) {
@@ -165,7 +165,7 @@ return view.extend({
 		});
 
 		/* ------------------------------------------------------------ proxy */
-		o = s.taboption('proxy', form.Value, 'tcp_no_redir_ports', _('TCP No Redir Ports'));
+		o = s.taboption('proxy', form.Value, 'tcp_no_redir_ports', _('TCP ports not forwarded (do not forward these TCP ports)'));
 		o.modalonly = true;
 		o.value('', _('No patterns are used'));
 		o.value('1:65535', _('All'));
@@ -173,7 +173,7 @@ return view.extend({
 		o.depends('mode', '2');
 		o.validate = portValidate;
 
-		o = s.taboption('proxy', form.Value, 'udp_no_redir_ports', _('UDP No Redir Ports'));
+		o = s.taboption('proxy', form.Value, 'udp_no_redir_ports', _('UDP ports not forwarded (do not forward these UDP ports)'));
 		o.modalonly = true;
 		o.value('', _('No patterns are used'));
 		o.value('1:65535', _('All'));
@@ -181,7 +181,7 @@ return view.extend({
 		o.depends('mode', '2');
 		o.validate = portValidate;
 
-		o = s.taboption('proxy', form.Value, 'tcp_redir_ports', _('TCP Redir Ports'));
+		o = s.taboption('proxy', form.Value, 'tcp_redir_ports', _('TCP ports forwarded (forward these TCP ports)'));
 		o.modalonly = true;
 		o.value('1:65535', _('All'));
 		o.value('22,25,53,80,143,443,465,587,853,873,993,995,5222,8080,8443,9418', _('Common Use'));
@@ -191,7 +191,7 @@ return view.extend({
 		o.depends('mode', '2');
 		o.validate = portValidate;
 
-		o = s.taboption('proxy', form.Value, 'udp_redir_ports', _('UDP Redir Ports'));
+		o = s.taboption('proxy', form.Value, 'udp_redir_ports', _('UDP ports forwarded (forward these UDP ports)'));
 		o.modalonly = true;
 		o.value('1:65535', _('All'));
 		o.default = '1:65535';

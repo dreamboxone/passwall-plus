@@ -60,7 +60,7 @@ var FA = {
 		'یک درخواست واقعی از داخل کانفیگ؛ تنها آزمایشی که ثابت می‌کند کانفیگ کار می‌کند.',
 
 	/* ----------------------------------------------------------- the nodes */
-	'Node': 'نام کانفیگ',
+	'Node name': 'نام کانفیگ',
 	'Choose node': 'انتخاب کانفیگ',
 	'Nodes': 'کانفیگ‌ها',
 	'%d nodes': '%d کانفیگ',
@@ -373,12 +373,12 @@ var FA = {
 	'No Proxy': 'بدون پروکسی',
 	'Use global config': 'با تنظیمات سراسری',
 	'the node the tunnel is using': 'کانفیگی که تونل از آن استفاده می‌کند',
-	'Nodes added by hand on the Node List page. A hysteria2 or tuic node cannot be given a rule of its own; such a rule uses the node the tunnel is using instead.':
+	'Nodes added by hand on the Configs page. A hysteria2 or tuic node cannot be given a rule of its own; such a rule uses the node the tunnel is using instead.':
 		'فقط کانفیگ‌های دستی صفحه «کانفیگ‌ها». کانفیگ‌های hysteria2 و tuic اینجا قابل استفاده نیستند و به جای آن‌ها کانفیگ اصلی تونل استفاده می‌شود.',
-	'TCP No Redir Ports': 'پورت‌های TCP بدون انتقال بشود (عدم فوروارد این پورت‌های TCP)',
-	'UDP No Redir Ports': 'پورت‌های UDP بدون انتقال بشود (عدم فوروارد این پورت‌های UDP)',
-	'TCP Redir Ports': 'پورت‌های TCP انتقالی بشود (فوروارد این پورت‌های TCP)',
-	'UDP Redir Ports': 'پورت‌های UDP انتقالی بشود (فوروارد این پورت‌های UDP)',
+	'TCP ports not forwarded (do not forward these TCP ports)': 'پورت‌های TCP بدون انتقال بشود (عدم فوروارد این پورت‌های TCP)',
+	'UDP ports not forwarded (do not forward these UDP ports)': 'پورت‌های UDP بدون انتقال بشود (عدم فوروارد این پورت‌های UDP)',
+	'TCP ports forwarded (forward these TCP ports)': 'پورت‌های TCP انتقالی بشود (فوروارد این پورت‌های TCP)',
+	'UDP ports forwarded (forward these UDP ports)': 'پورت‌های UDP انتقالی بشود (فوروارد این پورت‌های UDP)',
 	'No patterns are used': 'استفاده نشود',
 	'Common Use': 'پرکاربرد',
 	'The port settings support single ports and ranges. Separate multiple ports with commas (,). Example: 21,80,443,1000:2000.':
@@ -454,7 +454,7 @@ var FA = {
 	'Every node the tunnel may choose dials out through this node first — PassWall2’s pre-proxy. For a node that cannot be reached from here directly, or to hide which nodes are being used. With it on, the first-pass handshake is skipped, because no node is reached directly.':
 		'هر کانفیگی که تونل انتخاب کند، اول از داخل این نود رد می‌شود. برای نودی که از اینجا مستقیم در دسترس نیست، یا برای پنهان کردن اینکه از کدام نودها استفاده می‌شود. وقتی روشن است، هندشیک مرحله اول انجام نمی‌شود، چون به هیچ نودی مستقیم وصل نمی‌شویم.',
 	'Preproxy Node': 'کانفیگ پیش‌پروکسی',
-	'Nodes added by hand on the Node List page.': 'کانفیگ‌هایی که در صفحه کانفیگ‌ها دستی اضافه شده‌اند.',
+	'Nodes added by hand on the Configs page.': 'کانفیگ‌هایی که در صفحه کانفیگ‌ها دستی اضافه شده‌اند.',
 	'Fragment': 'فرگمنت',
 	'TCP fragments, which can deceive the censorship system in some cases, such as bypassing SNI blacklists.':
 		'اولین بسته‌های اتصال تکه‌تکه فرستاده می‌شوند تا فیلترینگ نتواند نام سایت (SNI) را تشخیص دهد. برای وقتی که کانفیگ‌ها به خاطر فیلتر SNI وصل نمی‌شوند.',
@@ -468,7 +468,7 @@ var FA = {
 	'Max Split': 'حداکثر تکه',
 	'Limit the maximum number of splits.': 'حداکثر تعداد تکه‌ها را محدود می‌کند.',
 	'Noise': 'نویز',
-	'UDP noise, Under some circumstances it can bypass some UDP based protocol restrictions. The packets are in the Xray Noise Packets table below; Xray sends them on mKCP nodes and on xhttp over HTTP/3.':
+	'Only affects mKCP configs and xhttp over HTTP/3. The packets are defined in the table below.':
 		'فقط روی کانفیگ‌های mKCP و xhttp با HTTP/3 اثر دارد. بسته‌ها در جدول پایین تعریف می‌شوند.',
 	'Mux': 'Mux',
 	'Several connections carried in one. Not used on a VLESS flow, xhttp or WireGuard node, where it cannot work.':
@@ -493,8 +493,8 @@ var FA = {
 	'It is the latest version': 'آخرین نسخه است',
 	'Check update': 'بررسی به‌روزرسانی',
 	'Force update': 'به‌روزرسانی اجباری',
-	'The update button downloads the new version from GitHub, checks it against the release’s checksums and installs it with the router’s own package manager. The settings are kept, and the page reloads by itself when it is done.':
-		'دکمه به‌روزرسانی نسخه جدید را از گیت‌هاب دانلود می‌کند، آن را با چک‌سام‌های همان انتشار بررسی می‌کند و با مدیر پکیج خود روتر نصب می‌کند. تنظیمات حفظ می‌شوند و وقتی کار تمام شد صفحه خودش دوباره بارگذاری می‌شود.',
+	'The update button downloads the new version from GitHub and installs it. The settings are kept.':
+		'دکمه به‌روزرسانی نسخه جدید را از گیت‌هاب دانلود و نصب می‌کند. تنظیمات حفظ می‌شوند.',
 	'Downloading and installing the new version. This takes a minute or two; the page reloads by itself when it is done.':
 		'در حال دانلود و نصب نسخه جدید. یکی دو دقیقه طول می‌کشد؛ وقتی تمام شد صفحه خودش دوباره بارگذاری می‌شود.',
 	'Updated to %s.': 'به نسخه %s به‌روز شد.',
@@ -583,7 +583,7 @@ var FA = {
 	'Socks Listen Port': 'پورت SOCKS',
 	'What the core itself says, shown on the Runtime Logs page beside this program’s own log.':
 		'پیام‌های هسته Xray ثبت شوند و در صفحه «لاگ‌های اجرا»، بخش «لاگ کانفیگ» نمایش داده شوند.',
-	'Asking the router…': 'در انتظار پاسخ روتر…',
+	'Waiting for the router…': 'در انتظار پاسخ روتر…',
 
 	/* ----------------------------------------------------------- units */
 	'TB': 'ترابایت',
@@ -597,7 +597,7 @@ var FA = {
 	'Other Settings': 'تنظیمات دیگر',
 	'Delay Settings': 'تنظیمات تاخیر',
 	'Open and close Daemon': 'بررسی و ترمیم خودکار',
-	'Every quarter of an hour: bring the tunnel back when it should be up and is not, and move to another node when the one in use carries nothing.':
+	'Checks every 15 minutes and, if the current config does not work, picks another.':
 		'هر 15 دقیقه بررسی می‌کند و اگر کانفیگ فعلی کار نکند، کانفیگ دیگری را انتخاب می‌کند.',
 	'Delay Start': 'تاخیر در شروع',
 	'Units:seconds': 'واحد: ثانیه',
@@ -643,8 +643,8 @@ var FA = {
 	'Buffer Size': 'اندازه بافر',
 	'Buffer size for every connection (kB)': 'اندازه بافر هر اتصال (کیلوبایت)',
 
-	/* ------------------------------------------ Node List, Node Subscribe */
-	'Node List': 'کانفیگ‌ها',
+	/* ------------------------------------------ Configs, Node Subscribe */
+	'Configs': 'کانفیگ‌ها',
 	'Node Subscribe': 'اشتراک‌ها',
 	'Automatic detection delay': 'بررسی خودکار تاخیر',
 	'When this page opens, each node added by hand is measured this way, and the answer put in its column.':
@@ -660,9 +660,9 @@ var FA = {
 	'Keep List': 'فهرست نگه‌داشتن',
 	'Discard List,But Keep List First': 'فهرست حذف، با اولویت فهرست نگه‌داشتن',
 	'Keep List,But Discard List First': 'فهرست نگه‌داشتن، با اولویت فهرست حذف',
-	'Subscriptions are not used now: on the Node List page, “Nodes to use” is set to only manually added configs.':
+	'Subscriptions are not used now: on the Configs page, “Nodes to use” is set to only manually added configs.':
 		'اشتراک‌ها الان استفاده نمی‌شوند: در صفحه «کانفیگ‌ها»، گزینه «کانفیگ‌های مورد استفاده» روی «فقط کانفیگ‌های دستی» است.',
-	'Filter keyword Mode': 'روش فیلتر کلمات داخل کانفیگ',
+	'Keyword filter method inside the config': 'روش فیلتر کلمات داخل کانفیگ',
 	'Nodes are kept or dropped by words in their names. A word matches anywhere in the name, exactly as written.':
 		'کانفیگ‌ها بر اساس کلمات موجود در نامشان نگه داشته یا حذف می‌شوند. کلمه در هر جای نام باشد، دقیقا همان‌طور که نوشته شده، پیدا می‌شود.',
 	'Nodes kept at most': 'حداکثر تعداد کانفیگ‌ها',
@@ -724,9 +724,9 @@ var FA = {
 	'Close window': 'بستن',
 	'Add': 'افزودن',
 	'Default Preproxy': 'پیش‌پراکسی پیش‌فرض',
-	'Geo View': 'موقعیت‌یاب',
+	'Locator': 'موقعیت‌یاب',
 	'Geoview App Path': 'مسیر برنامه Geoview',
-	'Only the Geo View page needs it. Empty means this program’s own copy in the folder above.':
+	'Only the Locator page needs it. Empty means this program’s own copy in the folder above.':
 		'فقط صفحه «موقعیت‌یاب» به آن نیاز دارد. خالی یعنی نسخه خود این برنامه در پوشه بالا.',
 	'Enter something to look for first.': 'اول چیزی برای جست‌وجو وارد کنید.',
 	'Processing, please wait…': 'در حال پردازش، لطفا صبر کنید…',
@@ -832,10 +832,10 @@ var FA = {
 	/* What the router says on the first page when something needs doing. */
 	'No node on the list answered at all. The connection itself may be blocking them, or the list may be stale.':
 		'هیچ کانفیگی در فهرست جواب نداد. ممکن است خود اینترنت جلوی آن‌ها را گرفته باشد یا فهرست قدیمی شده باشد.',
-	'No node on the list can carry traffic, and neither can the one in use. The tunnel has been taken out of the way so that the network works without it. Add a node that works on the Node List page, or check the subscription.':
+	'No node on the list can carry traffic, and neither can the one in use. The tunnel has been taken out of the way so that the network works without it. Add a node that works on the Configs page, or check the subscription.':
 		'هیچ کانفیگی در فهرست، و نه کانفیگ در حال استفاده، ترافیک را عبور نمی‌دهد. تونل کنار گذاشته شد تا شبکه بدون آن کار کند. در صفحه «کانفیگ‌ها» یک کانفیگ سالم اضافه کنید، یا اشتراک را بررسی کنید.',
 	'Nothing in the list could be read as a node': 'هیچ چیز در فهرست به‌عنوان کانفیگ خوانده نشد',
-	'There is no node list yet: no subscription could be read and none has been saved before. Add one node by hand on the Node List page - a single share link is enough - or check the subscription address on Node Subscribe.':
+	'There is no node list yet: no subscription could be read and none has been saved before. Add one node by hand on the Configs page - a single share link is enough - or check the subscription address on Node Subscribe.':
 		'هنوز فهرست کانفیگی وجود ندارد: هیچ اشتراکی خوانده نشد و فهرست ذخیره‌شده‌ای هم نیست. در صفحه «کانفیگ‌ها» یک کانفیگ دستی اضافه کنید (یک لینک کافی است)، یا آدرس اشتراک را در صفحه «اشتراک کانفیگ‌ها» بررسی کنید.',
 	'The node chosen in Basic Settings cannot be read. Choose another there, or set it back to Auto.':
 		'کانفیگ انتخاب‌شده در «تنظیمات پایه» خوانده نمی‌شود. کانفیگ دیگری انتخاب کنید یا آن را روی خودکار بگذارید.',

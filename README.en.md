@@ -133,7 +133,7 @@ PassWall2 is left alone.
 3. In the **Main** tab turn on **Main switch**, then press **Save & Apply**.
 
 That is all. If there is no list to choose from — the default subscription
-cannot be read, and you have no config of your own — go to **Node List**, press
+cannot be read, and you have no config of your own — go to **Configs**, press
 **Add the node via the link**, paste one of your own configs, and come back.
 
 > [!WARNING]
@@ -147,8 +147,8 @@ status card.
 ## 🧭 4. The pages, and every option on them
 
 The tabs across the top are PassWall2's, in PassWall2's order: **Basic
-Settings, Node List, Node Subscribe, Other Settings, App Update, Rule Manage,
-Geo View, Access Control, Runtime Logs**.
+Settings, Configs, Node Subscribe, Other Settings, App Update, Rule Manage,
+Locator, Access Control, Runtime Logs**.
 
 Every option is also a line in `/etc/config/zirgozar`, an ordinary UCI
 file; the name in backticks is its name there. Anything a page does can be done
@@ -191,7 +191,7 @@ The form below has four tabs, in PassWall2's order.
 | **Active core** | `core_engine` | Xray | `Xray`, `sing-box` or `sing-box-lx`. sing-box is given the same configuration, translated: same inbounds, rules, DNS and Iran split; hysteria2 and tuic nodes are dialled directly, with no helper program. Not carried over: mux, noise, FakeDNS, mKCP and the poisoned-address inbound; traffic statistics are counted by polling and run a little low. The official sing-box has no xhttp; [sing-box-lx](https://github.com/Leadaxe/sing-box-lx) does, and is installed from the Cores list on this page with one press (its path is **Sing-Box-LX App Path**). If the chosen sing-box is missing or cannot run the tunnel, Xray takes over and the page says so |
 | **Node** | `node` | Auto (fastest) | Auto measures the configs and uses the fastest. A config added by hand is used as it is, and nothing is measured |
 | **Preproxy** | `preproxy_enabled` | off | Every config the tunnel may choose dials out through a config of yours first — PassWall2's pre-proxy. For configs that cannot be reached from here directly, or to hide which ones are being used. With it on, the first-pass handshake is skipped, because no config is reached directly |
-| **Preproxy Node** | `preproxy_node` | — | The config dialled first. Only configs added by hand on Node List |
+| **Preproxy Node** | `preproxy_node` | — | The config dialled first. Only configs added by hand on Configs |
 | **Localhost Proxy** | `localhost_proxy` | on | The router's own traffic goes through the tunnel too — its downloads, its clock, its package manager, and so the routing data and the cores from GitHub. While a config is being measured or a subscription read it goes direct, so the router can always repair its own tunnel. On by default, as in PassWall2 |
 | **Client Proxy** | `client_proxy` | on | Devices on the LAN go through the tunnel. Turned off, they do not, but the devices named on Access Control still do |
 | **Node Socks Listen Port** | `node_socks_port` | 1070 | A SOCKS server on the router that goes out the way the tunnel does. Empty for none |
@@ -288,7 +288,7 @@ the last fortnight as bars, plus how much went straight out this month. The
 figures are read from the core every five minutes and added up in memory; how
 often they reach flash is set on Other Settings.
 
-### 📋 4.2 Node List
+### 📋 4.2 Configs
 
 PassWall2's Node List: which configs are used and how they are measured, the
 configs you add by hand, and every config the router has.
@@ -362,7 +362,7 @@ PassWall2's Node Subscribe. First, for all subscriptions:
 
 | Option | In the file | Default | What it does |
 |---|---|---|---|
-| **Filter keyword Mode** | `filter_keyword_mode` | Discard List | Configs are kept or dropped by words in their names; a word matches anywhere in the name, exactly as written. *Close*, *Discard List*, *Keep List*, *Discard List, But Keep List First*, *Keep List, But Discard List First* — PassWall2's five modes |
+| **Keyword filter method inside the config** | `filter_keyword_mode` | Discard List | Configs are kept or dropped by words in their names; a word matches anywhere in the name, exactly as written. *Close*, *Discard List*, *Keep List*, *Discard List, But Keep List First*, *Keep List, But Discard List First* — PassWall2's five modes |
 | **Discard List** | `filter_discard_list` | — | The words that drop a config |
 | **Keep List** | `filter_keep_list` | — | The words that keep a config |
 | **Nodes kept at most** | `max_nodes` | 300 | From all the subscriptions together. A long list takes longer to measure and more memory to hold |
@@ -390,8 +390,8 @@ Each subscription's edit window:
 | Main | **On** | `enabled` | on | This subscription on or off |
 | Main | **Subscribe URL Access Method** | `access_mode` | Auto | *Auto*: the way the router's own traffic goes when Localhost Proxy is on; otherwise through the tunnel when it is up, and straight out when it is not. *Direct Connection*, or *Proxy* — through the tunnel's own SOCKS port |
 | Main | **User-Agent** | `user_agent` | v2rayN/9.99 | What the request says it is. Some providers answer an unknown client with a page instead of the list |
-| Filter keyword Mode | **Filter keyword Mode** | `filter_keyword_mode` | Use global config | This subscription's own filter, or the global one above |
-| Filter keyword Mode | **Discard List / Keep List** | `filter_discard_list` / `filter_keep_list` | — | Its own words |
+| Keyword filter method inside the config | **Keyword filter method inside the config** | `filter_keyword_mode` | Use global config | This subscription's own filter, or the global one above |
+| Keyword filter method inside the config | **Discard List / Keep List** | `filter_discard_list` / `filter_keep_list` | — | Its own words |
 | Auto Update | **Update Once on Boot** | `boot_update` | off | Read once after every boot |
 | Auto Update | **Auto Update Mode** | `update_week_mode` | Disable | *Disable*: only when its button is pressed, or once if it has never been read. *Every 15 minutes* — how the default list is read. *Loop Mode*: every so many hours. *Every day*, or one day of the week |
 | Auto Update | **Update Time** | `update_time_mode` | 0:00 | The time, for every day or one day of the week |
@@ -425,10 +425,10 @@ switch is on.
 
 | Option | In the file | Default | What it does |
 |---|---|---|---|
-| **TCP No Redir Ports** | `tcp_no_redir_ports` | none | TCP ports that never go through the tunnel — before everything else |
-| **UDP No Redir Ports** | `udp_no_redir_ports` | none | The same for UDP |
-| **TCP Redir Ports** | `tcp_redir_ports` | All | The TCP ports that do: all, common ones, or only web (80, 443) |
-| **UDP Redir Ports** | `udp_redir_ports` | All | The same for UDP |
+| **TCP ports not forwarded (do not forward these TCP ports)** | `tcp_no_redir_ports` | none | TCP ports that never go through the tunnel — before everything else |
+| **UDP ports not forwarded (do not forward these UDP ports)** | `udp_no_redir_ports` | none | The same for UDP |
+| **TCP ports forwarded (forward these TCP ports)** | `tcp_redir_ports` | All | The TCP ports that do: all, common ones, or only web (80, 443) |
+| **UDP ports forwarded (forward these UDP ports)** | `udp_redir_ports` | All | The same for UDP |
 | **Prefer firewall tools** | `firewall_backend` | Auto | nftables or iptables. Auto is right unless the router has both and the wrong one is picked |
 | **TCP Proxy Way** | `tcp_proxy_way` | TPROXY | TPROXY carries TCP and UDP on one port. REDIRECT sends TCP to a port of its own, for a kernel whose TPROXY misbehaves with TCP; UDP is always TPROXY |
 | **Hijacking ICMP (PING)** | `accept_icmp` | off | A tunnel carries no ICMP, so a ping to a tunnelled address never comes back. With this on, the router answers it |
@@ -477,7 +477,7 @@ be made.
 | Card | What it shows |
 |---|---|
 | **App Update** | This program's version and whether a newer one is published. **Update to …** downloads the new version from GitHub, checks it against that release's checksums and installs it with the router's own package manager (apk or opkg); the settings are kept, the tunnel comes back if it was on, and the page reloads by itself |
-| **Cores** | Xray, sing-box, hysteria and Geoview: what is installed, what each project has published, **Check update**, **Install / Update to …**, **Remove**. An update is only offered for something actually newer. Beside Xray is a list of its recent releases, pre-releases included, with **Install this version**. Of the Xray cores on the router the **newest** is always used; to pin one, put its path in Xray App Path. sing-box and hysteria are only for configs that speak hysteria2 or tuic, which Xray does not; Geoview only for the Geo View page |
+| **Cores** | Xray, sing-box, hysteria and Geoview: what is installed, what each project has published, **Check update**, **Install / Update to …**, **Remove**. An update is only offered for something actually newer. Beside Xray is a list of its recent releases, pre-releases included, with **Install this version**. Of the Xray cores on the router the **newest** is always used; to pin one, put its path in Xray App Path. sing-box and hysteria are only for configs that speak hysteria2 or tuic, which Xray does not; Geoview only for the Locator page |
 | **Router requirements** | One line: everything is ready, or how many things are missing. **Details** opens the questions put to the running system — transparent proxy, policy routing, HTTPS, the firewall in use, missing packages — with **Install them**. They open by themselves when something is missing |
 
 **App Path**
@@ -531,7 +531,7 @@ The shunt rules are in the **Shunt Rule** tab of Basic Settings.
 | **Direct IP List** | `direct_ip` | — | Addresses that connect directly and never enter the core |
 | **Direct domains** | `direct_domain` | — | Sites that always go straight out. A name covers everything under it; `full:`, `regexp:`, `keyword:` are accepted as written |
 
-### 🔍 4.7 Geo View
+### 🔍 4.7 Locator
 
 PassWall2's Geo View, with its tool Geoview (install it with the button on the
 page, or on App Update).
@@ -559,7 +559,7 @@ A `config acl_rule` section per row:
 | Main | **Source** | `sources` | The devices: a MAC address, an IP, a range (`192.168.1.50-192.168.1.60`), a network, or `ipset:` and a set's name. Your router's known devices are offered |
 | Main | **Mode** | `mode` | *No Proxy*: never through the tunnel. *Proxy* through one config. *Proxy* through the config the tunnel is using |
 | Main | **Node** | `node` | For Proxy through one config: one of your configs. A hysteria2 or tuic one cannot have a rule of its own; such a rule uses the tunnel's config |
-| Proxy | **TCP / UDP No Redir Ports**, **TCP / UDP Redir Ports** | `tcp_no_redir_ports` … `udp_redir_ports` | The same as Forwarding Settings, for these devices only |
+| Proxy | **TCP / UDP ports not forwarded (do not forward these UDP ports)**, **TCP / UDP ports forwarded (forward these UDP ports)** | `tcp_no_redir_ports` … `udp_redir_ports` | The same as Forwarding Settings, for these devices only |
 
 ### 📜 4.9 Runtime Logs
 
@@ -590,7 +590,7 @@ the next one down the list rather than starting again.
 > Cloudflare, where the ping is answered by the CDN edge — which tells you
 > nothing about the server itself. Plenty of healthy servers do not answer pings
 > at all. So ping keeps configs that do not work and discards configs that do.
-> If you want ping anyway, it is **First pass** on Node List.
+> If you want ping anyway, it is **First pass** on Configs.
 
 ---
 
@@ -625,7 +625,7 @@ names the right one.
 
 **It says there is no node list yet.** No subscription could be read and you
 have no config of your own. Check the subscription on Node Subscribe or — more
-reliably — add one of your own configs on Node List. On a censored connection
+reliably — add one of your own configs on Configs. On a censored connection
 the subscription address usually will not open until the tunnel is up, and the
 tunnel will not come up without a config; one config of your own breaks that
 circle.
@@ -690,7 +690,7 @@ happens again.
 | No node on the list answered at all | The list is stale, or your connection is blocking all of them | Read the subscriptions again, or add a config of your own |
 | … answered a handshake, but none could complete a request | The configs are there, the traffic is not getting through | Choose again, or another list |
 | Nothing in the list could be read as a node | The subscription's format was not recognised | Check the subscription |
-| There is no node list yet | No subscription read and no config of your own | Add one on Node List |
+| There is no node list yet | No subscription read and no config of your own | Add one on Configs |
 | The chosen node speaks hysteria2/tuic, which Xray cannot | A helper core is needed | Install sing-box or hysteria on App Update |
 | The helper for this node's protocol would not start | The helper core did not run | Check Runtime Logs, or pick another config |
 | The tunnel process started but never accepted connections | The core ran and never listened | Look at Runtime Logs |
@@ -754,7 +754,7 @@ The default config list is the **TOP 100** collection published by
 [@Raydikalx](https://t.me/raydikalx), gathered and kept current as free, public
 work. The Iranian routing data is
 [Chocolate4U/Iran-v2ray-rules](https://github.com/Chocolate4U/Iran-v2ray-rules).
-Geo View uses [Geoview](https://github.com/snowie2000/geoview). This project
+Locator uses [Geoview](https://github.com/snowie2000/geoview). This project
 runs no servers of its own: it measures what those lists offer and picks
 whichever answers fastest from where you are. Without them there would be
 nothing here to measure. Thank you.

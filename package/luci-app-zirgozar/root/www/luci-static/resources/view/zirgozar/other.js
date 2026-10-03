@@ -65,7 +65,7 @@ return view.extend({
 		s.anonymous = true;
 
 		o = s.option(form.Flag, 'start_daemon', _('Open and close Daemon'),
-			_('Every quarter of an hour: bring the tunnel back when it should be up and is not, and move to another node when the one in use carries nothing.'));
+			_('Checks every 15 minutes and, if the current config does not work, picks another.'));
 		o.default = '1';
 		o.rmempty = false;
 
@@ -103,26 +103,26 @@ return view.extend({
 		s = m.section(form.NamedSection, 'config', 'zirgozar', _('Forwarding Settings'));
 		s.anonymous = true;
 
-		o = s.option(form.Value, 'tcp_no_redir_ports', _('TCP No Redir Ports'));
+		o = s.option(form.Value, 'tcp_no_redir_ports', _('TCP ports not forwarded (do not forward these TCP ports)'));
 		o.value('', _('No patterns are used'));
 		o.value('1:65535', _('All'));
 		o.validate = portValidate;
 
-		o = s.option(form.Value, 'udp_no_redir_ports', _('UDP No Redir Ports'),
+		o = s.option(form.Value, 'udp_no_redir_ports', _('UDP ports not forwarded (do not forward these UDP ports)'),
 			E('span', { 'style': 'color:#ef4444' },
 				_('Fill in the ports you don\'t want to be forwarded by the agent, with the highest priority.')));
 		o.value('', _('No patterns are used'));
 		o.value('1:65535', _('All'));
 		o.validate = portValidate;
 
-		o = s.option(form.Value, 'tcp_redir_ports', _('TCP Redir Ports'));
+		o = s.option(form.Value, 'tcp_redir_ports', _('TCP ports forwarded (forward these TCP ports)'));
 		o.value('1:65535', _('All'));
 		o.value('22,25,53,80,143,443,465,587,853,873,993,995,5222,8080,8443,9418', _('Common Use'));
 		o.value('80,443', _('Only Web'));
 		o.default = '1:65535';
 		o.validate = portValidate;
 
-		o = s.option(form.Value, 'udp_redir_ports', _('UDP Redir Ports'));
+		o = s.option(form.Value, 'udp_redir_ports', _('UDP ports forwarded (forward these UDP ports)'));
 		o.value('1:65535', _('All'));
 		o.default = '1:65535';
 		o.validate = portValidate;
@@ -208,7 +208,7 @@ return view.extend({
 		o.depends('fragment', '1');
 
 		o = s.option(form.Flag, 'noise', _('Noise'),
-			_('UDP noise, Under some circumstances it can bypass some UDP based protocol restrictions. The packets are in the Xray Noise Packets table below; Xray sends them on mKCP nodes and on xhttp over HTTP/3.'));
+			_('Only affects mKCP configs and xhttp over HTTP/3. The packets are defined in the table below.'));
 		o.default = '0';
 		o.rmempty = false;
 

@@ -449,7 +449,7 @@ function renderNodes(d) {
 	});
 
 	var rows = [ E('tr', { 'class': 'tr table-titles' }, [
-		E('th', { 'class': 'th' }, _('Node')),
+		E('th', { 'class': 'th' }, _('Node name')),
 		E('th', { 'class': 'th' }, _('Protocol')),
 		E('th', { 'class': 'th' }, _('URL Test')),
 		E('th', { 'class': 'th' }, _('TCPing')),

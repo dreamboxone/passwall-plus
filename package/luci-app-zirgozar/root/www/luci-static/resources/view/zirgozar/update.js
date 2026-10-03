@@ -209,7 +209,7 @@ function render(d) {
 				: ''
 		], 'app'));
 		abox.appendChild(E('p', { 'style': 'font-size:12px;color:var(--muted);margin:8px 0 0' },
-			_('The update button downloads the new version from GitHub, checks it against the release’s checksums and installs it with the router’s own package manager. The settings are kept, and the page reloads by itself when it is done.')));
+			_('The update button downloads the new version from GitHub and installs it. The settings are kept.')));
 	}
 
 	/* ------------------------------------------------------------- cores */
@@ -322,7 +322,7 @@ return view.extend({
 		o.placeholder = '/usr/libexec/zirgozar/hysteria';
 
 		o = s.option(form.Value, 'core_geoview', _('Geoview App Path'),
-			_('Only the Geo View page needs it. Empty means this program’s own copy in the folder above.'));
+			_('Only the Locator page needs it. Empty means this program’s own copy in the folder above.'));
 		o.placeholder = '/usr/libexec/zirgozar/geoview';
 
 		o = s.option(form.DummyValue, '_path_tip');
@@ -337,7 +337,7 @@ return view.extend({
 
 		return m.render().then(function(mapEl) {
 			function waiting() {
-				return E('p', { 'class': 'mk-muted', 'style': 'margin:0' }, _('Asking the router…'));
+				return E('p', { 'class': 'mk-muted', 'style': 'margin:0' }, _('Waiting for the router…'));
 			}
 			var content = [
 				E('div', { 'id': 'pwp-job', 'class': 'mk-alert', 'style': 'display:none' }, ''),

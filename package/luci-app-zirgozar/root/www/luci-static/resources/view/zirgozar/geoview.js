@@ -113,7 +113,7 @@ return view.extend({
 			])
 		]);
 
-		return pui.page([ pui.card(_('Geo View'), 'globe', '#0ea5e9', body) ]);
+		return pui.page([ pui.card(_('Locator'), 'globe', '#0ea5e9', body) ]);
 	},
 
 	handleSave: null,

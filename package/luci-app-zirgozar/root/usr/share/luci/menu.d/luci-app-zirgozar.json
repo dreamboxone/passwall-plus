@@ -20,7 +20,7 @@
 	},
 
 	"admin/services/zirgozar/nodes": {
-		"title": "Node List",
+		"title": "Configs",
 		"order": 20,
 		"action": {
 			"type": "view",
@@ -65,7 +65,7 @@
 	},
 
 	"admin/services/zirgozar/geoview": {
-		"title": "Geo View",
+		"title": "Locator",
 		"order": 70,
 		"action": {
 			"type": "view",

@@ -192,7 +192,7 @@ return view.extend({
 			o.render = function() {
 				return E('div', { 'class': 'cbi-value' }, E('div', {
 					'style': 'color:#dc2626;font-weight:600;font-size:13px;padding:4px 0'
-				}, _('Subscriptions are not used now: on the Node List page, “Nodes to use” is set to only manually added configs.')));
+				}, _('Subscriptions are not used now: on the Configs page, “Nodes to use” is set to only manually added configs.')));
 			};
 		}
 
@@ -209,7 +209,7 @@ return view.extend({
 		/* The table shows what PassWall2's does; everything else is in the
 		   edit window. */
 		s.tab('main', _('Main'));
-		s.tab('keywords', _('Filter keyword Mode'));
+		s.tab('keywords', _('Keyword filter method inside the config'));
 		s.tab('sched', _('Auto Update'));
 		s.tab('chain', _('Chain Proxy'));
 
@@ -275,7 +275,7 @@ return view.extend({
 		o.value('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0', 'Edge for Windows');
 		o.value('v2rayN/9.99', 'v2rayN');
 
-		o = s.taboption('keywords', form.ListValue, 'filter_keyword_mode', _('Filter keyword Mode'));
+		o = s.taboption('keywords', form.ListValue, 'filter_keyword_mode', _('Keyword filter method inside the config'));
 		o.modalonly = true;
 		filterModes(o, true);
 		o.default = '5';
@@ -372,7 +372,7 @@ return view.extend({
 		s = m.section(form.NamedSection, 'config', 'zirgozar');
 		s.anonymous = true;
 
-		o = s.option(form.ListValue, 'filter_keyword_mode', _('Filter keyword Mode'),
+		o = s.option(form.ListValue, 'filter_keyword_mode', _('Keyword filter method inside the config'),
 			_('Nodes are kept or dropped by words in their names. A word matches anywhere in the name, exactly as written.'));
 		filterModes(o, false);
 		o.default = '1';

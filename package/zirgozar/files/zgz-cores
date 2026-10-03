@@ -392,9 +392,13 @@ ver_newer() {
 # offers them as a choice.
 XRAY_VERSIONS="$ZGZ_ETC/xray.versions"
 
+# A release that can always be installed from the list, however old it has
+# become - the one this program is known to work well with.
+XRAY_PINNED=v26.1.23
+
 xray_releases() {
 	curl -fsSL --connect-timeout 8 --max-time 25 \
-		"https://api.github.com/repos/$XRAY_REPO/releases?per_page=12" 2>/dev/null |
+		"https://api.github.com/repos/$XRAY_REPO/releases?per_page=3" 2>/dev/null |
 		tr ',' '\n' | awk '
 			/"tag_name"[ \t]*:/ { t = $0; sub(/.*"tag_name"[ \t]*:[ \t]*"/, "", t); sub(/".*/, "", t) }
 			/"prerelease"[ \t]*:/ { if (t != "") { print t, ($0 ~ /true/ ? "pre" : "stable"); t = "" } }'
@@ -496,9 +500,15 @@ cmd_list() {
 	# not from here - a package manager is the only thing that can replace a
 	# package cleanly - so this only says whether there is one to install.
 	printf ',"xray_versions":['
-	if [ -s "$XRAY_VERSIONS" ]; then
-		awk 'NF == 2 { printf "%s{\"tag\":\"%s\",\"pre\":%s}", (n++ ? "," : ""), $1, ($2 == "pre" ? "true" : "false") }' "$XRAY_VERSIONS"
-	fi
+	# The pinned release is always on the list, whether or not it is among the
+	# recent ones the list was read from, and whether or not the list could be
+	# read at all.
+	[ -s "$XRAY_VERSIONS" ] || : > "$ZGZ_RUN/xray.versions.none"
+	awk -v PIN="$XRAY_PINNED" '
+		NF == 2 && shown < 3 { shown++; printf "%s{\"tag\":\"%s\",\"pre\":%s}", (n++ ? "," : ""), $1, ($2 == "pre" ? "true" : "false"); if ($1 == PIN) seen = 1 }
+		END { if (!seen) printf "%s{\"tag\":\"%s\",\"pre\":false}", (n++ ? "," : ""), PIN }
+	' "$( [ -s "$XRAY_VERSIONS" ] && echo "$XRAY_VERSIONS" || echo "$ZGZ_RUN/xray.versions.none" )"
+	rm -f "$ZGZ_RUN/xray.versions.none"
 	printf ']'
 	_mine="$(zgz_version)"; _mine="${_mine%-r*}"
 	_pub="$(latest_of zirgozar)"

@@ -463,7 +463,7 @@ return baseclass.extend({
 				]),
 				E('div', { 'id': 'pwp-pct', 'style': 'margin-top:5px;font-size:12px;color:var(--muted)' }, '')
 			]),
-			line(_('Node'), 'pwp-node'),
+			line(_('Node name'), 'pwp-node'),
 			protoLine(),
 			line(_('Latency'), 'pwp-latency'),
 			line(_('Routing'), 'pwp-route'),

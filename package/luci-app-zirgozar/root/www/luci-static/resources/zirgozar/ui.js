@@ -21,7 +21,7 @@ var _ = i18n.tr;
 
 /* Put on the stylesheet's and the logo's addresses, so a browser holding the
    previous release's copies fetches these. Kept in step with PKG_VERSION. */
-var BUILD = '2.0.32-1';
+var BUILD = '2.0.33-1';
 
 var callAction = rpc.declare({ object: 'luci.zirgozar', method: 'action',
                                params: [ 'name', 'arg' ], expect: { '': {} } });
@@ -328,12 +328,12 @@ function hero(root, version) {
    stylesheet, so there is one way between pages and it looks like Makhzan's. */
 var PAGES = [
 	[ 'settings',  'home',     'Basic Settings' ],
-	[ 'nodes',     'server',   'Node List' ],
+	[ 'nodes',     'server',   'Configs' ],
 	[ 'subscribe', 'rss',      'Node Subscribe' ],
 	[ 'other',     'grid',     'Other Settings' ],
 	[ 'update',    'download', 'App Update' ],
 	[ 'traffic',   'shield',   'Rule Manage' ],
-	[ 'geoview',   'globe',    'Geo View' ],
+	[ 'geoview',   'globe',    'Locator' ],
 	[ 'acl',      'users',    'Access Control' ],
 	[ 'log',      'book',     'Runtime Logs' ]
 ];

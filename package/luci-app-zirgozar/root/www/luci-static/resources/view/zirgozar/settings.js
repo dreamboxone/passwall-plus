@@ -10,7 +10,7 @@
  * has gone through the tunnel. There is one main switch, the one in the Main
  * tab, and it is saved and applied the way PassWall2's is.
  *
- * How a node is chosen is on Node List, and everything else PassWall2 keeps
+ * How a node is chosen is on Configs, and everything else PassWall2 keeps
  * in Other Settings is on that page here as well, and nowhere else.
  */
 
@@ -207,7 +207,7 @@ return view.extend({
 		o.rmempty = false;
 
 		o = s.taboption('main', form.ListValue, 'preproxy_node', _('Preproxy Node'),
-			_('Nodes added by hand on the Node List page.'));
+			_('Nodes added by hand on the Configs page.'));
 		o.depends('preproxy_enabled', '1');
 		nodeChoices(o);
 
@@ -358,7 +358,7 @@ return view.extend({
 			return dup ? _('This remark already exists, please change a new remark.') : true;
 		};
 
-		so = sr.option(form.ListValue, 'node', _('Node'));
+		so = sr.option(form.ListValue, 'node', _('Node name'));
 		whereTo(so, true);
 		so.editable = true;
 
