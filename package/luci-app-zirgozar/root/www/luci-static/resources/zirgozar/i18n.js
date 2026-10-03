@@ -651,7 +651,7 @@ var FA = {
 	'Keep List,But Discard List First': 'فهرست نگه‌داشتن، با اولویت فهرست حذف',
 	'Subscriptions are not used now: on the Node List page, “Nodes to use” is set to only manually added configs.':
 		'اشتراک‌ها الان استفاده نمی‌شوند: در صفحه «کانفیگ‌ها»، گزینه «کانفیگ‌های مورد استفاده» روی «فقط کانفیگ‌های دستی» است.',
-	'Filter keyword Mode': 'حالت فیلتر کلمات',
+	'Filter keyword Mode': 'روش فیلتر کلمات داخل کانفیگ',
 	'Nodes are kept or dropped by words in their names. A word matches anywhere in the name, exactly as written.':
 		'کانفیگ‌ها بر اساس کلمات موجود در نامشان نگه داشته یا حذف می‌شوند. کلمه در هر جای نام باشد، دقیقا همان‌طور که نوشته شده، پیدا می‌شود.',
 	'Nodes kept at most': 'حداکثر تعداد کانفیگ‌ها',

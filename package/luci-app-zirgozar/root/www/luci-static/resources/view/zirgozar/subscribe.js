@@ -183,11 +183,11 @@ return view.extend({
 
 		m = new form.Map('zirgozar');
 
-		/* --------------------------------------------- for all of them */
-		s = m.section(form.NamedSection, 'config', 'zirgozar');
-		s.anonymous = true;
-
+		/* The warning, when there is one, stays on top: it is about all of what
+		   follows. The settings for all the subscriptions come after the list. */
 		if ((uci.get('zirgozar', 'config', 'sources') || 'own') == 'own') {
+			s = m.section(form.NamedSection, 'config', 'zirgozar');
+			s.anonymous = true;
 			o = s.option(form.DummyValue, '_unused');
 			o.render = function() {
 				return E('div', { 'class': 'cbi-value' }, E('div', {
@@ -195,51 +195,6 @@ return view.extend({
 				}, _('Subscriptions are not used now: on the Node List page, “Nodes to use” is set to only manually added configs.')));
 			};
 		}
-
-		o = s.option(form.ListValue, 'filter_keyword_mode', _('Filter keyword Mode'),
-			_('Nodes are kept or dropped by words in their names. A word matches anywhere in the name, exactly as written.'));
-		filterModes(o, false);
-		o.default = '1';
-
-		o = s.option(form.DynamicList, 'filter_discard_list', _('Discard List'));
-		o.depends('filter_keyword_mode', '1');
-		o.depends('filter_keyword_mode', '3');
-		o.depends('filter_keyword_mode', '4');
-
-		o = s.option(form.DynamicList, 'filter_keep_list', _('Keep List'));
-		o.depends('filter_keyword_mode', '2');
-		o.depends('filter_keyword_mode', '3');
-		o.depends('filter_keyword_mode', '4');
-
-		o = s.option(form.Value, 'max_nodes', _('Nodes kept at most'),
-			_('From all the subscriptions together. A long list takes longer to measure and more memory to hold.'));
-		o.datatype = 'range(10,2000)';
-		o.default = '300';
-		o.placeholder = '300';
-
-		o = s.option(form.DummyValue, '_all');
-		o.render = function() {
-			return E('div', { 'class': 'cbi-value' }, [
-				E('label', { 'class': 'cbi-value-title' }, ''),
-				E('div', { 'class': 'cbi-value-field', 'style': 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' }, [
-					pui.btn(_('Manual subscription All'), 'primary mk-small', function(ev) {
-						var b = ev.currentTarget;
-						return callAction('refresh_nodes', '').then(function(r) {
-							done(b, r, _('Reading the subscriptions. This page will fill in shortly.'));
-						});
-					}, 'refresh'),
-					pui.btn(_('Delete All Subscribe Node'), 'danger mk-small', function(ev) {
-						var b = ev.currentTarget;
-						if (!window.confirm(_('Delete the nodes of every subscription? They come back the next time the subscriptions are read.')))
-							return;
-						return callAction('forget_nodes', '').then(function(r) {
-							done(b, r, _('Deleted.'));
-							return callSubs().then(renderInfo);
-						});
-					}, 'trash')
-				])
-			]);
-		};
 
 		/* ------------------------------------------ the subscriptions */
 		s = m.section(form.GridSection, 'subscription', _('Subscriptions'),
@@ -412,6 +367,55 @@ return view.extend({
 				});
 			}, 'refresh');
 		});
+
+		/* ----------------------------------- for all of them, after the list */
+		s = m.section(form.NamedSection, 'config', 'zirgozar');
+		s.anonymous = true;
+
+		o = s.option(form.ListValue, 'filter_keyword_mode', _('Filter keyword Mode'),
+			_('Nodes are kept or dropped by words in their names. A word matches anywhere in the name, exactly as written.'));
+		filterModes(o, false);
+		o.default = '1';
+
+		o = s.option(form.DynamicList, 'filter_discard_list', _('Discard List'));
+		o.depends('filter_keyword_mode', '1');
+		o.depends('filter_keyword_mode', '3');
+		o.depends('filter_keyword_mode', '4');
+
+		o = s.option(form.DynamicList, 'filter_keep_list', _('Keep List'));
+		o.depends('filter_keyword_mode', '2');
+		o.depends('filter_keyword_mode', '3');
+		o.depends('filter_keyword_mode', '4');
+
+		o = s.option(form.Value, 'max_nodes', _('Nodes kept at most'),
+			_('From all the subscriptions together. A long list takes longer to measure and more memory to hold.'));
+		o.datatype = 'range(10,2000)';
+		o.default = '300';
+		o.placeholder = '300';
+
+		o = s.option(form.DummyValue, '_all');
+		o.render = function() {
+			return E('div', { 'class': 'cbi-value' }, [
+				E('label', { 'class': 'cbi-value-title' }, ''),
+				E('div', { 'class': 'cbi-value-field', 'style': 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' }, [
+					pui.btn(_('Manual subscription All'), 'primary mk-small', function(ev) {
+						var b = ev.currentTarget;
+						return callAction('refresh_nodes', '').then(function(r) {
+							done(b, r, _('Reading the subscriptions. This page will fill in shortly.'));
+						});
+					}, 'refresh'),
+					pui.btn(_('Delete All Subscribe Node'), 'danger mk-small', function(ev) {
+						var b = ev.currentTarget;
+						if (!window.confirm(_('Delete the nodes of every subscription? They come back the next time the subscriptions are read.')))
+							return;
+						return callAction('forget_nodes', '').then(function(r) {
+							done(b, r, _('Deleted.'));
+							return callSubs().then(renderInfo);
+						});
+					}, 'trash')
+				])
+			]);
+		};
 
 		return m.render().then(function(mapEl) {
 			poll.add(function() {
