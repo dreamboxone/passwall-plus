@@ -80,6 +80,16 @@ function nameFromLink(text) {
 	   every space would take “سرور خانه” down to “سرور”. Only a second link
 	   on the same line ends the first one's name. */
 	var lines = String(text || '').split(/[\r\n]+/);
+	/* A WireGuard .conf: the comment a provider puts first, or else the
+	   host of its endpoint. */
+	if (/^\s*\[(interface|peer)\]/im.test(String(text || ''))) {
+		for (var c = 0; c < lines.length; c++) {
+			var cm = lines[c].match(/^\s*[#;]\s*(.+?)\s*$/);
+			if (cm) return cm[1];
+		}
+		var ep = String(text).match(/^\s*endpoint\s*=\s*\[?([^\]\s:]+)/im);
+		return ep ? ep[1] : '';
+	}
 	for (var i = 0; i < lines.length; i++) {
 		var l = lines[i].trim(), name = '';
 		if (l.indexOf('://') < 0) continue;
@@ -193,6 +203,17 @@ function withBrowse(o, hint) {
 				reader.onload = function() {
 					var el = self.getUIElement(section_id);
 					if (el) el.setValue(String(reader.result || '').trim());
+					/* setValue puts the text in without telling anyone, so the
+					   box went on counting as empty: LuCI had checked it once,
+					   when it was empty, and never again - which is why the
+					   Save button did nothing and said nothing. The events it
+					   listens for are sent by hand. */
+					var ta = box.querySelector('textarea');
+					if (ta) {
+						['input', 'keyup', 'change', 'blur'].forEach(function(t) {
+							ta.dispatchEvent(new Event(t, { bubbles: true }));
+						});
+					}
 				};
 				reader.onerror = function() {
 					pui.note(browse, _('That file could not be read.'), 'error');
@@ -623,7 +644,8 @@ return view.extend({
 		o.placeholder = 'vless://…';
 		o.validate = function(section, value) {
 			if (!value) return true;
-			if (!/:\/\//.test(value))
+			/* A WireGuard .conf is a file, not a link: it has no :// in it. */
+			if (!/:\/\//.test(value) && !/^\s*\[(interface|peer)\]/im.test(value))
 				return _('That does not look like a share link');
 			return true;
 		};

@@ -1183,6 +1183,15 @@ section_links() {
 	_sl_link="$(uci -q get "zirgozar.$1.link" 2>/dev/null)" || return 1
 	[ -n "$_sl_link" ] || return 1
 	_sl_name="$(uci -q get "zirgozar.$1.name" 2>/dev/null)" || _sl_name=""
+	# A whole WireGuard .conf is one document, not a list of links: cutting it
+	# into lines and hanging the name on each of them would turn every key in
+	# it into something else. The name goes in as the comment the parser
+	# reads a name from.
+	if printf '%s\n' "$_sl_link" | grep -qi '^[[:space:]]*\[\(interface\|peer\)\]'; then
+		[ -z "$_sl_name" ] || printf '# %s\n' "$_sl_name"
+		printf '%s\n' "$_sl_link"
+		return 0
+	fi
 	printf '%s\n' "$_sl_link" | NAME="$_sl_name" LC_ALL=C awk '
 		{
 			gsub(/[ \t]+[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "\n&")
