@@ -1,7 +1,7 @@
 <div dir="rtl">
 
 <p align="center">
-  <img alt="Zirgozar" src="package/luci-app-zirgozar/root/www/luci-static/resources/zirgozar/logo-anim.webp" width="420">
+  <img alt="Zirgozar" src="package/luci-app-zirgozar/root/www/luci-static/resources/zirgozar/logo.png" width="200">
 </p>
 
 <h3 align="center">فیلترشکن سراسری برای روتر OpenWrt</h3>

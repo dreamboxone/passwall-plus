@@ -21,7 +21,7 @@ var _ = i18n.tr;
 
 /* Put on the stylesheet's and the logo's addresses, so a browser holding the
    previous release's copies fetches these. Kept in step with PKG_VERSION. */
-var BUILD = '2.0.30-1';
+var BUILD = '2.0.31-1';
 
 var callAction = rpc.declare({ object: 'luci.zirgozar', method: 'action',
                                params: [ 'name', 'arg' ], expect: { '': {} } });
@@ -89,7 +89,7 @@ function logoImg(file, height, cls) {
    removed. When the router says another version than the one these pages
    were built for, each file is fetched again past the cache and the page
    reloaded, once. */
-var OWN_FILES = [ 'zirgozar/ui', 'zirgozar/i18n', 'zirgozar/status', 'zirgozar/logoanim',
+var OWN_FILES = [ 'zirgozar/ui', 'zirgozar/i18n', 'zirgozar/status',
 	'view/zirgozar/settings', 'view/zirgozar/nodes', 'view/zirgozar/subscribe', 'view/zirgozar/other',
 	'view/zirgozar/update', 'view/zirgozar/traffic', 'view/zirgozar/geoview', 'view/zirgozar/acl',
 	'view/zirgozar/log' ];
@@ -309,11 +309,7 @@ function hero(root, version) {
 		freshen(st.version);
 	}).catch(function() {});
 
-	/* The still logo at once, the moving one as soon as it has arrived. */
 	var heroLogo = logoImg('logo-light.png', 60);
-	L.require('zirgozar.logoanim').then(function(m) {
-		if (m && m.src) heroLogo.src = m.src;
-	}).catch(function() {});
 
 	return E('div', { 'class': 'mk-hero' }, [
 		E('div', { 'class': 'mk-brand' }, [ E('div', {}, [
