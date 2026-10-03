@@ -60,7 +60,7 @@ var FA = {
 		'یک درخواست واقعی از داخل کانفیگ؛ تنها آزمایشی که ثابت می‌کند کانفیگ کار می‌کند.',
 
 	/* ----------------------------------------------------------- the nodes */
-	'Node': 'کانفیگ',
+	'Node': 'نام کانفیگ',
 	'Choose node': 'انتخاب کانفیگ',
 	'Nodes': 'کانفیگ‌ها',
 	'%d nodes': '%d کانفیگ',
@@ -331,6 +331,7 @@ var FA = {
 	'Sing-Box-LX App Path': 'مسیر برنامه Sing-Box-LX',
 	'The sing-box build that speaks xhttp. Empty means this program’s own copy in the folder above.': 'نسخه‌ای از sing-box که xhttp را می‌فهمد. خالی یعنی نسخه خود این برنامه در پوشه بالا.',
 	'Active core': 'هسته فعال',
+	'The core refused the new settings, so the tunnel was left running as it was. Check the Runtime Logs page.': 'هسته تنظیمات جدید را نپذیرفت، پس تونل همان‌طور که بود روشن ماند. دلیلش را در صفحه «گزارش اجرا» ببینید.',
 	'sing-box could not run this tunnel, so Xray is carrying it. The Runtime Logs page says why. The official sing-box has no xhttp: install sing-box-lx on the App Update page and choose it under Active core in Basic Settings, or choose Xray there.': 'sing-box نتوانست این تونل را اجرا کند و Xray آن را می‌برد. دلیلش را صفحه «گزارش اجرا» می‌گوید. sing-box رسمی xhttp ندارد: sing-box-lx را از صفحه «به‌روزرسانی» نصب کنید و در تنظیمات پایه زیر «هسته فعال» آن را انتخاب کنید، یا همان‌جا Xray را انتخاب کنید.',
 	'Xray is the default. sing-box reads the same settings and carries the same rules and DNS, but not everything: mux, noise, FakeDNS and mKCP have no equivalent there, and statistics are counted a little differently. A node or setting it cannot use is named in the log, and if it cannot start at all Xray takes over. sing-box-lx, the build that speaks xhttp, is installed from App Update.':
 		'Xray پیش‌فرض است. sing-box همان تنظیمات را می‌خواند و همان قوانین و DNS را اجرا می‌کند، ولی نه همه چیز را: mux، noise، FakeDNS و mKCP در آن معادل ندارند و آمار مصرف کمی متفاوت شمرده می‌شود. نود یا تنظیمی که نتواند به کار ببرد در گزارش اجرا نوشته می‌شود و اگر اصلاً راه نیفتد، Xray کار را به دست می‌گیرد. sing-box-lx، نسخه‌ای که xhttp را می‌فهمد، از صفحه «به‌روزرسانی» نصب می‌شود.',
@@ -587,7 +588,7 @@ var FA = {
 	'Delay Settings': 'تنظیمات تاخیر',
 	'Open and close Daemon': 'بررسی و ترمیم خودکار',
 	'Every quarter of an hour: bring the tunnel back when it should be up and is not, and move to another node when the one in use carries nothing.':
-		'هر ربع ساعت بررسی می‌شود: اگر تونل باید روشن باشد و نیست، دوباره روشن می‌شود؛ و اگر کانفیگ فعلی کار نمی‌کند، کانفیگ دیگری انتخاب می‌شود.',
+		'هر 15 دقیقه بررسی می‌کند و اگر کانفیگ فعلی کار نکند، کانفیگ دیگری را انتخاب می‌کند.',
 	'Delay Start': 'تاخیر در شروع',
 	'Units:seconds': 'واحد: ثانیه',
 	'Stop automatically mode': 'توقف خودکار',

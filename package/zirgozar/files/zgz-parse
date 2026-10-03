@@ -722,9 +722,15 @@ function jappend(a, item) {
 # Mux is left off where it cannot work: a VLESS flow (Vision does its own
 # thing with UDP and refuses Mux), xhttp (which has its own), WireGuard, and
 # the bridge - a loopback SOCKS port in front of a core that is not Xray.
-function decorate(p, hp,   proto, ss, sock, net, fm, tcp, udp, first, d) {
+function decorate(p, hp,   proto, ss, sock, net, fm, tcp, udp, first, d, wgs) {
 	if (substr(jtrim(p), 1, 1) != "{") return p
 	proto = tolower(jstr(p, "protocol"))
+	# One already stored without the setting - see mk_wg - gets it here.
+	if (proto == "wireguard") {
+		wgs = jraw(p, "settings")
+		if (wgs != "" && jraw(wgs, "noKernelTun") == "")
+			p = jset(p, "settings", jset(wgs, "noKernelTun", "true"))
+	}
 	if (proto == "socks" && p ~ /"address":"127\.0\.0\.1"/) return p
 
 	ss = jraw(p, "streamSettings")
@@ -824,7 +830,11 @@ function mk_proxy(proto, user, pass) {
 # WireGuard is an Xray outbound like any other, which is what makes it worth
 # carrying at all: no second core, no bridge, no local listener.
 function mk_wg(secret, addrs, pubkey, psk, keepalive, mtu, reserved) {
-	return "{\"protocol\":\"wireguard\",\"settings\":{" \
+	# noKernelTun: Xray otherwise asks the kernel for a TUN device of its own,
+	# and a router without that support - most of them - refuses to start the
+	# whole core with "protocol not supported". With it the tunnel is carried
+	# in user space, which needs nothing from the kernel.
+	return "{\"protocol\":\"wireguard\",\"settings\":{\"noKernelTun\":true," \
 	       "\"secretKey\":\"" jesc(secret) "\"" \
 	       (addrs != "" ? ",\"address\":" addrs : "") \
 	       (mtu + 0 > 0 ? ",\"mtu\":" (mtu + 0) : "") \
