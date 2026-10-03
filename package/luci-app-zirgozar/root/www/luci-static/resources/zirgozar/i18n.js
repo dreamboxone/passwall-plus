@@ -363,7 +363,7 @@ var FA = {
 	'Use global config': 'با تنظیمات سراسری',
 	'the node the tunnel is using': 'کانفیگی که تونل از آن استفاده می‌کند',
 	'Nodes added by hand on the Node List page. A hysteria2 or tuic node cannot be given a rule of its own; such a rule uses the node the tunnel is using instead.':
-		'فقط کانفیگ‌های دستی صفحه «فهرست کانفیگ‌ها». کانفیگ‌های hysteria2 و tuic اینجا قابل استفاده نیستند و به جای آن‌ها کانفیگ اصلی تونل استفاده می‌شود.',
+		'فقط کانفیگ‌های دستی صفحه «کانفیگ‌ها». کانفیگ‌های hysteria2 و tuic اینجا قابل استفاده نیستند و به جای آن‌ها کانفیگ اصلی تونل استفاده می‌شود.',
 	'TCP No Redir Ports': 'پورت‌های TCP بدون انتقال',
 	'UDP No Redir Ports': 'پورت‌های UDP بدون انتقال',
 	'TCP Redir Ports': 'پورت‌های TCP انتقالی',
@@ -443,7 +443,7 @@ var FA = {
 	'Every node the tunnel may choose dials out through this node first — PassWall2’s pre-proxy. For a node that cannot be reached from here directly, or to hide which nodes are being used. With it on, the first-pass handshake is skipped, because no node is reached directly.':
 		'هر کانفیگی که تونل انتخاب کند، اول از داخل این نود رد می‌شود. برای نودی که از اینجا مستقیم در دسترس نیست، یا برای پنهان کردن اینکه از کدام نودها استفاده می‌شود. وقتی روشن است، هندشیک مرحله اول انجام نمی‌شود، چون به هیچ نودی مستقیم وصل نمی‌شویم.',
 	'Preproxy Node': 'کانفیگ پیش‌پروکسی',
-	'Nodes added by hand on the Node List page.': 'کانفیگ‌هایی که در صفحه فهرست کانفیگ‌ها دستی اضافه شده‌اند.',
+	'Nodes added by hand on the Node List page.': 'کانفیگ‌هایی که در صفحه کانفیگ‌ها دستی اضافه شده‌اند.',
 	'Fragment': 'فرگمنت',
 	'TCP fragments, which can deceive the censorship system in some cases, such as bypassing SNI blacklists.':
 		'اولین بسته‌های اتصال تکه‌تکه فرستاده می‌شوند تا فیلترینگ نتواند نام سایت (SNI) را تشخیص دهد. برای وقتی که کانفیگ‌ها به خاطر فیلتر SNI وصل نمی‌شوند.',
@@ -633,7 +633,7 @@ var FA = {
 	'Buffer size for every connection (kB)': 'اندازه بافر هر اتصال (کیلوبایت)',
 
 	/* ------------------------------------------ Node List, Node Subscribe */
-	'Node List': 'فهرست کانفیگ‌ها',
+	'Node List': 'کانفیگ‌ها',
 	'Node Subscribe': 'اشتراک‌ها',
 	'Automatic detection delay': 'بررسی خودکار تاخیر',
 	'When this page opens, each node added by hand is measured this way, and the answer put in its column.':
@@ -650,7 +650,7 @@ var FA = {
 	'Discard List,But Keep List First': 'فهرست حذف، با اولویت فهرست نگه‌داشتن',
 	'Keep List,But Discard List First': 'فهرست نگه‌داشتن، با اولویت فهرست حذف',
 	'Subscriptions are not used now: on the Node List page, “Nodes to use” is set to only manually added configs.':
-		'اشتراک‌ها الان استفاده نمی‌شوند: در صفحه «فهرست کانفیگ‌ها»، گزینه «کانفیگ‌های مورد استفاده» روی «فقط کانفیگ‌های دستی» است.',
+		'اشتراک‌ها الان استفاده نمی‌شوند: در صفحه «کانفیگ‌ها»، گزینه «کانفیگ‌های مورد استفاده» روی «فقط کانفیگ‌های دستی» است.',
 	'Filter keyword Mode': 'حالت فیلتر کلمات',
 	'Nodes are kept or dropped by words in their names. A word matches anywhere in the name, exactly as written.':
 		'کانفیگ‌ها بر اساس کلمات موجود در نامشان نگه داشته یا حذف می‌شوند. کلمه در هر جای نام باشد، دقیقا همان‌طور که نوشته شده، پیدا می‌شود.',
@@ -822,10 +822,10 @@ var FA = {
 	'No node on the list answered at all. The connection itself may be blocking them, or the list may be stale.':
 		'هیچ کانفیگی در فهرست جواب نداد. ممکن است خود اینترنت جلوی آن‌ها را گرفته باشد یا فهرست قدیمی شده باشد.',
 	'No node on the list can carry traffic, and neither can the one in use. The tunnel has been taken out of the way so that the network works without it. Add a node that works on the Node List page, or check the subscription.':
-		'هیچ کانفیگی در فهرست، و نه کانفیگ در حال استفاده، ترافیک را عبور نمی‌دهد. تونل کنار گذاشته شد تا شبکه بدون آن کار کند. در صفحه «فهرست کانفیگ‌ها» یک کانفیگ سالم اضافه کنید، یا اشتراک را بررسی کنید.',
+		'هیچ کانفیگی در فهرست، و نه کانفیگ در حال استفاده، ترافیک را عبور نمی‌دهد. تونل کنار گذاشته شد تا شبکه بدون آن کار کند. در صفحه «کانفیگ‌ها» یک کانفیگ سالم اضافه کنید، یا اشتراک را بررسی کنید.',
 	'Nothing in the list could be read as a node': 'هیچ چیز در فهرست به‌عنوان کانفیگ خوانده نشد',
 	'There is no node list yet: no subscription could be read and none has been saved before. Add one node by hand on the Node List page - a single share link is enough - or check the subscription address on Node Subscribe.':
-		'هنوز فهرست کانفیگی وجود ندارد: هیچ اشتراکی خوانده نشد و فهرست ذخیره‌شده‌ای هم نیست. در صفحه «فهرست کانفیگ‌ها» یک کانفیگ دستی اضافه کنید (یک لینک کافی است)، یا آدرس اشتراک را در صفحه «اشتراک کانفیگ‌ها» بررسی کنید.',
+		'هنوز فهرست کانفیگی وجود ندارد: هیچ اشتراکی خوانده نشد و فهرست ذخیره‌شده‌ای هم نیست. در صفحه «کانفیگ‌ها» یک کانفیگ دستی اضافه کنید (یک لینک کافی است)، یا آدرس اشتراک را در صفحه «اشتراک کانفیگ‌ها» بررسی کنید.',
 	'The node chosen in Basic Settings cannot be read. Choose another there, or set it back to Auto.':
 		'کانفیگ انتخاب‌شده در «تنظیمات پایه» خوانده نمی‌شود. کانفیگ دیگری انتخاب کنید یا آن را روی خودکار بگذارید.',
 	'The helper for this node\'s protocol would not start.': 'هسته کمکی پروتکل این کانفیگ اجرا نشد.',
