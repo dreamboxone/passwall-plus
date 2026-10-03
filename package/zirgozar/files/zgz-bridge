@@ -45,6 +45,19 @@ jbool() {
 	return 0
 }
 
+# The sing-box that runs the helper. AmneziaWG's obfuscation exists only in
+# sing-box-lx, so for that node nothing else will do; every other kind runs
+# on whichever sing-box there is.
+bridge_singbox() {
+	if [ "$(jget type)" = "amneziawg" ]; then
+		_bs="$(singbox_lx_path)"
+		[ -x "$_bs" ] && "$_bs" version 2>/dev/null | grep -q with_awg || return 1
+		echo "$_bs"
+		return 0
+	fi
+	find_singbox
+}
+
 cmd_needed() {
 	[ -s "$NODE" ] || return 1
 	return 0
@@ -57,7 +70,7 @@ singbox_config() {
 	# An OpenVPN profile has too many parts - certificates, keys, a wrapped
 	# control channel - for a line of shell to build; zgz-sbconfig does it, and
 	# decrypts the key on the way.
-	if [ "$_type" = "openvpn" ]; then
+	if [ "$_type" = "openvpn" ] || [ "$_type" = "amneziawg" ]; then
 		command -v ucode >/dev/null 2>&1 || return 1
 		ucode "$ZGZ_LIB/zgz-sbconfig" mode=bridge bridge="$NODE" bridgeport="$PORT" \
 			lib="$ZGZ_LIB" rsdir="$ZGZ_RUN/rs" mark="$ZGZ_OUT_MARK" > "$ZGZ_BRIDGE_JSON.new" 2>"$ZGZ_RUN/bridge.err" || {
@@ -145,7 +158,7 @@ hysteria_config() {
 cmd_config() {
 	cmd_needed || { echo "no bridge needed" >&2; return 1; }
 
-	if _sb="$(find_singbox)"; then
+	if _sb="$(bridge_singbox)"; then
 		if singbox_config; then
 			echo "$ZGZ_BRIDGE_JSON"
 			return 0
@@ -158,6 +171,11 @@ cmd_config() {
 		fi
 	fi
 
+	if [ "$(jget type)" = "amneziawg" ]; then
+		say_message "AmneziaWG needs sing-box-lx, the build that has it. Install it on the App Update page."
+		warn "no sing-box-lx installed to carry amneziawg"
+		return 1
+	fi
 	say_message "The chosen node speaks $(jget type), which Xray cannot. Install sing-box on the settings page, or pick another node."
 	warn "no core installed that can carry $(jget type)"
 	return 1
@@ -167,7 +185,7 @@ cmd_config() {
 # is a procd instance like any other and gets its respawning for free.
 cmd_command() {
 	cmd_needed || return 1
-	if _sb="$(find_singbox)" && singbox_config; then
+	if _sb="$(bridge_singbox)" && singbox_config; then
 		echo "$_sb run -c $ZGZ_BRIDGE_JSON"
 		return 0
 	fi

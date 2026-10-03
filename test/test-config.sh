@@ -560,20 +560,28 @@ cat > "$Y" <<'JSON'
       "jc": 10, "s1": 20 } ] }
 JSON
 LX="$(LC_ALL=C awk -f "$RIG/lib/zgz-parse" < "$Y")"
-check "$(printf '%s\n' "$LX" | wc -l | tr -d ' ')" "2" "the two nodes a core here can run"
+check "$(printf '%s\n' "$LX" | wc -l | tr -d ' ')" "3" "the three nodes: two an Xray can run and the AmneziaWG one"
 if printf '%s' "$LX" | grep -q '"mode":"packet-up"'; then
 	ok "xhttp keeps its mode, which decides whether it works at all"
 else
 	bad "xhttp keeps its mode"
 fi
 # AmneziaWG is WireGuard with the packets disguised, and Xray cannot speak it.
-# Emitting one would put a node in the list that measures like any other and
-# connects to nothing.
-if printf '%s' "$LX" | grep -q amnezia; then
-	bad "AmneziaWG is left out rather than offered as a node that cannot work"
+# It is a node of its own kind, carried by sing-box-lx, and not a plain
+# WireGuard one: that would measure like any other and connect to nothing.
+if printf '%s' "$LX" | grep -q 'amneziawg.*"jc":10'; then
+	ok "AmneziaWG is a node of its own kind, with its parameters"
 else
-	ok "AmneziaWG is left out rather than offered as a node that cannot work"
+	bad "AmneziaWG is a node of its own kind, with its parameters"
 fi
+echo "== an AmneziaWG .conf"
+AW="$RIG/work/awg.conf"
+printf '[Interface]\nPrivateKey = abc\nAddress = 10.8.1.2/32\nJc = 5\nJmin = 10\nJmax = 50\nS1 = 77\nH1 = 1234-5678\nI1 = <b 0xc2><r 8>\n[Peer]\nPublicKey = def\nEndpoint = 203.0.113.7:51820\nPersistentKeepalive = 25\n' > "$AW"
+AWOUT="$(LC_ALL=C awk -f "$RIG/lib/zgz-parse" < "$AW")"
+check "$(printf '%s' "$AWOUT" | cut -f3-5 | tr '\t' ' ')" "amneziawg 203.0.113.7 51820" "a .conf with the AmneziaWG lines is an AmneziaWG node"
+for want in '"jc":5' '"h1":"1234-5678"' '"i1":"<b 0xc2><r 8>"' '"keepalive":25'; do
+	if printf '%s' "$AWOUT" | grep -qF "$want"; then ok "carried through: $want"; else bad "carried through: $want"; fi
+done
 
 # ------------------------------------------------------------ the Xray tab
 #

@@ -291,7 +291,8 @@ function linkType(link) {
 		var t = m[1].toLowerCase();
 		return { ss: 'shadowsocks', hy2: 'hysteria2', socks5: 'socks', wg: 'wireguard' }[t] || t;
 	}
-	if (/^\s*\[(interface|peer)\]/i.test(l)) return 'wireguard';
+	if (/^\s*\[(interface|peer)\]/i.test(l))
+		return /^\s*(jc|jmin|jmax|s[1-4]|h[1-4]|i[1-5])\s*=/im.test(l) ? 'amneziawg' : 'wireguard';
 	return /^\s*(client\s*$|remote\s+\S+|<ca>)/im.test(l) ? 'openvpn' : '-';
 }
 

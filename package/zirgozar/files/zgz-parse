@@ -846,6 +846,32 @@ function mk_wg(secret, addrs, pubkey, psk, keepalive, mtu, reserved) {
 	       "}]}}"
 }
 
+# An AmneziaWG node: the WireGuard fields, and the obfuscation as one object.
+# A number stays a number; a range such as the h1..h4 of version 2, and the
+# decoy-packet language of i1..i5, stay text.
+function awg_json(a,   keys, n, i, k, out) {
+	n = split("jc jmin jmax s1 s2 s3 s4 h1 h2 h3 h4 i1 i2 i3 i4 i5", keys, " ")
+	out = ""
+	for (i = 1; i <= n; i++) {
+		k = keys[i]
+		if (!(k in a)) continue
+		out = out (out != "" ? "," : "") "\"" k "\":" \
+		      (a[k] ~ /^[0-9]+$/ ? a[k] : "\"" jesc(a[k]) "\"")
+	}
+	return "{" out "}"
+}
+
+function mk_awg(secret, addrs, pubkey, psk, keepalive, mtu, a) {
+	return "{\"type\":\"amneziawg\",\"server\":\"" jesc(HOST) "\",\"port\":" PORT \
+	       ",\"private_key\":\"" jesc(secret) "\"" \
+	       (addrs != "" ? ",\"address\":" addrs : "") \
+	       ",\"public_key\":\"" jesc(pubkey) "\"" \
+	       (psk != "" ? ",\"pre_shared_key\":\"" jesc(psk) "\"" : "") \
+	       (keepalive + 0 > 0 ? ",\"keepalive\":" (keepalive + 0) : "") \
+	       (mtu + 0 > 0 ? ",\"mtu\":" (mtu + 0) : "") \
+	       ",\"awg\":" awg_json(a) "}"
+}
+
 # The local addresses, however they were written: a JSON array, one CIDR, or
 # a comma separated list.
 function wg_addrs(v,   parts, m, i, out) {
@@ -973,7 +999,7 @@ function sb_stream(it,   tls, rel, tr, net, sec, sni, fp, alpn, pbk, sid, path, 
 	return stream(net, sec, host, path, sni, fp, alpn, pbk, sid, "", svc, "", jstr(tr, "mode"))
 }
 
-function from_singbox(it,   t, lab, peer) {
+function from_singbox(it,   t, lab, peer, aw, ak, ai, nk) {
 	t = tolower(jstr(it, "type"))
 	if (t == "") return
 	if (t ~ /^(direct|block|dns|selector|urltest|tun|mixed)$/) return
@@ -994,15 +1020,21 @@ function from_singbox(it,   t, lab, peer) {
 		if (PORT <= 0) PORT = jnum(peer, "server_port")
 		if (HOST == "" || PORT <= 0) return
 		# AmneziaWG: WireGuard with junk packets and rewritten headers so
-		# that it does not look like WireGuard on the wire. The fields
-		# below are its parameters, and Xray's wireguard cannot speak any
-		# of it. An outbound built from one of these looks perfectly
-		# correct, measures like any other node and connects to nothing
-		# whatever - so it is left out rather than filling the list with
-		# servers that cannot work.
-		if (jraw(it, "jc") != "" || jraw(it, "jmin") != "" || jraw(it, "jmax") != "" || \
-		    jraw(it, "s1") != "" || jraw(it, "s2") != "" || jraw(it, "h1") != "" || \
-		    jraw(it, "h4") != "") return
+		# that it does not look like WireGuard on the wire. Xray's wireguard
+		# cannot speak any of it, so it is a node of its own kind, carried by
+		# sing-box-lx.
+		nk = split("jc jmin jmax s1 s2 s3 s4 h1 h2 h3 h4 i1 i2 i3 i4 i5", ak, " ")
+		for (ai = 1; ai <= nk; ai++)
+			if (jraw(it, ak[ai]) != "") aw[ak[ai]] = junq(jraw(it, ak[ai]))
+		for (ai in aw) {
+			emit(lab, "amneziawg", \
+				mk_awg(jstr(it, "private_key") != "" ? jstr(it, "private_key") : jstr(it, "secret_key"), \
+				       wg_addrs(jraw(it, "address") != "" ? jraw(it, "address") : jraw(it, "local_address")), \
+				       jstr(it, "peer_public_key") != "" ? jstr(it, "peer_public_key") : jstr(peer, "public_key"), \
+				       jstr(it, "pre_shared_key") != "" ? jstr(it, "pre_shared_key") : jstr(peer, "pre_shared_key"), \
+				       jnum(it, "persistent_keepalive_interval"), jnum(it, "mtu"), aw))
+			return
+		}
 		emit(lab, "wireguard", \
 			mk_wg(jstr(it, "private_key") != "" ? jstr(it, "private_key") : jstr(it, "secret_key"), \
 			      wg_addrs(jraw(it, "address") != "" ? jraw(it, "address") : jraw(it, "local_address")), \
@@ -1239,7 +1271,7 @@ LANDING {
 	line = $0
 	gsub(/\r/, "", line)
 	if (line == "" || split(line, rec, "\t") < 6) next
-	if (rec[3] ~ /^(hysteria2|hysteria|tuic|openvpn)$/) next
+	if (rec[3] ~ /^(hysteria2|hysteria|tuic|openvpn|amneziawg)$/) next
 	if (!lready) {
 		split(ENVIRON["LAND"], land, "\t")
 		lp = ENVIRON["LAND"]
@@ -1789,7 +1821,7 @@ function ovpn_conf(doc,   lines, m, i, l, t, k, w, nw, p, inblk, blk, name, nrem
 # where every provider puts it, and from the endpoint otherwise.
 function wg_conf(doc,   lines, m, i, l, sect, k, v, p,
                         name, secret, addrs, mtu, reserved,
-                        pubkey, psk, keep, endpoint) {
+                        pubkey, psk, keep, endpoint, awg, nawg) {
 	m = split(doc, lines, "\n")
 	sect = ""
 	for (i = 1; i <= m; i++) {
@@ -1819,6 +1851,9 @@ function wg_conf(doc,   lines, m, i, l, sect, k, v, p,
 			else if (k == "address")    addrs = v
 			else if (k == "mtu")        mtu = v + 0
 			else if (k == "reserved")   reserved = v
+			# AmneziaWG's own lines: junk packets, padding, the message types
+			# it rewrites and the decoy packets sent first.
+			else if (k ~ /^(jc|jmin|jmax|s[1-4]|h[1-4]|i[1-5])$/) { awg[k] = v; nawg++ }
 		} else if (sect == "[peer]") {
 			if      (k == "publickey")           pubkey = v
 			else if (k == "presharedkey")        psk = v
@@ -1831,6 +1866,12 @@ function wg_conf(doc,   lines, m, i, l, sect, k, v, p,
 	# is not half a server - it is a file that was cut short somewhere.
 	if (secret == "" || pubkey == "" || endpoint == "") return
 	if (!hostport(endpoint)) return
+	# With any of them it is not WireGuard as Xray knows it, and an outbound
+	# built as if it were would measure like any other and connect to nothing.
+	if (nawg > 0) {
+		emit(name, "amneziawg", mk_awg(secret, wg_addrs(addrs), pubkey, psk, keep, mtu, awg))
+		return
+	}
 	emit(name, "wireguard",
 	     mk_wg(secret, wg_addrs(addrs), pubkey, psk, keep, mtu, wg_reserved(reserved)))
 }

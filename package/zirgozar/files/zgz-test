@@ -224,7 +224,7 @@ do_url() {
 	# would be a second core, a second port and a second thing to leave
 	# running. Say so rather than reporting a working node as broken.
 	case "$_proto" in
-		hysteria2|hysteria|tuic|openvpn) echo -2 > "$_out"; return 0 ;;
+		hysteria2|hysteria|tuic|openvpn|amneziawg) echo -2 > "$_out"; return 0 ;;
 	esac
 
 	url_ms "$_payload2" "$4" "$5" > "$_out" 2>/dev/null || true
@@ -301,7 +301,7 @@ cmd_run() {
 			URL_REPEAT=1 url_ms "$_payload" "$_host" "$_port" > "$DIR/$_id.tcp" 2>/dev/null || true
 			return 0
 			;;
-		tcp:hysteria2|tcp:hysteria|tcp:tuic|tcp:openvpn)
+		tcp:hysteria2|tcp:hysteria|tcp:tuic|tcp:openvpn|tcp:amneziawg)
 			# Not something Xray can carry, and the column has no other
 			# honest answer for them.
 			put "$_id.tcp" -2

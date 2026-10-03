@@ -331,6 +331,7 @@ var FA = {
 	'Sing-Box-LX App Path': 'مسیر برنامه Sing-Box-LX',
 	'The sing-box build that speaks xhttp. Empty means this program’s own copy in the folder above.': 'نسخه‌ای از sing-box که xhttp را می‌فهمد. خالی یعنی نسخه خود این برنامه در پوشه بالا.',
 	'Active core': 'هسته فعال',
+	'AmneziaWG needs sing-box-lx, the build that has it. Install it on the App Update page.': 'AmneziaWG به sing-box-lx نیاز دارد، همان نسخه‌ای که آن را دارد. از صفحه «به‌روزرسانی» نصبش کنید.',
 	'OpenVPN user name': 'نام کاربری OpenVPN',
 	'Only for an OpenVPN profile that asks for a user name and password.': 'فقط برای پروفایل OpenVPN که نام کاربری و رمز می‌خواهد.',
 	'OpenVPN password': 'رمز OpenVPN',

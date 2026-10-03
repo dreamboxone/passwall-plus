@@ -1133,7 +1133,7 @@ chain_outbound() {
 	[ -n "$_co" ] || return 1
 	case "$(printf '%s' "$_co" | cut -f3)" in
 		# A pre-proxy Xray cannot speak cannot be dialled through by Xray.
-		hysteria2|hysteria|tuic|openvpn) return 1 ;;
+		hysteria2|hysteria|tuic|openvpn|amneziawg) return 1 ;;
 	esac
 	printf '%s\n' "$_co" | cut -f6- | DOMSTRAT="${DOMSTRAT:-}" decorate |
 		sed -e "s/^{/{\"tag\":\"chain-$1\",/"
@@ -1250,10 +1250,10 @@ node_records() {
 				_nd_land="$(section_links "$_nd_to" | LC_ALL=C awk -v LIMIT=1 -f "$ZGZ_LIB/zgz-parse" 2>/dev/null | head -1)"
 				_nd_first="$(printf '%s\n' "$_nd_recs" | head -1)"
 				case "$(printf '%s' "$_nd_first" | cut -f3)" in
-					hysteria2|hysteria|tuic|openvpn) _nd_land="" ;;
+					hysteria2|hysteria|tuic|openvpn|amneziawg) _nd_land="" ;;
 				esac
 				case "$(printf '%s' "$_nd_land" | cut -f3)" in
-					hysteria2|hysteria|tuic|openvpn|'') _nd_land="" ;;
+					hysteria2|hysteria|tuic|openvpn|amneziawg|'') _nd_land="" ;;
 				esac
 				if [ -n "$_nd_land" ]; then
 					printf '%s\t%s → %s\t%s\t%s\t%s\t%s\n' \

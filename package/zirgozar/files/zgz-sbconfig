@@ -174,20 +174,42 @@ function ovpn_endpoint(b, tag, mark) {
 	return e;
 }
 
+// An AmneziaWG node: a WireGuard endpoint with the obfuscation fields of
+// sing-box-lx in it. Only that build has them; a sing-box without them refuses
+// the configuration, which is how this learns it cannot be used.
+function awg_endpoint(b, tag, mark) {
+	let peer = { address: b.server, port: int(b.port), public_key: b.public_key, allowed_ips: [ '0.0.0.0/0', '::/0' ] };
+	if (b.pre_shared_key)
+		peer.pre_shared_key = b.pre_shared_key;
+	if (b.keepalive)
+		peer.persistent_keepalive_interval = b.keepalive;
+	let e = { type: 'wireguard', tag, address: b.address ?? [], private_key: b.private_key, peers: [ peer ], routing_mark: mark };
+	if (b.mtu)
+		e.mtu = b.mtu;
+	for (let k, v in (b.awg ?? {}))
+		e[k] = v;
+	return e;
+}
+
+// The endpoint a profile record is, whichever kind it is.
+function bridge_endpoint(b, tag, mark) {
+	return b.type == 'amneziawg' ? awg_endpoint(b, tag, mark) : ovpn_endpoint(b, tag, mark);
+}
+
 // zgz-sbconfig mode=bridge: the whole configuration of the helper that offers
-// one OpenVPN server as a SOCKS port on loopback - what zgz-bridge runs when
-// Xray is the engine.
+// one OpenVPN or AmneziaWG server as a SOCKS port on loopback - what
+// zgz-bridge runs when Xray is the engine.
 if (args.mode == 'bridge') {
 	let raw = readfile(args.bridge ?? '');
 	let b = raw ? json(raw) : null;
-	if (type(b) != 'object' || b.type != 'openvpn') {
+	if (type(b) != 'object' || (b.type != 'openvpn' && b.type != 'amneziawg')) {
 		stderr.write('error: There is no OpenVPN profile to run.\n');
 		exit(2);
 	}
 	print(sprintf('%J', {
 		log: { level: 'warn', timestamp: true },
 		inbounds: [{ type: 'mixed', tag: 'in', listen: '127.0.0.1', listen_port: int(args.bridgeport ?? 10808) }],
-		endpoints: [ ovpn_endpoint(b, 'out', int(args.mark ?? 255)) ],
+		endpoints: [ bridge_endpoint(b, 'out', int(args.mark ?? 255)) ],
 		route: { final: 'out' }
 	}), '\n');
 	exit(0);
@@ -361,8 +383,8 @@ function native_bridge(o) {
 	let b = raw ? json(raw) : null;
 	if (type(b) != 'object')
 		return null;
-	if (b.type == 'openvpn')
-		return ovpn_endpoint(b, 'proxy', MARK);
+	if (b.type == 'openvpn' || b.type == 'amneziawg')
+		return bridge_endpoint(b, 'proxy', MARK);
 	let tls = { enabled: true, server_name: b.sni ? b.sni : b.server };
 	if (b.insecure)
 		tls.insecure = true;
@@ -390,7 +412,7 @@ function conv_outbound(o) {
 	let nb = native_bridge(o);
 	if (nb) {
 		// An OpenVPN profile is an endpoint in sing-box, not an outbound.
-		push(nb.type == 'openvpn-client' ? endpoints : outbounds, nb);
+		push(nb.type == 'openvpn-client' || nb.type == 'wireguard' ? endpoints : outbounds, nb);
 		out_tags[tag] = true;
 		return;
 	}

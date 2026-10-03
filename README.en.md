@@ -349,6 +349,8 @@ settings.
 
 **OpenVPN.** A whole `.ovpn` profile can be added by hand: the servers, `proto`, the certificates in `<ca>`, `<cert>` and `<key>`, `tls-crypt`, `tls-crypt-v2` and `tls-auth`, `verify-x509-name`, the ciphers and `auth`, compression, and a user name and password inside `<auth-user-pass>`. A profile that wants a user name and password without carrying them, or whose private key has a pass phrase, gets those in the edit window of its config - the pass phrase needs `openssl-util`, which *Router requirements* installs. sing-box carries it, so it needs a sing-box on the router: with Xray as the engine a helper runs it as a local SOCKS port, with a sing-box engine it is dialled directly. Scripts, pushed routes and DNS in the profile are ignored, and a profile with no certificate authority (a static key) is not read. Like hysteria2 it is chosen by hand: the automatic ranking does not measure it.
 
+**AmneziaWG.** A WireGuard `.conf` that carries any of the AmneziaWG lines - `Jc`, `Jmin`, `Jmax`, `S1` to `S4`, `H1` to `H4` (a number or a range) and the decoy packets `I1` to `I5` - is an AmneziaWG node, version 2 or 3. Xray cannot speak it, and neither can the official sing-box: it is carried by [sing-box-lx](https://github.com/Leadaxe/sing-box-lx). With Xray as the engine a helper sing-box-lx runs it as a local SOCKS port; with the sing-box-lx engine it is dialled directly. Without sing-box-lx installed the page says so. Chosen by hand, like hysteria2 and OpenVPN.
+
 **The list at the bottom** — every config the router knows about, measured
 first. **TCPing** is filled in for all of them; **URL Test** only for those that
 answered, and only until one fast enough was found, so most of that column is
