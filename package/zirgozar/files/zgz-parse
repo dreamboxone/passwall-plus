@@ -1239,7 +1239,7 @@ LANDING {
 	line = $0
 	gsub(/\r/, "", line)
 	if (line == "" || split(line, rec, "\t") < 6) next
-	if (rec[3] ~ /^(hysteria2|hysteria|tuic)$/) next
+	if (rec[3] ~ /^(hysteria2|hysteria|tuic|openvpn)$/) next
 	if (!lready) {
 		split(ENVIRON["LAND"], land, "\t")
 		lp = ENVIRON["LAND"]
@@ -1288,6 +1288,9 @@ LANDING {
 			# line or inside somebody else's JSON.
 			if (substr(probe, 1, 1) == "{") JSONDOC = 1
 			else if (tolower(probe) ~ /^\[(interface|peer)\]/) { WGCONF = 1; doc = head }
+			# An OpenVPN profile: the first directive is one of these, or the
+			# file opens with a block holding the certificate authority.
+			else if (tolower(probe) ~ /^(client|dev[ \t]|remote[ \t]|proto[ \t]|setenv[ \t]|nobind|persist-(key|tun)|<ca>)/) { OVPN = 1; doc = head }
 			else if (substr(probe, 1, 1) == "[") JSONDOC = 1
 			# A YAML key, which is what a Clash or a hysteria file opens
 			# with. Not a link: "vless://x" also starts with letters and a
@@ -1296,13 +1299,14 @@ LANDING {
 			else if (substr(probe, 1, 2) == "- ") YAMLDOC = 1
 		}
 	}
-	if (JSONDOC || WGCONF || YAMLDOC) { doc = doc line "\n"; next }
+	if (JSONDOC || WGCONF || OVPN || YAMLDOC) { doc = doc line "\n"; next }
 	do_line(line)
 }
 
 END {
 	if (DECODE) printf "%s", b64(blob)
 	else if (WGCONF) wg_conf(doc)
+	else if (OVPN) ovpn_conf(doc)
 	else if (YAMLDOC) yaml_doc(doc)
 	else if (JSONDOC) json_doc(doc)
 }
@@ -1601,6 +1605,165 @@ function yaml_doc(doc,   j) {
 		return
 	}
 	json_doc(j)
+}
+
+# ----------------------------------------------------------- an OpenVPN profile
+#
+# The .ovpn file a provider hands out: directives, and the certificates and
+# keys inside <ca>, <cert>, <key> and <tls-crypt> blocks. sing-box speaks
+# OpenVPN, Xray does not, so the node is a record like hysteria2's - the
+# fields below, as JSON - and zgz-bridge or zgz-sbconfig turns it into an
+# endpoint.
+#
+# What is read is what an endpoint can use: the servers, the transport, the
+# certificates and the wrapping of the control channel, the ciphers and the
+# digest, the name the server certificate must carry, compression and the
+# user name and password. Everything else - scripts, routes, DNS the server
+# pushes - is left alone: what goes through the tunnel is this program's
+# decision and not the profile's.
+#
+# The user name, the password and the pass phrase of an encrypted key are not
+# in the file or are not meant to be; they arrive as comment lines
+# "#!zgz-user=..." in front of it, from the settings of the node.
+
+function jpem(s) {
+	gsub(/\\/, "\\\\", s)
+	gsub(/"/, "\\\"", s)
+	gsub(/\t/, " ", s)
+	gsub(/\r/, "", s)
+	sub(/\n+$/, "", s)
+	gsub(/\n/, "\\n", s)
+	return s
+}
+
+function ov_net(p) {
+	p = tolower(p)
+	if (p ~ /^tcp/) return "tcp"
+	if (p ~ /^udp/) return "udp"
+	return ""
+}
+
+function ov_array(s,   a, n, i, out) {
+	n = split(s, a, ":")
+	out = ""
+	for (i = 1; i <= n; i++)
+		if (a[i] != "") out = out (out != "" ? "," : "") "\"" jesc(a[i]) "\""
+	return "[" out "]"
+}
+
+function ovpn_conf(doc,   lines, m, i, l, t, k, w, nw, p, inblk, blk, name, nrem, rh, rp, rn, \
+                          proto, dport, cipher, dciph, auth, vname, vtype, wrap, wrapkey, kdir, \
+                          comp, lzo, user, pass, keypass, ca, cert, key, extra, pl, j, servers, first, ap) {
+	m = split(doc, lines, "\n")
+	proto = "udp"; dport = 1194
+	for (i = 1; i <= m; i++) {
+		l = lines[i]
+		gsub(/\r/, "", l)
+		if (inblk != "") {
+			if (l ~ ("^[ \t]*</" inblk ">")) inblk = ""
+			else blk[inblk] = blk[inblk] l "\n"
+			continue
+		}
+		t = l
+		sub(/^[ \t]+/, "", t)
+		sub(/[ \t]+$/, "", t)
+		if (t == "") continue
+		if (t ~ /^#!zgz-/) {
+			t = substr(t, 7)
+			p = index(t, "=")
+			if (p > 0) extra[substr(t, 1, p - 1)] = substr(t, p + 1)
+			continue
+		}
+		if (t ~ /^[#;]/) {
+			if (name == "") {
+				name = substr(t, 2)
+				sub(/^[ \t]+/, "", name)
+				name = clean_label(name)
+			}
+			continue
+		}
+		if (t ~ /^<[A-Za-z0-9-]+>$/) {
+			inblk = substr(t, 2, length(t) - 2)
+			blk[inblk] = ""
+			continue
+		}
+		nw = split(t, w, /[ \t]+/)
+		k = tolower(w[1])
+		if (k == "remote") {
+			nrem++
+			rh[nrem] = w[2]
+			rp[nrem] = (w[3] ~ /^[0-9]+$/) ? w[3] + 0 : 0
+			rn[nrem] = ov_net(w[4])
+		}
+		else if (k == "proto" || k == "proto-force") proto = ov_net(w[2]) != "" ? ov_net(w[2]) : proto
+		else if (k == "port" || k == "rport") dport = w[2] + 0
+		else if (k == "cipher") cipher = w[2]
+		else if (k == "data-ciphers" || k == "ncp-ciphers") dciph = w[2]
+		else if (k == "auth") auth = w[2]
+		else if (k == "verify-x509-name") {
+			vname = w[2]
+			vtype = (nw >= 3) ? tolower(w[3]) : "subject"
+		}
+		else if (k == "key-direction") kdir = (w[2] == "1") ? "client" : "server"
+		else if (k == "tls-auth") { wrap = "tls_auth"; if (nw >= 3) kdir = (w[3] == "1") ? "client" : "server" }
+		else if (k == "tls-crypt") wrap = "tls_crypt"
+		else if (k == "tls-crypt-v2") wrap = "tls_crypt_v2"
+		else if (k == "compress") comp = (nw >= 2) ? w[2] : "stub"
+		else if (k == "comp-lzo") lzo = (nw >= 2) ? w[2] : "adaptive"
+		else if (k == "auth-user-pass" && nw >= 2) { }
+	}
+
+	# A profile with no certificate authority is a static-key one, or one
+	# that keeps its certificates in a file this cannot see. Neither can be
+	# used, and saying nothing for it is what every other unusable entry does.
+	ca = blk["ca"]
+	if (ca == "" || nrem < 1) return
+
+	if (blk["tls-crypt-v2"] != "") { wrap = "tls_crypt_v2"; wrapkey = blk["tls-crypt-v2"] }
+	else if (blk["tls-crypt"] != "") { wrap = "tls_crypt"; wrapkey = blk["tls-crypt"] }
+	else if (blk["tls-auth"] != "") { wrap = "tls_auth"; wrapkey = blk["tls-auth"] }
+	else wrap = ""
+
+	user = extra["user"]; pass = extra["pass"]
+	if (blk["auth-user-pass"] != "") {
+		split(blk["auth-user-pass"], ap, "\n")
+		if (user == "") user = ap[1]
+		if (pass == "") pass = ap[2]
+	}
+	keypass = extra["keypass"]
+
+	for (j = 1; j <= nrem; j++) {
+		if (rp[j] <= 0) rp[j] = dport
+		if (rn[j] == "") rn[j] = proto
+	}
+	HOST = rh[1]
+	PORT = rp[1]
+
+	pl = "{\"type\":\"openvpn\",\"server\":\"" jesc(rh[1]) "\",\"port\":" rp[1] ",\"network\":\"" rn[1] "\""
+	if (nrem > 1) {
+		servers = ""
+		for (j = 1; j <= nrem; j++)
+			servers = servers (j > 1 ? "," : "") "{\"server\":\"" jesc(rh[j]) "\",\"port\":" rp[j] ",\"network\":\"" rn[j] "\"}"
+		pl = pl ",\"servers\":[" servers "]"
+	}
+	pl = pl ",\"ca\":\"" jpem(ca) "\""
+	if (blk["cert"] != "") pl = pl ",\"cert\":\"" jpem(blk["cert"]) "\""
+	if (blk["key"] != "") pl = pl ",\"key\":\"" jpem(blk["key"]) "\""
+	if (keypass != "") pl = pl ",\"keypass\":\"" jesc(keypass) "\""
+	if (wrap != "") {
+		pl = pl ",\"wrap\":\"" wrap "\",\"wrap_key\":\"" jpem(wrapkey) "\""
+		if (wrap == "tls_auth" && kdir != "") pl = pl ",\"wrap_direction\":\"" kdir "\""
+	}
+	if (vname != "") pl = pl ",\"server_name\":\"" jesc(vname) "\",\"server_name_type\":\"" (vtype ~ /^(subject|name|name-prefix)$/ ? vtype : "name") "\""
+	if (dciph != "") pl = pl ",\"data_ciphers\":" ov_array(dciph)
+	if (cipher != "") pl = pl ",\"cipher\":\"" jesc(cipher) "\""
+	if (auth != "") pl = pl ",\"auth\":\"" jesc(auth) "\""
+	if (comp != "") pl = pl ",\"compress\":\"" jesc(comp) "\""
+	if (lzo != "") pl = pl ",\"comp_lzo\":\"" jesc(lzo) "\""
+	if (user != "") pl = pl ",\"username\":\"" jesc(user) "\",\"password\":\"" jesc(pass) "\""
+	pl = pl "}"
+
+	emit(name, "openvpn", pl)
 }
 
 # --------------------------------------------------------- a wireguard .conf

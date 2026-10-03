@@ -51,6 +51,11 @@ wanted() {
 	esac
 	# only needed to install a core later, so not worth failing over
 	echo "unzip"
+	# An OpenVPN profile whose private key has a pass phrase cannot be used
+	# until the key is unlocked, and unlocking it is openssl's job.
+	if uci -q show zirgozar 2>/dev/null | grep -q "ENCRYPTED"; then
+		echo "openssl-util"
+	fi
 	return 0
 }
 

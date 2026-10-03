@@ -156,7 +156,7 @@ sift_one() {
 	# them behind everything that did answer, and the second pass, which makes
 	# a real request, decides whether they work.
 	case "$_proto" in
-		wireguard|hysteria2|hysteria|tuic)
+		wireguard|hysteria2|hysteria|tuic|openvpn)
 			printf '%06d\t%s\n' 9000 "$_tag" >> "$ALIVE"
 			echo x >> "$ATTEMPTS"
 			return 0
@@ -545,14 +545,16 @@ select_row() {
 
 	_tmp="$ZGZ_RUN/best.new"
 	case "$_proto" in
-		hysteria2|tuic)
+		hysteria2|tuic|openvpn)
 			# Xray cannot speak these. zgz-bridge runs a core that can and
 			# offers it as a plain SOCKS port on loopback, so what Xray ends
 			# up holding is an ordinary socks outbound and nothing else in the
 			# program has to know the difference.
 			_bport="$(cfg bridge_port 10808)"
 			printf '%s\n' "$_payload" > "$ZGZ_RUN/bridge.new"
+			chmod 600 "$ZGZ_RUN/bridge.new" 2>/dev/null || true
 			write_if_changed "$ZGZ_RUN/bridge.new" "$ZGZ_ETC/bridge.json" || true
+			chmod 600 "$ZGZ_ETC/bridge.json" 2>/dev/null || true
 			rm -f "$ZGZ_RUN/bridge.new"
 			printf '{"protocol":"socks","settings":{"servers":[{"address":"127.0.0.1","port":%s}]},"streamSettings":{"network":"tcp"}}\n' \
 				"$_bport" > "$_tmp"

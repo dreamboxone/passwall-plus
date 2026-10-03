@@ -54,6 +54,21 @@ cmd_needed() {
 
 singbox_config() {
 	_type="$(jget type)"
+	# An OpenVPN profile has too many parts - certificates, keys, a wrapped
+	# control channel - for a line of shell to build; zgz-sbconfig does it, and
+	# decrypts the key on the way.
+	if [ "$_type" = "openvpn" ]; then
+		command -v ucode >/dev/null 2>&1 || return 1
+		ucode "$ZGZ_LIB/zgz-sbconfig" mode=bridge bridge="$NODE" bridgeport="$PORT" \
+			lib="$ZGZ_LIB" rsdir="$ZGZ_RUN/rs" mark="$ZGZ_OUT_MARK" > "$ZGZ_BRIDGE_JSON.new" 2>"$ZGZ_RUN/bridge.err" || {
+			rm -f "$ZGZ_BRIDGE_JSON.new"
+			say_message "$(sed -n 's/^error: //p' "$ZGZ_RUN/bridge.err" | head -1)"
+			return 1
+		}
+		chmod 600 "$ZGZ_BRIDGE_JSON.new"
+		mv -f "$ZGZ_BRIDGE_JSON.new" "$ZGZ_BRIDGE_JSON"
+		return 0
+	fi
 	_server="$(jget server)"
 	_port="$(jnum port)"
 	_sni="$(jget sni)"

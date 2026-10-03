@@ -401,6 +401,43 @@ else
 	bad "a .conf with no peer produces nothing"
 fi
 
+# An OpenVPN profile: the whole file is one node, and what is put in front of it
+# as comments - the settings of the node - reaches it.
+echo "== an OpenVPN .ovpn profile"
+OV="$RIG/work/p.ovpn"
+printf '#!zgz-user=bob
+#!zgz-pass=secret
+# Office
+client
+proto tcp
+remote 203.0.113.9 1194
+verify-x509-name srv name
+auth SHA256
+data-ciphers AES-128-GCM
+<ca>
+-----BEGIN CERTIFICATE-----
+AAAA
+-----END CERTIFICATE-----
+</ca>
+<tls-crypt>
+KKKK
+</tls-crypt>
+' > "$OV"
+OVOUT="$(LC_ALL=C awk -f "$RIG/lib/zgz-parse" < "$OV")"
+check "$(printf '%s' "$OVOUT" | cut -f2-5 | tr '	' ' ')" "Office openvpn 203.0.113.9 1194" "the profile is one node, named by its leading comment"
+for want in '"network":"tcp"' '"server_name":"srv"' '"wrap":"tls_crypt"' '"username":"bob"' '"password":"secret"'; do
+	if printf '%s' "$OVOUT" | grep -q "$want"; then ok "carried through: $want"; else bad "carried through: $want"; fi
+done
+printf 'client
+proto udp
+remote 203.0.113.9 1194
+' > "$OV"
+if [ -z "$(LC_ALL=C awk -f "$RIG/lib/zgz-parse" < "$OV")" ]; then
+	ok "a profile with no certificate authority produces nothing"
+else
+	bad "a profile with no certificate authority produces nothing"
+fi
+
 # The two shapes people are actually handed, and the two this could not read.
 #
 # A Clash file and a hysteria file are both YAML, and the parser only treated a

@@ -99,7 +99,7 @@ g_udp_r="$(port_list "$(cfg udp_redir_ports 1:65535)")"
 local_exclusions() {
 	_lx_proto="$(sed -n 's/^protocol=//p' "$ZGZ_BEST_META" 2>/dev/null | tail -1)"
 	case "$_lx_proto" in
-		hysteria2|hysteria|tuic)
+		hysteria2|hysteria|tuic|openvpn)
 			_lx_host="$(sed -n 's/^host=//p' "$ZGZ_BEST_META" 2>/dev/null | tail -1)"
 			resolve_direct "$_lx_host" 2>/dev/null || true
 			;;

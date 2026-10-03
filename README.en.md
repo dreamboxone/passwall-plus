@@ -347,6 +347,8 @@ Beside **Edit** and **Delete** on each row: **To Top** moves it to the top,
 `DNS` are deliberately ignored: routing and name lookups are Zirgozar's own
 settings.
 
+**OpenVPN.** A whole `.ovpn` profile can be added by hand: the servers, `proto`, the certificates in `<ca>`, `<cert>` and `<key>`, `tls-crypt`, `tls-crypt-v2` and `tls-auth`, `verify-x509-name`, the ciphers and `auth`, compression, and a user name and password inside `<auth-user-pass>`. A profile that wants a user name and password without carrying them, or whose private key has a pass phrase, gets those in the edit window of its config - the pass phrase needs `openssl-util`, which *Router requirements* installs. sing-box carries it, so it needs a sing-box on the router: with Xray as the engine a helper runs it as a local SOCKS port, with a sing-box engine it is dialled directly. Scripts, pushed routes and DNS in the profile are ignored, and a profile with no certificate authority (a static key) is not read. Like hysteria2 it is chosen by hand: the automatic ranking does not measure it.
+
 **The list at the bottom** — every config the router knows about, measured
 first. **TCPing** is filled in for all of them; **URL Test** only for those that
 answered, and only until one fast enough was found, so most of that column is

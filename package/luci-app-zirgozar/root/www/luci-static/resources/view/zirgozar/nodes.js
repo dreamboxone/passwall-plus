@@ -90,6 +90,15 @@ function nameFromLink(text) {
 		var ep = String(text).match(/^\s*endpoint\s*=\s*\[?([^\]\s:]+)/im);
 		return ep ? ep[1] : '';
 	}
+	/* An OpenVPN profile: the comment it opens with, or else its first remote. */
+	if (/^\s*(client\s*$|remote\s+\S+|<ca>)/im.test(String(text || ''))) {
+		for (var o = 0; o < lines.length; o++) {
+			var om = lines[o].match(/^\s*[#;]\s*(.+?)\s*$/);
+			if (om) return om[1];
+		}
+		var rm = String(text).match(/^\s*remote\s+(\S+)/im);
+		return rm ? rm[1] : '';
+	}
 	for (var i = 0; i < lines.length; i++) {
 		var l = lines[i].trim(), name = '';
 		if (l.indexOf('://') < 0) continue;
@@ -194,7 +203,7 @@ function withBrowse(o, hint) {
 
 		var picker = E('input', {
 			'type': 'file',
-			'accept': '.conf,.txt,.json,.yaml,.yml,text/plain',
+			'accept': '.conf,.ovpn,.txt,.json,.yaml,.yml,text/plain',
 			'style': 'display:none',
 			'change': function(ev) {
 				var f = ev.target.files && ev.target.files[0];
@@ -282,7 +291,8 @@ function linkType(link) {
 		var t = m[1].toLowerCase();
 		return { ss: 'shadowsocks', hy2: 'hysteria2', socks5: 'socks', wg: 'wireguard' }[t] || t;
 	}
-	return /^\s*\[(interface|peer)\]/i.test(l) ? 'wireguard' : '-';
+	if (/^\s*\[(interface|peer)\]/i.test(l)) return 'wireguard';
+	return /^\s*(client\s*$|remote\s+\S+|<ca>)/im.test(l) ? 'openvpn' : '-';
 }
 
 function groups() {
@@ -565,7 +575,7 @@ return view.extend({
 		   already know — whereas what they actually want to know about a node
 		   they have just typed in is whether it works. */
 		o = s.option(form.TextValue, 'link', _('Share link'),
-			_('A share link, several of them one per line, or a whole WireGuard .conf file. Choose a file and its contents are put in the box for you.'));
+			_('A share link, several of them one per line, a whole WireGuard .conf file or an OpenVPN .ovpn profile. Choose a file and its contents are put in the box for you.'));
 		o.modalonly = true;
 		o.rows = 6;
 		withBrowse(o, _('a .conf file, or a list of links'));
@@ -574,10 +584,27 @@ return view.extend({
 		o.validate = function(section, value) {
 			if (!value) return true;
 			/* A WireGuard .conf is a file, not a link: it has no :// in it. */
-			if (!/:\/\//.test(value) && !/^\s*\[(interface|peer)\]/im.test(value))
+			if (!/:\/\//.test(value) && !/^\s*\[(interface|peer)\]/im.test(value) && !/^\s*(client\s*$|remote\s+\S+|<ca>)/im.test(value))
 				return _('That does not look like a share link');
 			return true;
 		};
+		/* An OpenVPN profile does not always carry everything it needs: the user
+		   name and password of the account, and the pass phrase of a private key
+		   that is encrypted. They are kept with the node and used only by one. */
+		o = s.option(form.Value, 'ovpn_user', _('OpenVPN user name'),
+			_('Only for an OpenVPN profile that asks for a user name and password.'));
+		o.modalonly = true;
+		o.rmempty = true;
+		o = s.option(form.Value, 'ovpn_pass', _('OpenVPN password'));
+		o.modalonly = true;
+		o.password = true;
+		o.rmempty = true;
+		o = s.option(form.Value, 'ovpn_keypass', _('OpenVPN key pass phrase'),
+			_('Only for an OpenVPN profile whose private key is encrypted. Unlocking it needs the openssl-util package, which Router requirements installs.'));
+		o.modalonly = true;
+		o.password = true;
+		o.rmempty = true;
+
 		/* Written after the name, which is why this can fill it in: the empty
 		   name has already been removed by the time this runs. A name the
 		   reader typed is left exactly as they typed it. */

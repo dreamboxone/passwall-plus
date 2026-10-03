@@ -1133,7 +1133,7 @@ chain_outbound() {
 	[ -n "$_co" ] || return 1
 	case "$(printf '%s' "$_co" | cut -f3)" in
 		# A pre-proxy Xray cannot speak cannot be dialled through by Xray.
-		hysteria2|hysteria|tuic) return 1 ;;
+		hysteria2|hysteria|tuic|openvpn) return 1 ;;
 	esac
 	printf '%s\n' "$_co" | cut -f6- | DOMSTRAT="${DOMSTRAT:-}" decorate |
 		sed -e "s/^{/{\"tag\":\"chain-$1\",/"
@@ -1192,6 +1192,18 @@ section_links() {
 		printf '%s\n' "$_sl_link"
 		return 0
 	fi
+	# An OpenVPN profile is a document too. The user name, the password and the
+	# pass phrase of its key are settings of the node and not part of the file,
+	# so they are put in front of it as comments the parser reads.
+	if printf '%s\n' "$_sl_link" | grep -qiE '^[[:space:]]*(client[[:space:]]*$|remote[[:space:]]+[^[:space:]]+|<ca>)'; then
+		for _k in user pass keypass; do
+			_v="$(uci -q get "zirgozar.$1.ovpn_$_k" 2>/dev/null)" || _v=""
+			[ -z "$_v" ] || printf '#!zgz-%s=%s\n' "$_k" "$_v"
+		done
+		[ -z "$_sl_name" ] || printf '# %s\n' "$_sl_name"
+		printf '%s\n' "$_sl_link"
+		return 0
+	fi
 	printf '%s\n' "$_sl_link" | NAME="$_sl_name" LC_ALL=C awk '
 		{
 			gsub(/[ \t]+[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, "\n&")
@@ -1238,10 +1250,10 @@ node_records() {
 				_nd_land="$(section_links "$_nd_to" | LC_ALL=C awk -v LIMIT=1 -f "$ZGZ_LIB/zgz-parse" 2>/dev/null | head -1)"
 				_nd_first="$(printf '%s\n' "$_nd_recs" | head -1)"
 				case "$(printf '%s' "$_nd_first" | cut -f3)" in
-					hysteria2|hysteria|tuic) _nd_land="" ;;
+					hysteria2|hysteria|tuic|openvpn) _nd_land="" ;;
 				esac
 				case "$(printf '%s' "$_nd_land" | cut -f3)" in
-					hysteria2|hysteria|tuic|'') _nd_land="" ;;
+					hysteria2|hysteria|tuic|openvpn|'') _nd_land="" ;;
 				esac
 				if [ -n "$_nd_land" ]; then
 					printf '%s\t%s → %s\t%s\t%s\t%s\t%s\n' \

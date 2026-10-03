@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (C) 2026 dreamboxone <https://t.me/routekernel1>
+# Part of Zirgozar - https://github.com/dreamboxone/zirgozar
+#
+# zgz-ovpnkey - an OpenVPN profile's private key without its pass phrase.
+#
+#   ZGZ_KEYPASS=... zgz-ovpnkey < key.pem
+#
+# The key goes in on standard input and comes out the same way, in the plain
+# PKCS#8 form every program reads. The pass phrase is read from the
+# environment and never from the command line, where `ps` would show it.
+#
+#   exit 0  the key, on standard output
+#   exit 3  there is no openssl on this router
+#   exit 1  the pass phrase is wrong, or this is not a key
+
+command -v openssl >/dev/null 2>&1 || exit 3
+exec openssl pkey -passin env:ZGZ_KEYPASS 2>/dev/null
