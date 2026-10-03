@@ -520,77 +520,6 @@ return view.extend({
 		/* No title over the page: the tab bar already says where this is. */
 		m = new form.Map('zirgozar');
 
-		/* ------------------------------------------ PassWall2's three */
-		s = m.section(form.NamedSection, 'config', 'zirgozar');
-		s.anonymous = true;
-
-		o = s.option(form.ListValue, 'sources', _('Nodes to use'),
-			_('This decides who may be measured, not who wins: whichever node answers fastest is the one used, wherever it came from. A node added by hand joins the list rather than replacing it. To insist on one node, press “Use” beside it below.'));
-		o.value('own', _('Only manually added configs'));
-		o.value('both', _('All configs'));
-		o.value('subs', _('Only the subscriptions'));
-		o.default = 'own';
-
-		o = s.option(form.ListValue, 'auto_detection_time', _('Automatic detection delay'),
-			_('When this page opens, each node added by hand is measured this way, and the answer put in its column.'));
-		o.value('0', _('Close'));
-		o.value('icmp', 'Ping');
-		o.value('tcping', 'TCP Ping');
-		o.default = 'tcping';
-
-		o = s.option(form.Flag, 'show_node_info', _('Show server address and port'));
-		o.default = '0';
-		o.rmempty = false;
-
-		o = s.option(form.Value, 'test_url', _('URL Test Address'),
-			_('What a real request through a node asks for, when a node is measured and when the URL Test column is pressed.'));
-		o.value('http://www.gstatic.com/generate_204', 'Gstatic (HTTP)');
-		o.value('https://cp.cloudflare.com/', 'Cloudflare');
-		o.value('https://www.gstatic.com/generate_204', 'Gstatic');
-		o.value('https://www.google.com/generate_204', 'Google');
-		o.value('https://www.youtube.com/generate_204', 'YouTube');
-		o.default = 'http://www.gstatic.com/generate_204';
-		o.rmempty = false;
-		o.validate = function(section, value) {
-			if (value && !/^https?:\/\/\S+$/.test(value))
-				return _('Must start with http:// or https://');
-			return true;
-		};
-
-		/* ------------------------------------------- automatic choice
-		   This program's own, and it has no PassWall2 equivalent: how the
-		   fastest node is found when the node in Basic Settings is Auto. */
-		s = m.section(form.NamedSection, 'config', 'zirgozar', _('Node selection'),
-			_('Two passes. A quick handshake to every node, then a real request through the ones that answered — ten at a time, best first, stopping at the first node fast enough. Connecting therefore takes seconds, not a minute.'));
-		s.anonymous = true;
-
-		o = s.option(form.ListValue, 'prefilter', _('First pass'),
-			_('A TCP handshake to the node’s real port is the right test. A ping is quicker and wrong often enough to matter: a node behind a CDN answers pings at the edge whatever state it is in, and plenty of working nodes drop ICMP entirely.'));
-		o.value('tcp', _('TCP handshake (recommended)'));
-		o.value('icmp', _('Ping'));
-		o.value('both', _('Ping, then handshake'));
-		o.default = 'tcp';
-
-		o = s.option(form.Value, 'good_ms', _('Good enough (ms)'),
-			_('The first node measured faster than this is the one used. Lower means a better node and a longer wait.'));
-		o.datatype = 'uinteger';
-		o.default = '1000';
-
-		o = s.option(form.Value, 'batch_size', _('Measured at a time'),
-			_('How many nodes are measured properly in one go.'));
-		o.datatype = 'range(1,50)';
-		o.default = '10';
-
-		o = s.option(form.Value, 'max_batches', _('Batches at most'),
-			_('How far down the list to keep going when nothing is fast enough.'));
-		o.datatype = 'range(1,30)';
-		o.default = '5';
-
-		o = s.option(form.Value, 'sift_parallel', _('Checked at once'),
-			_('How many handshakes run in parallel in the first pass. If your router has little RAM, lower this number.'));
-		o.datatype = 'range(1,100)';
-		o.default = '30';
-
 		/* ---------------------------------------------- added by hand */
 		s = m.section(form.GridSection, 'node', _('Nodes added manually'),
 			_('One share link per entry — vless, vmess, trojan, shadowsocks, socks, hysteria2, tuic or wireguard. A whole WireGuard .conf file can be pasted in as it stands. These are tried before the subscription list. The three test columns each measure something different; press one to run it.'));
@@ -769,6 +698,77 @@ return view.extend({
 		};
 
 		var self = this;
+
+		/* ------------------------------------------ PassWall2's three */
+		s = m.section(form.NamedSection, 'config', 'zirgozar');
+		s.anonymous = true;
+
+		o = s.option(form.ListValue, 'sources', _('Nodes to use'),
+			_('This decides who may be measured, not who wins: whichever node answers fastest is the one used, wherever it came from. A node added by hand joins the list rather than replacing it. To insist on one node, press “Use” beside it below.'));
+		o.value('own', _('Only manually added configs'));
+		o.value('both', _('All configs'));
+		o.value('subs', _('Only the subscriptions'));
+		o.default = 'own';
+
+		o = s.option(form.ListValue, 'auto_detection_time', _('Automatic detection delay'),
+			_('When this page opens, each node added by hand is measured this way, and the answer put in its column.'));
+		o.value('0', _('Close'));
+		o.value('icmp', 'Ping');
+		o.value('tcping', 'TCP Ping');
+		o.default = 'tcping';
+
+		o = s.option(form.Flag, 'show_node_info', _('Show server address and port'));
+		o.default = '0';
+		o.rmempty = false;
+
+		o = s.option(form.Value, 'test_url', _('URL Test Address'),
+			_('What a real request through a node asks for, when a node is measured and when the URL Test column is pressed.'));
+		o.value('http://www.gstatic.com/generate_204', 'Gstatic (HTTP)');
+		o.value('https://cp.cloudflare.com/', 'Cloudflare');
+		o.value('https://www.gstatic.com/generate_204', 'Gstatic');
+		o.value('https://www.google.com/generate_204', 'Google');
+		o.value('https://www.youtube.com/generate_204', 'YouTube');
+		o.default = 'http://www.gstatic.com/generate_204';
+		o.rmempty = false;
+		o.validate = function(section, value) {
+			if (value && !/^https?:\/\/\S+$/.test(value))
+				return _('Must start with http:// or https://');
+			return true;
+		};
+
+		/* ------------------------------------------- automatic choice
+		   This program's own, and it has no PassWall2 equivalent: how the
+		   fastest node is found when the node in Basic Settings is Auto. */
+		s = m.section(form.NamedSection, 'config', 'zirgozar', _('Node selection'),
+			_('Two passes. A quick handshake to every node, then a real request through the ones that answered — ten at a time, best first, stopping at the first node fast enough. Connecting therefore takes seconds, not a minute.'));
+		s.anonymous = true;
+
+		o = s.option(form.ListValue, 'prefilter', _('First pass'),
+			_('A TCP handshake to the node’s real port is the right test. A ping is quicker and wrong often enough to matter: a node behind a CDN answers pings at the edge whatever state it is in, and plenty of working nodes drop ICMP entirely.'));
+		o.value('tcp', _('TCP handshake (recommended)'));
+		o.value('icmp', _('Ping'));
+		o.value('both', _('Ping, then handshake'));
+		o.default = 'tcp';
+
+		o = s.option(form.Value, 'good_ms', _('Good enough (ms)'),
+			_('The first node measured faster than this is the one used. Lower means a better node and a longer wait.'));
+		o.datatype = 'uinteger';
+		o.default = '1000';
+
+		o = s.option(form.Value, 'batch_size', _('Measured at a time'),
+			_('How many nodes are measured properly in one go.'));
+		o.datatype = 'range(1,50)';
+		o.default = '10';
+
+		o = s.option(form.Value, 'max_batches', _('Batches at most'),
+			_('How far down the list to keep going when nothing is fast enough.'));
+		o.datatype = 'range(1,30)';
+		o.default = '5';
+
+		o = s.option(form.Value, 'sift_parallel', _('Checked at once'),
+			_('How many handshakes run in parallel in the first pass. If your router has little RAM, lower this number.'));
+		o.datatype = 'range(1,100)';
+		o.default = '30';
 
 		return m.render().then(function(mapEl) {
 			/* PassWall2's buttons, above the table of nodes added by hand. */
